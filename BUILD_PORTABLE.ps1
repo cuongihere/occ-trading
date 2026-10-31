@@ -27,6 +27,28 @@ $node = Join-Path $stage 'runtime\node.exe'
 if (-not (Test-Path -LiteralPath $node)) { throw "Missing portable node.exe" }
 & $node --version
 if ($LASTEXITCODE -ne 0) { throw 'Bundled node.exe could not run.' }
-Compress-Archive -LiteralPath $stage -DestinationPath $archive -CompressionLevel Optimal
+# The executable may be temporarily held by Windows Defender right after validation.
+# Retry ONLY packaging; do not suppress errors or publish a truncated ZIP.
+$success = $false
+Start-Sleep -Seconds 3
+for ($attempt = 1; $attempt -le 6; $attempt++) {
+    try {
+        Compress-Archive -LiteralPath $stage -DestinationPath $archive -CompressionLevel Optimal -ErrorAction Stop
+        if (-not (Test-Path -LiteralPath $archive -PathType Leaf) -or
+            (Get-Item -LiteralPath $archive).Length -lt 1000000) {
+            throw 'Archive missing or unexpectedly small'
+        }
+        $success = $true
+        break
+    } catch {
+        Write-Warning "Archive attempt $attempt failed: $($_.Exception.Message)"
+        if (Test-Path -LiteralPath $archive) {
+            Remove-Item -LiteralPath $archive -Force -ErrorAction SilentlyContinue
+        }
+        if ($attempt -eq 6) { throw }
+        Start-Sleep -Seconds (4 * $attempt)
+    }
+}
+if (-not $success) { throw 'Portable archive could not be verified' }
 Write-Host "Portable ZIP: $archive"
 Get-FileHash -LiteralPath $archive -Algorithm SHA256
