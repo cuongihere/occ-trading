@@ -37,10 +37,10 @@ const server=createServer(async(req,res)=>{
   res.setHeader('Content-Type','application/json');
   if(req.headers.origin!==`http://${host}`||req.headers['x-occ-local']!=='1'){res.writeHead(403);return res.end(JSON.stringify({error:'Local origin required'}));}
   try{let body='';for await(const chunk of req){body+=chunk;if(body.length>4096)throw Error('Request too large');}const p=JSON.parse(body||'{}');
-   if(req.url==='/control/start'){if(!feed.healthy()||!engine.ready)throw Error('Chưa có dữ liệu Binance liên tục. Kết nối lại trước.');commit('user_start',{},null,Date.now(),()=>{engine.setHealthy(true);engine.setRunning(true);});simulate=true;}
+   if(req.url==='/control/start'){if(engine.config.exitMode!=='Multi TP v5')throw Error('Phiên cũ không dùng Multi TP v5. Hãy tạo phiên mới để chuyển chế độ.');if(!feed.healthy()||!engine.ready)throw Error('Chưa có dữ liệu Binance liên tục. Kết nối lại trước.');commit('user_start',{},null,Date.now(),()=>{engine.setHealthy(true);engine.setRunning(true);});simulate=true;}
    else if(req.url==='/control/pause'){simulate=false;commit('user_pause',{},null,Date.now(),()=>engine.setRunning(false));}
    else if(req.url==='/control/connect'){simulate=false;feed.connect();}
-   else if(req.url==='/control/reset'){if(!(p.capital>0)||p.feeBps<0||p.feeBps>500||p.slippageBps<0||p.slippageBps>1000)throw Error('Vốn/phí/trượt giá không hợp lệ');simulate=false;const next=new OCCEngine(p);commit('user_reset',{initialState:next.serialize()},null,Date.now(),()=>{engine=next;});lastMark=null;lastObserved=null;feed.connect();}
+   else if(req.url==='/control/reset'){if(!(p.capital>0)||p.feeBps<0||p.feeBps>500||p.slippageBps<0||p.slippageBps>1000)throw Error('Vốn/phí/trượt giá không hợp lệ');simulate=false;const next=new OCCEngine({...p,exitMode:'Multi TP v5'});commit('user_reset',{initialState:next.serialize()},null,Date.now(),()=>{engine=next;});lastMark=null;lastObserved=null;feed.connect();}
    else throw Error('Unknown action');res.end(JSON.stringify({ok:true}));
   }catch(e){res.writeHead(400);res.end(JSON.stringify({error:e.message}));}return;
  }

@@ -14,30 +14,29 @@ function setup(config={},side='LONG'){
  assert.equal(opening.length,1);assert.equal(opening[0].action,'OPEN');assert.equal(e.position.qty,1);
  return {e,time};
 }
-test('Pine default Classic v3 0/0: NO auto SL/TP',()=>{
- const {e,time}=setup();
- assert.equal(e.config.exitMode,'Classic v3');assert.equal(e.levels().sl,null);assert.equal(e.levels().tp1,null);
- assert.deepEqual(e.onTrade({price:800,time:time+1,id:2},true),[]);
- assert.deepEqual(e.onTrade({price:1200,time:time+2,id:3},true),[]);
- assert.equal(e.position.qty,1);
+test('Default new session is always Multi TP v5 (no Classic setup required)',()=>{
+ const {e}=setup();
+ assert.equal(e.config.exitMode,'Multi TP v5');
+ assert.deepEqual(e.position.legs.map(l=>l.id),['TP1','TP2','TP3']);
+ assert.equal(e.levels().sl,990);
+ assert.deepEqual(e.position.legs.map(l=>l.qty),[0.33,0.33,0.34]);
 });
-test('Classic v3 SL and TP points are tick counts (not dollars or percent)',()=>{
- const {e,time}=setup({classicSlPoints:20,classicTpPoints:50,tickSize:0.1});
- assert.ok(Math.abs(e.levels().sl-998)<1e-9);
- assert.ok(Math.abs(e.levels().tp1-1005)<1e-9);
- assert.equal(e.onTrade({price:1004.9,time:time+1,id:2},true).length,0);
- const result=e.onTrade({price:1005,time:time+2,id:3},true);
- assert.equal(result.length,1);assert.equal(result[0].reason,'CLASSIC');assert.equal(result[0].price,1005);assert.equal(e.position,null);
+test('Legacy Classic checkpoint can be read without rewriting historical fills',()=>{
+ const {e,time}=setup({exitMode:'Classic v3',classicSlPoints:0,classicTpPoints:0});
+ const old=OCCEngine.restore(e.serialize());assert.equal(old.config.exitMode,'Classic v3');
+ assert.equal(old.levels().sl,null);
+ assert.equal(old.onTrade({price:800,time:time+1,id:8},true).length,0);
+ assert.equal(old.position.qty,1);
 });
-test('Classic SHORT stop executes beyond stop at observed price (conservative gap)',()=>{
- const {e,time}=setup({classicSlPoints:20,classicTpPoints:50,tickSize:0.1},'SHORT');
- e.config.slippageBps=10;
- assert.equal(e.levels().sl,1002);
- assert.ok(Math.abs(e.levels().tp1-995)<1e-9);
- const out=e.onTrade({price:1010,time:time+1,id:2},true);
- assert.equal(out.length,1);assert.equal(out[0].reason,'SL');
- assert.ok(out[0].price>1010);assert.equal(e.position,null);
+test('Pre-exit legacy checkpoint defaults to historical no-SL/TP and cannot silently switch to Multi',()=>{
+ const {e,time}=setup({exitMode:'Classic v3',classicSlPoints:0,classicTpPoints:0});
+ const saved=e.serialize();delete saved.config.exitMode;delete saved.config.classicSlPoints;delete saved.config.classicTpPoints;
+ const reopened=OCCEngine.restore(saved);
+ assert.equal(reopened.config.exitMode,'Classic v3');
+ assert.equal(reopened.levels().sl,null);
+ assert.equal(reopened.onTrade({price:800,time:time+1,id:8},true).length,0);
 });
+
 test('Pine Multi TP v5 percent default 1% SL, TP 1/2/3%, 33/33/34 portions',()=>{
  const {e,time}=setup({exitMode:'Multi TP v5'});
  assert.equal(e.levels().sl,990);assert.equal(e.levels().tp1,1010);
@@ -89,7 +88,7 @@ test('Partial fills survive restart, and a complete position counts only once',(
  assert.deepEqual(fills.map(f=>f.reason),['TP2','TP3']);
  assert.equal(summarize(restored.trades).summary.closed,1);
 });
-test('Invalid exit settings rejected, including noninteger Classic tick counts',()=>{
+test('Invalid exit settings rejected for both Multi TP and legacy Classic configurations',()=>{
  assert.throws(()=>new OCCEngine({classicSlPoints:1.5}),/settings/);
  assert.throws(()=>new OCCEngine({exitMode:'unknown'}),/settings/);
  assert.throws(()=>new OCCEngine({tpMode:'Ticks'}),/settings/);

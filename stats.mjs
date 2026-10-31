@@ -27,7 +27,7 @@ export function summarize(fills,sessionIds) {
    if(qty>entry.remainingQty+tolerance)throw Error('Partial/mismatched quantity exceeds open position');
    if(time<entry.entryTime)throw Error('CLOSE precedes OPEN');
    const gross=finite(fill.pnl,'close pnl');entry.grossPnl+=gross;entry.exitFees+=fee;
-   entry.partialNetPnl+=gross-fee;entry.remainingQty=Math.max(0,entry.remainingQty-qty);
+   entry.partialNetPnl+=gross-fee;entry.remainingQty=Number(Math.max(0,entry.remainingQty-qty).toFixed(12));
    entry.exits.push({id:fill.id,reason:fill.reason??null,qty,price,time,fee,pnl:gross});
    if(entry.remainingQty<=tolerance){
     const totalFees=entry.entryFee+entry.exitFees,net=entry.grossPnl-totalFees;

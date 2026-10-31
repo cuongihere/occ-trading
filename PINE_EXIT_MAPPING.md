@@ -1,36 +1,26 @@
-# OCC Pine v5: SL/TP mapping
+# OCC Multi TP v5 — quy tắc theo Pine Script gốc
 
-Nguồn tham chiếu: bản Pine người dùng cung cấp, tiêu đề "OCC Strategy R5.1 V3 Match + V5 Visual TP/SL".
+Chỉ dùng **Multi TP v5** cho mọi phiên mới. Giao diện không có Classic v3.
 
-## Classic v3 (Pine mặc định)
+## Tham số mặc định
 
-Exit Mode = Classic v3; Classic Stop Loss Points = 0; Classic Target Profit Points = 0. Giá trị 0 tắt ngưỡng tương ứng. Số points trong Pine là **ticks** (syminfo.mintick), KHÔNG phải USD hay phần trăm. App lấy tickSize trực tiếp từ Binance PRICE_FILTER.
+- SL: **1%** giá vào (0 = tắt SL).
+- TP mode: **Percent**, có thể đổi sang **Points** (chênh lệch giá tuyệt đối, không phải ticks).
+- TP1: **1%**, chốt **33%** vị thế ban đầu.
+- TP2: **2%**, chốt **33%** vị thế ban đầu.
+- TP3: **3%**, chốt **34% còn lại**.
+- Với LONG, SL thấp hơn giá vào và TP cao hơn. Với SHORT, hướng tính ngược lại.
+- Các mức 0 tắt mục tiêu tương ứng. SL áp dụng cho phần vị thế còn lại; tín hiệu OCC đảo chiều đóng phần còn lại trước khi mở vị thế mới.
+- TP1 Qty + TP2 Qty tối đa bằng 100% trên cơ chế phân bổ của engine; phần nhỏ hơn bước khối lượng Binance được dồn vào mức TP đang được sử dụng cuối cùng.
 
-- LONG: SL = entry - SL points × tickSize; TP = entry + TP points × tickSize.
-- SHORT: SL = entry + SL points × tickSize; TP = entry - TP points × tickSize.
-- Lệnh ngược OCC vẫn đóng/đảo vị thế nếu chưa chạm mức SL/TP.
+## Tương thích phiên cũ
 
-## Multi TP v5
+Phiên đã lưu trước khi nâng cấp vẫn được giữ nguyên trong SQLite để tránh thay đổi lịch sử và vị thế mô phỏng. Nếu checkpoint cũ đang dùng Classic, app **không cho bấm Bắt đầu** trên phiên đó. Hãy vào Thiết lập và chọn **Tạo phiên mới** để mở phiên Multi; thao tác này được xác nhận trên giao diện, không xóa lịch sử vị thế cũ. Mã hỗ trợ Classic chỉ được giữ nội bộ để đọc phiên cũ, không thể chọn Classic cho phiên mới qua dashboard.
 
-Theo Pine mặc định: SL = **1%** giá vào; TP mode = **Percent**; TP1/2/3 = **1%/2%/3%**; TP1 Qty = **33%**, TP2 Qty = **33%**, TP3 Qty = max(0, 100 - 33 - 33) = **34%**.
+## Giới hạn paper trading so với Pine
 
-- SL LONG = entry × (1 - SL%/100); SL SHORT = entry × (1 + SL%/100).
-- TP Percent LONG/SHORT = entry × (1 ± TP%/100), dấu + cho LONG, - cho SHORT.
-- TP Points LONG/SHORT = entry ± TP points, là khoảng giá **tuyệt đối**, KHÔNG nhân tickSize.
-- TPn = 0 tắt riêng target đó; SL% = 0 tắt SL. Các tranche có cả SL và target tắt sẽ giữ tới khi bị đảo chiều.
-- Mỗi TP chốt tỷ lệ khối lượng được phân bổ; stop áp dụng cho từng phần còn lại; tín hiệu đảo chiều đóng khối lượng chưa khớp.
-- Khối lượng mô phỏng được làm tròn theo qtyStep Binance, phần dư về mức TP cuối có tỷ lệ dương, nên vị thế rất nhỏ có thể không đúng chính xác 33/33/34.
-- Nếu TP1% + TP2% > 100%, mức sau được giới hạn theo phần khối lượng còn lại.
-
-## Live-paper và Pine không tuyệt đối trùng nhau
-
-- Pine calc_on_every_tick=false tạo tín hiệu trên nến, trong khi stop/limit đã đặt có thể khớp trong nến. App chỉ phát tín hiệu OCC trên nến M15 hoàn tất, kiểm tra SL/TP theo từng sự kiện aggTrade nhận được từ Binance khi feed khỏe.
-- TP limit mô phỏng khớp tại target, SL stop-market khớp theo giá quan sát có cộng slippage bất lợi. Gaps, tick feed và mô phỏng khớp có thể khác TradingView broker emulator.
-- Khi tạm dừng, app không mở/đảo vị thế mới nhưng tiếp tục xử lý SL/TP đang có nếu feed còn khỏe. Mất mạng không sinh lệnh khớp giá quá khứ.
-- Một vị thế chốt ba TP vẫn tính một vị thế đã đóng trong win rate; các fill có reason TP1, TP2, TP3, SL, CLASSIC, REVERSE.
-- Funding chưa được tính. Các line/box/label Visual Pine chưa được tái tạo toàn bộ; dashboard hiển thị Entry và các mức SL/TP hiện hành.
-- Chiến lược OCC M15/H4 hiện tại không phải trình chạy nguyên văn Pine/TradingView, và kết quả không được bảo đảm parity 100%.
-
-## Sử dụng
-
-Dashboard > Thiết lập mô phỏng > Exit Mode > Classic v3 hoặc Multi TP v5 > Tạo phiên mới. Chỉ áp dụng cấu hình cho phiên mới, không sửa nhật ký phiên cũ. Sao lưu data/ khi đã dừng ứng dụng trước khi nâng cấp.
+- Các chỉ báo OCC được cập nhật khi nến M15 hoàn tất; stop/limit đang có được theo dõi bằng aggTrade khi nguồn dữ liệu khỏe.
+- TP limit mô phỏng khớp ở target và SL khớp theo giá quan sát cộng slippage bất lợi; khác broker emulator TradingView. Không tạo fill từ nến đã qua khi mất kết nối.
+- Phí từng lần khớp được hạch toán; funding chưa được tính.
+- Một vị thế chốt 3 phần vẫn là **1 vị thế đã đóng** trong báo cáo, tính P&L theo tổng fill trừ mọi phí.
+- Không cam kết giá khớp, thứ tự và lịch sử 100% giống TradingView. Phần hình vẽ Visual của Pine chưa được tái tạo toàn bộ.

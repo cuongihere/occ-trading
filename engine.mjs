@@ -1,4 +1,4 @@
-// OCC R5.1: SMMA8, M15 samples of developing H4, delay 0, BOTH, Classic SL/TP=0.
+// OCC R5.1: SMMA8, M15 samples of developing H4, delay 0, BOTH; Multi TP v5 exits.
 // Deliberately causal: never reproduce historical lookahead_on future leakage.
 export const M15 = 900000, H4 = 14400000;
 const clone = x => JSON.parse(JSON.stringify(x));
@@ -9,7 +9,7 @@ export class OCCEngine {
  constructor(config={}) { this.reset(config); }
  reset(config=this.config) {
   const c={capital:10000,feeBps:5,slippageBps:1,qtyStep:0.001,minQty:0.001,minNotional:0,
-   tickSize:0.1,exitMode:'Classic v3',classicSlPoints:0,classicTpPoints:0,
+   tickSize:0.1,exitMode:'Multi TP v5',classicSlPoints:0,classicTpPoints:0,
    slPercent:1,tpMode:'Percent',tp1Val:1,tp2Val:2,tp3Val:3,tp1Qty:33,tp2Qty:33,...config};
   const numeric=['capital','feeBps','slippageBps','qtyStep','minQty','minNotional','tickSize',
    'classicSlPoints','classicTpPoints','slPercent','tp1Val','tp2Val','tp3Val','tp1Qty','tp2Qty'];
@@ -168,8 +168,10 @@ export class OCCEngine {
  }
  snapshot(){const unrealized=this.position&&this.lastPrice!==null?(this.lastPrice-this.position.entryPrice)*this.position.qty*(this.position.side==='LONG'?1:-1):0;return clone({config:this.config,sessionId:this.sessionId,balance:this.balance,equity:this.balance+unrealized,unrealized,fees:this.fees,position:this.position,levels:this.levels(),trades:this.trades,signals:this.signals,history:this.history,pending:this.pending,running:this.running,healthy:this.healthy,lastCandleTime:this.lastCandleTime,lastPrice:this.lastPrice,ready:this.ready,funding:'excluded'});}
  serialize(){return clone({version:1,...this});}
- static restore(data){if(data?.version!==1)throw Error('Unsupported session');const e=new OCCEngine(data.config);for(const k of Object.keys(e))if(k in data)e[k]=clone(data[k]);
-  e.config={...new OCCEngine(data.config).config,...data.config};
+ static restore(data){if(data?.version!==1)throw Error('Unsupported session');
+  const cfg={...(data.config||{})};if(!Object.hasOwn(cfg,'exitMode'))cfg.exitMode='Classic v3';
+  const e=new OCCEngine(cfg);for(const k of Object.keys(e))if(k in data)e[k]=clone(data[k]);
+  e.config={...new OCCEngine(cfg).config,...cfg};
   if(e.position&&!e.position.legs)e.position.legs=e.makeLegs(e.position.qty,e.position.entryPrice,e.position.side);
   e.running=false;e.healthy=false;e.pending=null;return e;}
  exportCSV(){const columns=['id','signalId','time','tradeId','action','side','qty','price','marketPrice','fee','pnl','balance'];const esc=x=>'"'+String(x??'').replaceAll('"','""')+'"';return [columns.join(','),...this.trades.map(r=>columns.map(k=>esc(r[k])).join(','))].join('\r\n');}
