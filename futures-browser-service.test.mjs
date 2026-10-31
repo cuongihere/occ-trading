@@ -5,7 +5,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {BrowserFutures} from './futures-browser-service.mjs';
 const tmp=t=>{const p=mkdtempSync(join(tmpdir(),'occ-browser-live-'));t.after(()=>rmSync(p,{force:true,recursive:true}));return p;};
-function fake({flatRiskRows=false,brokenConfig=false}={}){
+function fake({flatRiskRows=false,brokenConfig=false,failStop=false}={}){
  const calls=[],algo=[],normal=[],position={qty:0},mode={dualSidePosition:false};
  const api={
   close(){calls.push('closed');},
@@ -28,8 +28,12 @@ function fake({flatRiskRows=false,brokenConfig=false}={}){
   },
   async post(path,p){
    calls.push({method:'POST',path,p});
-   if(path==='/fapi/v1/order'){position.qty=.032;return {orderId:100,status:'FILLED'};}
+   if(path==='/fapi/v1/order'){
+    if(p.reduceOnly==='true'){position.qty=0;return {orderId:999,status:'FILLED'};}
+    position.qty=.032;return {orderId:100,status:'FILLED'};
+   }
    if(path==='/fapi/v1/algoOrder'){
+    if(failStop&&p.type==='STOP_MARKET')throw Error('Simulated Binance STOP failure');
     const id=200+algo.length;
     algo.push({algoId:id,symbol:'BTCUSDT',clientAlgoId:p.clientAlgoId,algoStatus:'NEW',
      orderType:p.type,side:p.side,triggerPrice:p.triggerPrice,
@@ -42,31 +46,32 @@ function fake({flatRiskRows=false,brokenConfig=false}={}){
  };
  return {api,calls,algo,normal,position,mode};
 }
-const creds={apiKey:'dummy-api-key',apiSecret:'dummy-secret',environment:'demo'};
+const creds={apiKey:'dummy-api-key',apiSecret:'dummy-secret',environment:'production'};
 test('UI backend accepts credentials in memory, stores only harmless configuration, restarts OFF',async t=>{
  const dir=tmp(t),fx=fake(),service=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api});
  await service.connect(creds);
  assert.equal(service.snapshot().connected,true);
- assert.equal(service.snapshot().environment,'demo');
+ assert.equal(service.snapshot().environment,'production');
  service.saveConfig({marginUSDT:500,leverage:5});
  const content=readFileSync(join(dir,'futures-browser-settings.json'),'utf8');
  assert.doesNotMatch(content,/dummy-api-key|dummy-secret/);
- await service.arm();assert.equal(service.snapshot().armed,true);
+ await service.arm('CHAP NHAN BTC FUTURES');assert.equal(service.snapshot().armed,true);
  service.disarm();assert.equal(service.snapshot().armed,false);
  const again=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api});
  assert.equal(again.snapshot().armed,false);
  assert.equal(again.snapshot().config.marginUSDT,500);
- assert.equal(existsSync(join(dir,'futures-demo-intent.json')),false);
+ assert.equal(existsSync(join(dir,'futures-live-intent.json')),false);
 });
-test('Production connection is read-only and cannot ARM',async t=>{
+test('Production Auto requires explicit confirmation and rejects missing consent',async t=>{
  const service=new BrowserFutures({dataDir:tmp(t),transportFactory:()=>fake().api});
  await service.connect({...creds,environment:'production'});
- await assert.rejects(service.arm(),/Chỉ cho phép Binance Demo/);
+ await assert.rejects(service.arm(),/Chưa xác nhận giao dịch tiền thật/);
+ await service.arm('CHAP NHAN BTC FUTURES');assert.equal(service.snapshot().armed,true);
 });
-test('Demo Auto sends MARKET then confirmed STOP and three TP, never opens duplicate',async t=>{
+test('Production Auto mock sends MARKET then confirmed STOP and three TP, never opens duplicate',async t=>{
  const dir=tmp(t),fx=fake(),service=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api});
  await service.connect(creds);service.saveConfig({marginUSDT:500,leverage:5});
- await service.arm();
+ await service.arm('CHAP NHAN BTC FUTURES');
  await service.signal({side:'LONG',barTime:900000},true);
  const posts=fx.calls.filter(x=>x.method==='POST');
  assert.deepEqual(posts.map(x=>x.path),['/fapi/v1/order','/fapi/v1/algoOrder',
@@ -83,21 +88,21 @@ test('Demo Auto sends MARKET then confirmed STOP and three TP, never opens dupli
  assert.equal(service.snapshot().armed,true);
  service.disarm();
 });
-test('Unfinished intent after restart blocks arming until exchange confirmed FLAT',async t=>{
+test('Live unfinished intent after restart blocks arming until exchange confirmed FLAT',async t=>{
  const dir=tmp(t),fx=fake(),service=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api});
- await service.connect(creds);service.saveConfig({marginUSDT:500,leverage:5});await service.arm();
+ await service.connect(creds);service.saveConfig({marginUSDT:500,leverage:5});await service.arm('CHAP NHAN BTC FUTURES');
  await service.signal({side:'LONG',barTime:900000},true);
  const again=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api});
  assert.equal(again.snapshot().armed,false);assert.equal(again.snapshot().halted,true);
  await again.connect(creds);
- await assert.rejects(again.arm(),/chưa đối soát/);
+ await assert.rejects(again.arm('CHAP NHAN BTC FUTURES'),/chưa đối soát/);
  await assert.rejects(again.reconcileFlat(),/còn vị thế/);
  fx.position.qty=0;fx.algo.splice(0);
- await again.reconcileFlat();await again.arm();
+ await again.reconcileFlat();await again.arm('CHAP NHAN BTC FUTURES');
  assert.equal(again.snapshot().armed,true);
 });
 
-test('Binance production read-only API accepts V3 positionRisk [] when account is FLAT',async t=>{
+test('Binance production API accepts V3 positionRisk [] when account is FLAT',async t=>{
  const dir=tmp(t),fx=fake({flatRiskRows:true});
  const service=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api});
  await service.connect({...creds,environment:'production'});
@@ -106,12 +111,34 @@ test('Binance production read-only API accepts V3 positionRisk [] when account i
  assert.equal(state.account.positionBTC,0);
  assert.equal(state.account.availableUSDT,800);
  assert.equal(state.armed,false);
- await assert.rejects(service.api.post('/fapi/v1/order',{symbol:'BTCUSDT',type:'MARKET'}),/Production trade API is locked/);
- await assert.rejects(service.arm(),/Chỉ cho phép Binance Demo/);
+ await assert.rejects(service.arm(),/Chưa xác nhận giao dịch tiền thật/);
 });
 test('read-only connection identifies exact failing endpoint instead of generic account error',async t=>{
  const fx=fake({brokenConfig:true});
  const service=new BrowserFutures({dataDir:tmp(t),transportFactory:()=>fx.api});
  await assert.rejects(service.connect({...creds,environment:'production'}),/\/fapi\/v1\/symbolConfig/);
  assert.equal(service.snapshot().connected,false);
+});
+
+test('Demo connections are rejected by production-only application',async t=>{
+ const svc=new BrowserFutures({dataDir:tmp(t),transportFactory:()=>fake().api});
+ await assert.rejects(svc.connect({...creds,environment:'demo'}),/Chỉ sử dụng Binance Futures thật/);
+});
+
+test('Real BTCUSDT entry failure to establish STOP triggers one reduce-only emergency close and HALT',async t=>{
+ const fx=fake({failStop:true}),service=new BrowserFutures({dataDir:tmp(t),transportFactory:()=>fx.api});
+ await service.connect(creds);service.saveConfig({marginUSDT:500,leverage:5});
+ await service.arm('CHAP NHAN BTC FUTURES');
+ await service.signal({side:'LONG',barTime:900000},true);
+ assert.equal(service.snapshot().halted,true);
+ assert.equal(service.snapshot().armed,false);
+ const posts=fx.calls.filter(x=>x.method==='POST');
+ assert.equal(posts.length,3);
+ assert.equal(posts[0].path,'/fapi/v1/order');
+ assert.equal(posts[1].p.type,'STOP_MARKET');
+ assert.equal(posts[2].p.reduceOnly,'true');
+ assert.equal(posts[2].p.side,'SELL');
+ assert.equal(fx.position.qty,0);
+ await service.signal({side:'SHORT',barTime:1800000},true);
+ assert.equal(fx.calls.filter(x=>x.method==='POST').length,3);
 });

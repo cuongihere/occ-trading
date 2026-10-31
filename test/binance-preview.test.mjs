@@ -40,3 +40,10 @@ test('Frontend script parses without syntax errors',()=>{
 test('Portable packager includes Binance settings page',()=>{
  assert.match(read('BUILD_PORTABLE.ps1'),/'BINANCE_UI_PREVIEW\.html'/);
 });
+
+test('Live frontend only offers real BTCUSDT, no Demo trading option',()=>{
+ const html=read('BINANCE_UI_PREVIEW.html');
+ assert.doesNotMatch(html,/Binance Demo|Tiền thử|tiền thử|Demo.*Auto/);
+ assert.match(html,/id="apiEnvironment" value="Binance Futures THẬT/);
+ assert.match(html,/CHAP NHAN BTC FUTURES/);
+});

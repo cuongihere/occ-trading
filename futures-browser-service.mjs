@@ -1,10 +1,10 @@
 // Browser-based BTCUSDT connection; credentials exist only in server memory.
-// Demo auto-trade is an opt-in isolated executor; production order placement remains gated.
+// Futures thật auto-trade is an opt-in isolated executor; production order placement remains gated.
 import {randomBytes} from 'node:crypto';
 import {existsSync,readFileSync,writeFileSync,mkdirSync,renameSync} from 'node:fs';
 import {resolve,dirname} from 'node:path';
 import {FuturesTransport} from './futures-transport.mjs';
-import {validateLiveConfig} from './futures-sizing.mjs';
+import {validateLiveConfig,floorStep} from './futures-sizing.mjs';
 import {draftProtectedOrder} from './futures-order-plan.mjs';
 import {ProtectionCoordinator} from './futures-protection-orchestrator.mjs';
 import {ProtectionCheckpoint} from './futures-protection-checkpoint.mjs';
@@ -15,8 +15,8 @@ const safeJSON=(value)=>JSON.parse(JSON.stringify(value));
 export class BrowserFutures{
  constructor({dataDir,transportFactory=null}){
   this.dir=resolve(dataDir);this.path=resolve(this.dir,'futures-browser-settings.json');
-  this.intentPath=resolve(this.dir,'futures-demo-intent.json');
-  this.protectionPath=resolve(this.dir,'futures-demo-protection.json');
+  this.intentPath=resolve(this.dir,'futures-live-intent.json');
+  this.protectionPath=resolve(this.dir,'futures-live-protection.json');
   this.config=validateLiveConfig(existsSync(this.path)?JSON.parse(readFileSync(this.path,'utf8')):DEFAULT);
   this.transportFactory=transportFactory||((params)=>new FuturesTransport(params));
   this.api=null;this.environment=null;this.account=null;this.filters=null;
@@ -24,12 +24,12 @@ export class BrowserFutures{
   const unresolved=existsSync(this.intentPath)?JSON.parse(readFileSync(this.intentPath,'utf8')):null;
   const prior=existsSync(this.protectionPath)?new ProtectionCheckpoint(this.protectionPath).load():null;
   if((unresolved&&unresolved.phase!=='CLEARED')||(prior&&prior.phase!=='IDLE')){
-   this.halted=true;this.error='Có lệnh Demo chưa đối soát sau lần chạy trước. Kiểm tra Binance Demo trước khi tạo lệnh mới.';
+   this.halted=true;this.error='Có lệnh Futures thật chưa đối soát sau lần chạy trước. Kiểm tra Binance Futures thật trước khi tạo lệnh mới.';
   }
  }
  log(type,message){this.events.push({at:Date.now(),type,message:String(message).slice(0,400)});this.events=this.events.slice(-50);}
  saveConfig(input){
-  if(this.armed||this.busy||this.activeProtection)throw Error('Tắt Auto và đóng hết vị thế Demo đang quản lý trước khi sửa cấu hình');
+  if(this.armed||this.busy||this.activeProtection)throw Error('Tắt Auto và đóng hết vị thế Futures thật đang quản lý trước khi sửa cấu hình');
   this.config=validateLiveConfig(input);
   mkdirSync(this.dir,{recursive:true});
   const temp=this.path+'.tmp';writeFileSync(temp,JSON.stringify(this.config,null,2),{mode:0o600});renameSync(temp,this.path);
@@ -41,10 +41,10 @@ export class BrowserFutures{
  }
  snapshot(){
   return {connected:!!this.api,environment:this.environment,armed:this.armed,
-   demoOnly:true,halted:this.halted,busy:this.busy,error:this.error,
+   realFuturesOnly:true,halted:this.halted,busy:this.busy,error:this.error,
    protectedPosition:this.activeProtection?{entry:this.activeProtection.entry,stop:this.activeProtection.stop,tps:this.activeProtection.tps}:null,
    config:this.config,account:this.account,events:this.events.slice(-20),
-   warning:'LIVE production bị khóa. Demo chỉ dùng vốn thử nghiệm. API Key/Secret không ghi vào file hay trình duyệt.'};
+   warning:'Giao dịch tiền thật có thể mất vốn. API Key/Secret chỉ giữ trong RAM; cần xác nhận mỗi khi bật Auto.'};
  }
  async inspect(){
   if(!this.api)throw Error('Chưa kết nối API');
@@ -103,39 +103,66 @@ export class BrowserFutures{
   };
   return this.account;
  }
- async connect({apiKey,apiSecret,environment='demo'}){
-  if(this.armed||this.busy)throw Error('Tắt Auto trước khi đổi API');
-  if(!['demo','production'].includes(environment))throw Error('Môi trường API không hợp lệ');
+ async connect({apiKey,apiSecret,environment='production'}){
+  if(this.armed||this.busy||this.activeProtection)throw Error('Tắt Auto và xử lý vị thế đang quản lý trước khi đổi API');
+  if(environment!=='production')throw Error('Chỉ sử dụng Binance Futures thật');
   if(typeof apiKey!=='string'||typeof apiSecret!=='string'||apiKey.length<8||apiSecret.length<8)
    throw Error('Nhập đầy đủ API Key và Secret');
-  this.api?.close();this.api=null;this.account=null;
-  this.environment=environment;
-  const connection=this.transportFactory({apiKey,apiSecret,environment,
-   ...(environment==='production'?{productionConsent:'I_ACCEPT_LIVE_BTCUSDT'}:{})});
-  if(environment==='production'){
-   // Production keys can check balances, never mutate exchange orders.
-   connection.post=async()=>{throw Error('Production trade API is locked');};
-   connection.del=async()=>{throw Error('Production trade API is locked');};
-  }
+  this.api?.close();this.api=null;this.account=null;this.environment='production';
+  const connection=this.transportFactory({apiKey,apiSecret,environment:'production',
+   productionConsent:'I_ACCEPT_LIVE_BTCUSDT'});
   this.api=connection;
-  try{await this.inspect();this.error=null;this.log('CONNECTED','API '+environment+' đã xác minh chỉ bằng GET');}
+  try{await this.inspect();this.error=this.halted?this.error:null;
+   this.log('CONNECTED','Đã xác minh Binance Futures thật; Auto mặc định OFF');}
   catch(e){this.api.close();this.api=null;this.account=null;this.error=e.message;throw e;}
   return this.snapshot();
  }
- async arm(){
+ async arm(acceptance){
   if(!this.api)throw Error('Kết nối API trên trang Binance trước');
-  if(this.environment!=='demo')throw Error('Auto tiền thật chưa mở. Chỉ cho phép Binance Demo');
+  if(this.environment!=='production')throw Error('Chỉ sử dụng Binance Futures thật');
+  if(acceptance!=='CHAP NHAN BTC FUTURES')throw Error('Chưa xác nhận giao dịch tiền thật');
   if(this.halted||this.busy||this.activeProtection)throw Error(this.error||'Lệnh tồn đọng chưa đối soát; không bật Auto');
   const a=await this.inspect();
-  if(!a.canTrade||a.dualSidePosition!==false||a.marginType!=='ISOLATED'||
+  if(!a.canTrade||a.hasOtherPositions||a.dualSidePosition!==false||a.marginType!=='ISOLATED'||
    a.leverage!==this.config.leverage||a.hasUnknownOrders||a.positionBTC!==0)
    throw Error('Yêu cầu BTCUSDT One-way, ISOLATED, đúng đòn bẩy, không có vị thế/lệnh cũ');
-  this.armed=true;this.log('AUTO_ON','Chỉ Binance Demo; chờ tín hiệu OCC BTCUSDT mới');return this.snapshot();
+  this.armed=true;this.log('AUTO_ON','BẬT AUTO TIỀN THẬT, chờ tín hiệu BTCUSDT');return this.snapshot();
  }
- disarm(){this.armed=false;this.log('AUTO_OFF','Không mở lệnh mới; giữ lệnh SL/TP đã đặt trên Demo');return this.snapshot();}
+ disarm(){this.armed=false;this.log('AUTO_OFF','Không mở lệnh mới; giữ lệnh SL/TP đã đặt trên Futures thật');return this.snapshot();}
  close(){this.disarm();this.api?.close();this.api=null;this.account=null;}
+ // On failed exchange-side STOP, reduce-only MARKET can close a confirmed unprotected BTC position.
+ // Never retry an ambiguous order and never submit opposite-opening quantity.
+ async emergencyCloseIfUnprotected(){
+  if(!this.api||this.environment!=='production')return;
+  const risk=await this.api.get('/fapi/v3/positionRisk',{symbol:'BTCUSDT'});
+  if(!Array.isArray(risk))throw Error('Cannot verify position');
+  const row=risk.find(x=>x.symbol==='BTCUSDT'&&x.positionSide==='BOTH');
+  const amt=row?Number(row.positionAmt):0;
+  if(!Number.isFinite(amt))throw Error('Unknown BTC position amount');
+  if(amt===0){this.log('EMERGENCY_FLAT','Vị thế BTCUSDT đã đóng');return;}
+  const intent=existsSync(this.intentPath)?JSON.parse(readFileSync(this.intentPath,'utf8')):null;
+  if(!intent?.clientId)throw Error('Missing recorded entry client ID');
+  const orders=await this.api.get('/fapi/v1/openAlgoOrders',{symbol:'BTCUSDT'});
+  if(!Array.isArray(orders))throw Error('Cannot verify exchange stop');
+  if(orders.some(o=>o.clientAlgoId===intent.clientId+'-SL'&&
+    ['NEW','ACCEPTED','PENDING_NEW'].includes(o.algoStatus))){
+   this.log('STOP_STILL_ACTIVE','Đã xác minh SL đang có trên sàn; không đóng cưỡng bức');return;
+  }
+  const qty=floorStep(Math.abs(amt),this.filters.stepSize);
+  if(qty<this.filters.minQty)throw Error('BTC remaining below exchange minQty; manual action required');
+  const closeId='OCCBTC-'+randomBytes(7).toString('hex');
+  this.saveIntent({...intent,phase:'EMERGENCY_CLOSE_SENDING',closeId,qty,at:Date.now()});
+  const result=await this.api.post('/fapi/v1/order',{symbol:'BTCUSDT',positionSide:'BOTH',
+   side:amt>0?'SELL':'BUY',type:'MARKET',reduceOnly:'true',quantity:String(qty),
+   newClientOrderId:closeId,newOrderRespType:'RESULT'});
+  if(!result?.orderId)throw Error('Emergency close response unknown');
+  const resultRows=await this.api.get('/fapi/v3/positionRisk',{symbol:'BTCUSDT'});
+  if(!Array.isArray(resultRows)||Number(resultRows.find(x=>x.symbol==='BTCUSDT'&&x.positionSide==='BOTH')?.positionAmt??0)!==0)
+   throw Error('Emergency close not verified FLAT');
+  this.log('EMERGENCY_CLOSED','Đã xác minh giảm vị thế BTCUSDT về 0');
+ }
  async signal(signal,feedHealthy){
-  if(!this.armed||this.busy||this.halted||this.activeProtection||this.environment!=='demo'||!feedHealthy||!signal?.side)return;
+  if(!this.armed||this.busy||this.halted||this.activeProtection||this.environment!=='production'||!feedHealthy||!signal?.side)return;
   this.busy=true;
   try{
    const a=await this.inspect();
@@ -156,21 +183,24 @@ export class BrowserFutures{
     stepSize:this.filters.stepSize,tickSize:this.filters.tickSize,clientPrefix:clientId});
    this.saveIntent({phase:'PROTECTED',clientId,orderId:String(response.orderId)});
    this.activeProtection=result; // No new signal while a position is managed.
-   this.log('PROTECTED','Demo entry '+response.orderId+' có SL và '+result.tps.length+' TP trên sàn; chờ vị thế đóng');
+   this.log('PROTECTED','Futures thật entry '+response.orderId+' có SL và '+result.tps.length+' TP trên sàn; chờ vị thế đóng');
   }catch(e){
    this.armed=false;this.halted=true;this.error=e.message;
-   this.log('HALTED','Không gửi lại lệnh. Kiểm tra BTCUSDT và SL trên Binance Demo: '+e.message);
+   this.log('HALTED','Đã khóa Auto tiền thật, kiểm tra Binance: '+e.message);
+   try{await this.emergencyCloseIfUnprotected();}
+   catch(recovery){this.log('CRITICAL','Không thể xác nhận đóng vị thế thiếu SL: '+recovery.message);}
+   this.error+=' — Kiểm tra BTCUSDT và SL/TP trực tiếp trên Binance.';
   }finally{this.busy=false;}
  } 
  // Monitor only the position and orders that OCC placed; never cancel unknown orders.
  async monitor(){
-  if(!this.api||this.environment!=='demo'||this.busy||!this.activeProtection||this.halted)return;
+  if(!this.api||this.environment!=='production'||this.busy||!this.activeProtection||this.halted)return;
   this.busy=true;
   try{
    const rows=await this.api.get('/fapi/v3/positionRisk',{symbol:'BTCUSDT'});
    const p=Array.isArray(rows)?rows.find(x=>x.symbol==='BTCUSDT'&&x.positionSide==='BOTH'):null;
-   if(!p||!Number.isFinite(Number(p.positionAmt)))throw Error('Không xác minh được vị thế BTCUSDT Demo');
-   const amt=Number(p.positionAmt);
+   if(!Array.isArray(rows)||(p&&!Number.isFinite(Number(p.positionAmt))))throw Error('Không xác minh được vị thế BTCUSDT');
+   const amt=p?Number(p.positionAmt):0;
    const algo=await this.api.get('/fapi/v1/openAlgoOrders',{symbol:'BTCUSDT'});
    if(!Array.isArray(algo))throw Error('Không xác minh được danh sách SL/TP');
    const managed=this.activeProtection;
@@ -185,28 +215,30 @@ export class BrowserFutures{
     if(other)throw Error('Có lệnh điều kiện ngoài OCC, không mở lệnh mới');
     new ProtectionCheckpoint(this.protectionPath).save({phase:'IDLE',entry:null,stop:null,tps:[],inFlight:null,halted:false});
     this.saveIntent({phase:'CLEARED',at:Date.now()});
-    this.activeProtection=null;this.log('FLAT','Đã đóng BTCUSDT Demo, hủy lệnh cũ và xác nhận sạch');
+    this.activeProtection=null;this.log('FLAT','Đã đóng BTCUSDT Futures thật, hủy lệnh cũ và xác nhận sạch');
    }else{
     if(Math.sign(amt)!==(managed.entry.side==='LONG'?1:-1)||
        !ours.some(x=>String(x.algoId)===String(managed.stop.id)))
-     throw Error('Vị thế BTC đổi chiều hoặc lệnh SL đã mất; cần xử lý trên Binance Demo ngay');
+     throw Error('Vị thế BTC đổi chiều hoặc lệnh SL đã mất; cần xử lý trên Binance Futures thật ngay');
    }
   }catch(e){
    this.halted=true;this.armed=false;this.error=e.message;
-   this.log('HALTED','Dừng Auto; cần kiểm tra Binance Demo: '+e.message);
+   this.log('HALTED','Dừng Auto; cần kiểm tra Binance Futures thật: '+e.message);
+   try{await this.emergencyCloseIfUnprotected();}
+   catch(recovery){this.log('CRITICAL','Không thể xác nhận đã bảo vệ vị thế: '+recovery.message);}
   }finally{this.busy=false;}
  }
  async reconcileFlat(){
-  if(!this.api||this.environment!=='demo'||this.busy||this.armed)
-   throw Error('Chỉ đối soát khi đã ngắt Auto và có kết nối Demo');
+  if(!this.api||this.environment!=='production'||this.busy||this.armed)
+   throw Error('Chỉ đối soát khi đã ngắt Auto và có kết nối Futures thật');
   this.busy=true;
   try{
    const account=await this.inspect();
    if(account.positionBTC!==0||account.openOrders||account.openAlgos)
-    throw Error('Binance Demo còn vị thế hoặc lệnh BTCUSDT, không thể xác nhận đã sạch');
+    throw Error('Binance Futures thật còn vị thế hoặc lệnh BTCUSDT, không thể xác nhận đã sạch');
    new ProtectionCheckpoint(this.protectionPath).save({phase:'IDLE',entry:null,stop:null,tps:[],inFlight:null,halted:false});
    this.saveIntent({phase:'CLEARED',at:Date.now()});
-   this.activeProtection=null;this.halted=false;this.error=null;this.log('RECOVERED','Đã xác minh vị thế và lệnh BTCUSDT Demo hoàn toàn sạch');
+   this.activeProtection=null;this.halted=false;this.error=null;this.log('RECOVERED','Đã xác minh vị thế và lệnh BTCUSDT Futures thật hoàn toàn sạch');
    return this.snapshot();
   }finally{this.busy=false;}
  }

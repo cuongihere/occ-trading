@@ -18,6 +18,7 @@ try{lock.exec('PRAGMA busy_timeout=0; BEGIN EXCLUSIVE; CREATE TABLE IF NOT EXIST
 catch{console.error('Another collector owns this data directory. Refusing concurrent simulation.');process.exit(1);}
 const store=new Store(resolve(dir,'occ.sqlite'));
 const browserFutures=new BrowserFutures({dataDir:dir});
+const liveSignalEngine=new OCCEngine(); // independent of paper running state
 const saved=store.load(),previousEvent=store.lastEvent();
 let engine=saved?OCCEngine.restore(saved):new OCCEngine();
 let simulate=Boolean(args.has('--simulate')||saved?.tradingEnabled||(!Object.hasOwn(saved||{},'tradingEnabled')&&saved?.running));
@@ -50,6 +51,9 @@ function commit(type,payload,exchangeAt=null,receivedAt=Date.now(),mutate=()=>{}
 function statusEvent(s){
  status=s;if(closing)return;
  if(s.state!=='live'&&browserFutures.armed)browserFutures.disarm();
+ liveSignalEngine.setHealthy(s.state==='live');
+ if(s.state!=='live')liveSignalEngine.setRunning(false);
+ else if(liveSignalEngine.ready)liveSignalEngine.setRunning(true);
  commit('status',s,null,Date.now(),()=>{
   engine.setHealthy(s.state==='live');
   if(s.state!=='live')engine.setRunning(false);
@@ -59,10 +63,14 @@ function statusEvent(s){
 }
 const feed=new BinanceFeed({
  onStatus:statusEvent,
- onReady(p){commit('warmup',p,p.now,Date.now(),()=>{for(const [k,v]of Object.entries({qtyStep:p.stepSize,minQty:p.minQty,minNotional:p.minNotional,tickSize:p.tickSize}))if(Number.isFinite(v)&&v>0)engine.config[k]=v;engine.warmup(p.h4,p.m15,p.now);engine.setRunning(false);engine.setHealthy(false);});},
- onCandle(bar,opts){let signal=null;commit('candle',{bar,opts},opts.exchangeAt??opts.observedAt,opts.receivedAt??Date.now(),()=>{signal=engine.onCandle(bar,opts);});
-  if(signal&&opts.live&&feed.healthy()&&browserFutures.armed)
-   browserFutures.signal(signal,true).catch(e=>console.error('Demo auto status:',e.message));
+ onReady(p){commit('warmup',p,p.now,Date.now(),()=>{for(const [k,v]of Object.entries({qtyStep:p.stepSize,minQty:p.minQty,minNotional:p.minNotional,tickSize:p.tickSize}))if(Number.isFinite(v)&&v>0)engine.config[k]=v;engine.warmup(p.h4,p.m15,p.now);engine.setRunning(false);engine.setHealthy(false);});
+   liveSignalEngine.warmup(p.h4,p.m15,p.now);liveSignalEngine.setHealthy(false);liveSignalEngine.setRunning(false);
+ },
+ onCandle(bar,opts){commit('candle',{bar,opts},opts.exchangeAt??opts.observedAt,opts.receivedAt??Date.now(),()=>engine.onCandle(bar,opts));
+  const signal=liveSignalEngine.onCandle(bar,opts);
+  liveSignalEngine.pending=null; // signals only; never simulate entry or fills
+  if(signal?.eligible&&opts.live&&feed.healthy()&&browserFutures.armed)
+   browserFutures.signal(signal,true).catch(e=>console.error('Futures Auto:',e.message));
  },
  onTrade(t){lastObserved=t.receivedAt??Date.now();const due=engine.pending||engine.exitTrigger(t.price)||Date.now()-lastPriceCommit>=1000;
   if(!due)return;lastPriceCommit=Date.now();const healthy=feed.healthy();commit(engine.pending||engine.exitTrigger(t.price)?'execution_candidate':'price_sample',{trade:t,healthy},t.time,lastObserved,()=>engine.onTrade(t,healthy));
@@ -94,8 +102,9 @@ const server=createServer(async(req,res)=>{
    }
    else if(req.url==='/control/live/config'){browserFutures.saveConfig(p);}
    else if(req.url==='/control/live/on'){
-    if(!feed.healthy()||!engine.ready)throw Error('Cần dữ liệu nến và stream Binance liên tục trước khi bật Auto');
-    await browserFutures.arm();
+    if(!feed.healthy()||!liveSignalEngine.ready||!liveSignalEngine.healthy)
+     throw Error('Cần dữ liệu Binance liên tục và nến OCC đã đồng bộ trước khi bật Auto');
+    await browserFutures.arm(p.acceptance);
    }
    else if(req.url==='/control/live/off'){browserFutures.disarm();}
    else if(req.url==='/control/live/reconcile'){await browserFutures.reconcileFlat();}

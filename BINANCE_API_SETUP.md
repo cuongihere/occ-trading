@@ -1,27 +1,23 @@
-# Binance Futures API — BTCUSDT
+# OCC Binance BTCUSDT Futures — Tài khoản thật
 
-Status: **read-only Binance API connectivity**, not real order execution.
+## Dùng trên Windows Portable
 
-## Windows portable
+1. Mở START_WINDOWS.bat, truy cập http://127.0.0.1:8080/binance.
+2. Nhập API Key và API Secret Binance Futures THẬT trực tiếp trong trình duyệt. Không gửi cho ChatGPT hay ghi vào GitHub. Cần quyền Futures trading; không bật rút tiền.
+3. Kiểm tra kết nối, số dư/vị thế. Chỉnh USDT ký quỹ / lệnh, đòn bẩy, SL và TP từng phần.
+4. Thiết lập trên Binance: BTCUSDT Perpetual, One-way, ISOLATED, đúng leverage và không có lệnh/vị thế BTCUSDT đang mở trước khi bật.
+5. Bật Auto chỉ sau khi đã đọc cảnh báo và nhập chính xác chuỗi xác nhận tiền thật trên giao diện.
+6. Auto OFF chỉ ngăn mở lệnh mới. Không hủy SL/TP đã có trên sàn. Nếu HALTED, xem Binance trước khi làm gì khác.
 
-1. Create a Binance Futures API key with **Read** permission. Never enable withdrawals. Use IP restriction where available.
-2. Extract the latest OCC Portable ZIP.
-3. Run **CHECK_BINANCE_WINDOWS.bat**.
-4. Enter API key and secret in the local PowerShell prompt (hidden typing). Credentials are held in process memory, not saved to files.
-5. Review BTCUSDT USD-M account balance, position, One-way/Hedge, isolated/cross margin, leverage, existing orders and server authentication.
+## Cơ chế và giới hạn
 
-**START_WINDOWS.bat remains paper trading.** This release contains no API order-placement feature.
+- Đặt Entry MARKET BTCUSDT khi có tín hiệu OCC M15 mới và nguồn giá khỏe.
+- Chỉ sau khi xác nhận Entry FILLED và vị thế trên Binance mới đặt STOP_MARKET close-all rồi TP1, TP2, TP3 reduce-only.
+- Ghi dấu lệnh trước khi gửi, không tự gửi lại nếu timeout; mất xác nhận SL sẽ cố đóng MARKET reduce-only, nhưng có thể không thành công nếu mạng/sàn lỗi.
+- App khởi động lại Auto OFF, khóa khi vị thế hoặc lệnh chưa được đối soát.
+- Không đủ khối lượng tối thiểu BTC cho ba TP sẽ bỏ tín hiệu thay vì đặt Entry rồi thất bại bảo vệ.
+- Khóa API/Secret chỉ giữ trong RAM, không lưu file. Khóa phải có quyền Futures Trade và giới hạn IP đúng.
+- **CHƯA được kiểm chứng bằng tài khoản Binance Production thật.** Kiểm thử hiện có dùng mock. Đặt lệnh Futures có rủi ro mất vốn và thanh lý. Theo dõi trực tiếp lệnh trên Binance.
+- Báo cáo P&L sau phí/funding chưa đối soát đầy đủ lệnh algo kích hoạt. Không dựa riêng vào số liệu trong app để đánh giá kết quả thực.
 
-## Requirements before automation with real funds
-
-- Restrict all symbol operations to BTCUSDT perpetual only.
-- Separate REAL balances from existing paper SQLite.
-- Reconcile every order/fill and the exchange position across restarts and uncertain HTTP outcomes.
-- Deploy exchange-side SL confirmation before TP1/TP2/TP3 for partial exits.
-- Fail closed on lost feed, rate limits and unmatched positions; never silently retry ambiguous trade submissions.
-- Test with supported Binance non-production environment, then very small real exposure only with deliberate opt-in.
-- Binance can restrict API connectivity by geography; do not bypass restrictions.
-
-Official USD-M account docs: https://developers.binance.com/en/docs/catalog/core-trading-derivatives-trading-usd-s-m-futures/api/rest-api/account
-
-Official USD-M trade docs: https://developers.binance.com/en/docs/catalog/core-trading-derivatives-trading-usd-s-m-futures/api/rest-api/trade
+Tài liệu chính thức: https://developers.binance.com/en/docs/catalog/core-trading-derivatives-trading-usd-s-m-futures/api/rest-api/trade
