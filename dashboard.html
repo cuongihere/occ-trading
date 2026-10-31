@@ -43,16 +43,16 @@ footer{color:var(--muted);font-size:12px;margin-top:22px;line-height:1.8}.danger
 </header>
 <div class="notice" id="legacyWarning" hidden><strong>Cần chuyển sang Multi TP</strong><span>Phiên cũ đang dùng chế độ thoát lệnh trước đây. Tạo phiên mới để dùng Multi TP v5; lịch sử phiên cũ vẫn được giữ.</span></div>
 <div class="notice"><strong>SIMULATION ONLY</strong><span>Tiền ảo, không đặt lệnh thật, không đòn bẩy; SL/TP tùy cấu hình. Chưa tính funding. H4 đang hình thành có thể thay đổi tín hiệu.</span></div>
-<div class="toolbar"><div class="actions"><button class="primary" id="start" disabled>Bắt đầu mô phỏng</button><button id="pause" disabled>Tạm dừng</button><button id="connect">Kết nối lại Binance</button></div><div class="tiny" id="received">Chưa có dữ liệu giá</div></div>
+<div class="toolbar"><div class="actions"><button class="primary" id="start" disabled>Bắt đầu mô phỏng</button><button id="pause" disabled>Tạm dừng</button><button id="connect">Kết nối lại Binance</button><button id="configure">Cài đặt Multi TP</button></div><div class="tiny" id="received">Chưa có dữ liệu giá</div></div>
 <section class="grid">
  <div class="card"><div class="label">GIÁ GIAO DỊCH BTC</div><div class="big" id="price">—</div><div class="detail">Mark price: <span id="mark">—</span></div></div>
  <div class="card"><div class="label">TÀI SẢN ẢO (USDT)</div><div class="big" id="equity">—</div><div class="detail">Vốn ban đầu: <span id="capitalValue">—</span></div></div>
- <div class="card"><div class="label">P&L TỔNG PHIÊN</div><div class="big" id="pnl">—</div><div class="detail">Bao gồm P&L chưa thực hiện, chưa tính funding</div></div>
+ <div class="card"><div class="label">P&L TÀI KHOẢN HIỆN TẠI</div><div class="big" id="pnl">—</div><div class="detail">Bao gồm P&L chưa thực hiện, chưa tính funding</div></div>
  <div class="card"><div class="label">VỊ THẾ HIỆN TẠI</div><div class="big" id="position">—</div><div class="detail" id="positionDetail">Quy mô khoảng 10% equity mỗi lần mở</div><div class="detail" id="levels" style="margin-top:8px;white-space:pre-line">SL/TP: Chưa có vị thế</div></div>
 </section>
 <div class="columns">
  <section class="card"><div class="charthead"><h2>Đường lợi nhuận vị thế đã đóng</h2><span class="tiny">P&L cộng dồn · USDT</span></div><div class="chartbox"><canvas id="curve" aria-label="Biểu đồ P&L tích lũy"></canvas></div><div class="tiny">Chỉ dùng lệnh đã đóng. Các vị thế đang mở không được tính vào đường này.</div></section>
- <section class="card"><div class="charthead"><h2>Thống kê giao dịch</h2><select id="session" aria-label="Phạm vi phiên"><option value="current">Phiên hiện tại</option><option value="all">Tất cả phiên</option></select></div>
+ <section class="card"><div class="charthead"><h2>Thống kê tích lũy toàn lịch sử</h2><details><summary class="tiny">Xem riêng các đợt đặt lại vốn trước đây</summary><select id="session" aria-label="Phạm vi" style="margin:10px"><option value="all" selected>Tổng tất cả</option><option value="current">Tài khoản hiện tại</option></select></details></div>
  <div class="stats">
  <div class="stat"><strong id="closed">0</strong><span>Vị thế đã đóng</span></div>
  <div class="stat"><strong id="winrate">0%</strong><span>Win rate</span></div>
@@ -60,16 +60,19 @@ footer{color:var(--muted);font-size:12px;margin-top:22px;line-height:1.8}.danger
  <div class="stat"><strong id="wins">0</strong><span>Thắng</span></div>
  <div class="stat"><strong id="losses">0</strong><span>Thua</span></div>
  <div class="stat"><strong id="breakeven">0</strong><span>Hòa</span></div></div>
- <p style="margin-top:18px">P&L đã đóng: <strong id="realized">0</strong> USDT</p>
+ <p style="margin-top:18px">Tổng P&L đã đóng: <strong id="realized">0</strong> USDT</p>
  <p class="tiny" style="margin-top:5px">Phí vị thế đã đóng: <span id="closedFees">0</span> · Tổng phí các lần khớp: <span id="allFees">0</span></p>
- <p class="tiny" id="openPositions" style="margin-top:10px"></p></section>
+ <p class="tiny" id="openPositions" style="margin-top:10px"></p><p class="tiny">Tổng từ các vị thế đã đóng, không cộng vốn các đợt cũ. Equity phía trên chỉ là tài khoản hiện tại.</p></section>
 </div>
+<section class="card" style="margin-bottom:18px"><div class="charthead"><h2>Nhật ký app ngừng giao dịch</h2><span class="tiny">UTC+7</span></div>
+<p class="tiny">Ghi nhận app tắt, mất kết nối và tạm dừng. Tắt đột ngột: thời điểm bắt đầu ước tính từ lần lưu cuối. Không tạo lệnh bù khi offline.</p>
+<div class="scroll" style="max-height:280px"><table style="min-width:630px"><thead><tr><th>Trạng thái</th><th>Từ</th><th>Đến</th><th>Thời lượng</th><th>Nguyên nhân</th></tr></thead><tbody id="activity"><tr><td colspan="5">Chưa có dữ liệu.</td></tr></tbody></table></div></section>
 <section class="card"><div class="charthead"><h2>Lịch sử vị thế đã đóng</h2><span class="tiny">Giờ Việt Nam UTC+7</span></div>
  <div class="links"><a id="positionsCsv" href="/positions.csv">Tải CSV vị thế</a><a id="fillsCsv" href="/trades.csv">Tải CSV khớp lệnh</a><a id="signalsJson" href="/signals.json">Tải nhật ký tín hiệu</a></div>
  <div class="scroll"><table><thead><tr><th>Thời gian vào / ra</th><th>Chiều</th><th>Khối lượng BTC</th><th>Giá vào / ra</th><th>Phí</th><th>P&L sau phí</th><th>Thoát cuối</th><th>Kết quả</th></tr></thead><tbody id="trades"><tr><td colspan="8">Chưa có giao dịch đã đóng</td></tr></tbody></table></div>
 </section>
-<details class="card settings"><summary><strong>Thiết lập mô phỏng & nhật ký tín hiệu</strong></summary>
- <div class="fields"><label>Vốn ban đầu (USDT)<input id="capital" type="number" min="1" value="10000"></label><label>Phí mỗi phía (%)<input id="fee" type="number" min="0" max="5" step=".01" value=".05"></label><label>Slippage (bps)<input id="slip" type="number" min="0" max="1000" step=".5" value="1"></label><button id="reset">Tạo phiên mới</button></div>
+<details class="card settings" id="multiConfig"><summary><strong>Thiết lập Multi TP v5 · Lưu vào tài khoản hiện tại</strong></summary><p class="tiny" id="appliedSettings">Đang đọc thông số...</p>
+ <div class="fields"><label>Vốn ban đầu (không đặt lại)<input id="capital" type="number" min="1" value="10000" disabled></label><label>Phí mỗi phía (%)<input id="fee" type="number" min="0" max="5" step=".01" value=".05"></label><label>Slippage (bps)<input id="slip" type="number" min="0" max="1000" step=".5" value="1"></label><button id="reset">Lưu thông số Multi TP</button></div>
  <h2 style="margin-top:18px">Cấu hình thoát lệnh theo Pine v5</h2>
  <div id="multiSettings"><p class="tiny">Chế độ cố định: <strong>Multi TP v5 · Chốt từng phần</strong></p>
  <div class="fields"><label>SL (% giá vào)<input id="slPercent" type="number" min="0" step=".1" value="1"></label>
@@ -81,8 +84,8 @@ footer{color:var(--muted);font-size:12px;margin-top:22px;line-height:1.8}.danger
  <label>Chốt TP2 (%)<input id="tp2Qty" type="number" min="0" max="100" step="1" value="33"></label>
  <label>TP3 (% còn lại)<input id="tp3Qty" type="number" disabled value="34"></label></div>
  </div>
- <p class="tiny">Multi TP v5 mặc định SL 1%, TP 1/2/3% với tỷ lệ 33/33/34; bấm Tạo phiên mới để áp dụng cấu hình, không sửa phiên cũ. Lệnh TP nhỏ hơn bước khối lượng sẽ dồn phần làm tròn vào TP3.</p>
- <p class="tiny">Tạo phiên mới sẽ xóa vị thế mô phỏng của phiên hiện tại (nhưng vẫn lưu nhật ký phiên cũ). Xuất CSV nếu cần sao lưu. Vị thế chưa đóng không tính thắng/thua.</p>
+ <p class="tiny">Multi TP v5 chỉnh được SL, TP1/2/3, tỷ lệ chốt từng phần, phí và slippage. TP3 Qty tự tính. Lưu thông số khi tạm dừng và không có vị thế mở; không đặt lại vốn hoặc lịch sử.</p>
+ <p class="tiny"><span id="configHint">Tạm dừng và chờ vị thế đóng hết trước khi thay đổi thông số.</span></p>
  <h2 style="margin-top:20px">20 tín hiệu gần nhất của phiên hiện tại</h2><pre id="signals">[]</pre>
 </details>
 <footer><strong>OCC Paper Portable</strong> · Chỉ chạy cục bộ tại 127.0.0.1 · Không cần API key hoặc tài khoản Binance · Đóng tab không dừng server, nhấn Ctrl+C tại cửa sổ chương trình để thoát.<br>Máy phải bật, không ngủ và có mạng để tiếp tục nhận dữ liệu. Mất kết nối sẽ tạm dừng quyết định giao dịch mới. Kết quả mô phỏng không đồng nghĩa khả năng khớp lệnh thực tế.</footer>
@@ -103,10 +106,13 @@ async function control(name,payload={}){
  }catch(e){alert(e.message);}
 }
 function renderState(s){
- $('state').textContent=s.running?'ĐANG MÔ PHỎNG':s.status.state==='live'?'SẴN SÀNG · TẠM DỪNG':'TẠM DỪNG';
+ $('state').textContent=s.running?'ĐANG MÔ PHỎNG':s.tradingEnabled?'ĐỢI KHÔI PHỤC KẾT NỐI':'ĐÃ TẠM DỪNG';
  $('source').textContent=s.status.message||'Đang đồng bộ Binance';
  $('dot').className='dot'+(s.status.state==='live'?' live':s.status.state==='blocked'?' blocked':'');
  $('legacyWarning').hidden=s.config.exitMode==='Multi TP v5';
+ $('appliedSettings').textContent='Đã lưu: SL '+num(s.config.slPercent)+'%, TP '+[s.config.tp1Val,s.config.tp2Val,s.config.tp3Val].map(num).join(' / ')+(s.config.tpMode==='Percent'?'%':' USD')+' · Chốt '+num(s.config.tp1Qty)+'% / '+num(s.config.tp2Qty)+'% / '+num(Math.max(0,100-s.config.tp1Qty-s.config.tp2Qty))+'%';
+ $('reset').disabled=!!s.position||s.running;
+ $('configHint').textContent=s.position?'Còn vị thế mở: chưa thể đổi thông số.':s.running?'Nhấn Tạm dừng trước khi lưu.':'Lưu thông số không tạo phiên mới hoặc đặt lại số dư.';
  $('start').disabled=!s.healthy||!s.ready||s.running||s.config.exitMode!=='Multi TP v5';$('pause').disabled=!s.running;
  $('received').textContent=s.lastObservedUTC?'Giá nhận lúc '+when(s.lastObservedUTC)+' (UTC+7)':'Chưa có dữ liệu giá gần đây';
  $('price').textContent=num(s.lastTrade);$('mark').textContent=num(s.markPrice);
@@ -148,6 +154,14 @@ function drawCurve(positions){
  ctx.fillStyle='#a8e9b0';ctx.beginPath();ctx.arc(x(vals.length-1),y(vals[vals.length-1]),4,0,2*Math.PI);ctx.fill();
  if(positions.length===0){ctx.fillStyle='#93a7b9';ctx.textAlign='center';ctx.fillText('Chưa có vị thế đã đóng',w/2,h/2);ctx.textAlign='left';}
 }
+function duration(ms){const minutes=Math.max(0,Math.floor(ms/60000)),hours=Math.floor(minutes/60);return hours?hours+' giờ '+minutes%60+' phút':minutes+' phút';}
+async function showActivity(){
+ const log=await getJSON('/api/activity'),body=$('activity');body.replaceChildren();
+ const rows=log.length?log.slice(0,40):[{kind:'none'}];
+ for(const entry of rows){const tr=document.createElement('tr'),cells=entry.kind==='none'?['Chưa có nhật ký','—','—','—','—']:
+ [entry.kind==='app_offline'?'App đã tắt':'Trade tạm dừng',when(entry.from),entry.to==null?'Đang tiếp diễn':when(entry.to),duration((entry.to??Date.now())-entry.from),(entry.reason||'')+(entry.approximate?' · thời điểm ước tính':'')];
+ for(const c of cells){const td=document.createElement('td');td.textContent=c;tr.append(td);}body.append(tr);}
+}
 async function refresh(){
  if(refreshing)return;refreshing=true;
  try{
@@ -155,20 +169,20 @@ async function refresh(){
   const sessions=await getJSON('/api/sessions');const select=$('session');const known=new Set(Array.from(select.options,o=>o.value));
   for(const session of sessions){if(!known.has(session.id)){const opt=document.createElement('option');opt.value=session.id;opt.textContent=when(session.startedAt)+' · '+num(session.config.capital)+' USDT';select.append(opt);known.add(session.id);}}
   const key=select.value==='current'?s.session:select.value;
-  const r=await getJSON('/api/report?session='+encodeURIComponent(key));reportData=r;setReport(r,s,key);
+  const r=await getJSON('/api/report?session='+encodeURIComponent(key));reportData=r;setReport(r,s,key);await showActivity();
  }catch(e){$('state').textContent='KHÔNG KẾT NỐI';$('source').textContent=e.message;$('dot').className='dot blocked';$('start').disabled=true;$('pause').disabled=true;}
  finally{refreshing=false;}
 }
+$('configure').onclick=()=>{$('multiConfig').open=true;$('multiConfig').scrollIntoView({behavior:'smooth',block:'start'});};
 $('start').onclick=()=>control('start');$('pause').onclick=()=>control('pause');$('connect').onclick=()=>control('connect');
 function updateExitSettings(){
   $('tp3Qty').value=Math.max(0,100-Number($('tp1Qty').value)-Number($('tp2Qty').value));
 }
 $('tp1Qty').oninput=updateExitSettings;$('tp2Qty').oninput=updateExitSettings;
 $('reset').onclick=()=>{
- if(!confirm('Tạo phiên mới và bỏ vị thế ảo hiện tại? Lịch sử phiên cũ vẫn lưu trong SQLite.'))return;
+ if(!confirm('Lưu thông số Multi TP vào tài khoản hiện tại? Không đặt lại số dư và lịch sử.'))return;
  const val=id=>Number($(id).value);
- control('reset',{capital:val('capital'),feeBps:val('fee')*100,slippageBps:val('slip'),
-  exitMode:'Multi TP v5',
+ control('configure',{feeBps:val('fee')*100,slippageBps:val('slip'),
   slPercent:val('slPercent'),tpMode:$('tpMode').value,tp1Val:val('tp1Val'),tp2Val:val('tp2Val'),
   tp3Val:val('tp3Val'),tp1Qty:val('tp1Qty'),tp2Qty:val('tp2Qty')});
 };

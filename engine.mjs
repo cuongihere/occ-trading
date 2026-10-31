@@ -24,7 +24,7 @@ export class OCCEngine {
   this.config=c;this.balance=c.capital;this.fees=0;this.position=null;this.trades=[];this.signals=[];this.history=[];
   this.running=false;this.healthy=false;this.ready=false;this.pending=null;this.lastPrice=null;
   this.lastTradeTime=-1;this.lastTradeId=null;this.lastCandleTime=null;this.previous=null;
-  this.baseOpen=null;this.baseClose=null;this.currentH4=null;
+  this.baseOpen=null;this.baseClose=null;this.currentH4=null;this.tradingEnabled=false;
   this.sessionId=String(Date.now())+'-'+Math.random().toString(36).slice(2,9);
  }
  levels() {
@@ -66,6 +66,16 @@ export class OCCEngine {
     (l.target!==null&&(long?price>=l.target:price<=l.target))));
  }
  setRunning(value) { if(value&&!this.ready) throw Error('Warmup required'); this.running=!!value;if(!value)this.pending=null; }
+ configure(update) {
+  if(this.running||this.position)throw Error('Tạm dừng và đóng hết vị thế mô phỏng trước khi thay đổi cài đặt.');
+  const allowed=['feeBps','slippageBps','slPercent','tpMode','tp1Val','tp2Val','tp3Val','tp1Qty','tp2Qty'];
+  const changes=Object.fromEntries(allowed.filter(k=>Object.hasOwn(update,k)).map(k=>[k,update[k]]));
+  const next=new OCCEngine({...this.config,...changes,exitMode:'Multi TP v5'});
+  if(next.config.feeBps>500||next.config.slippageBps>1000)throw Error('Phí hoặc slippage vượt giới hạn.');
+  this.config=next.config;this.pending=null;this.tradingEnabled=false;
+  return this.config;
+ }
+
  setHealthy(value) { this.healthy=!!value; if(!value)this.pending=null; }
  warmup(h4candles,m15candles,now=Date.now()) {
   const h=h4candles.map(barOf).filter(b=>b.time<=now).sort((a,b)=>a.time-b.time);
@@ -173,6 +183,7 @@ export class OCCEngine {
   const e=new OCCEngine(cfg);for(const k of Object.keys(e))if(k in data)e[k]=clone(data[k]);
   e.config={...new OCCEngine(cfg).config,...cfg};
   if(e.position&&!e.position.legs)e.position.legs=e.makeLegs(e.position.qty,e.position.entryPrice,e.position.side);
+  e.tradingEnabled=Boolean(data.tradingEnabled ?? data.running);
   e.running=false;e.healthy=false;e.pending=null;return e;}
  exportCSV(){const columns=['id','signalId','time','tradeId','action','side','qty','price','marketPrice','fee','pnl','balance'];const esc=x=>'"'+String(x??'').replaceAll('"','""')+'"';return [columns.join(','),...this.trades.map(r=>columns.map(k=>esc(r[k])).join(','))].join('\r\n');}
 }

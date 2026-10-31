@@ -80,6 +80,27 @@ export class Store {
       this.#db.exec('COMMIT');return seq;
     } catch(error) {this.#db.exec('ROLLBACK');throw error;}
   }
+  lastEvent() {
+    const r=this.#db.prepare('SELECT seq,type,received_at FROM events ORDER BY seq DESC LIMIT 1').get();
+    return r?{seq:r.seq,type:r.type,time:r.received_at}:null;
+  }
+  activity(limit=80) {
+    const rows=this.#db.prepare("SELECT type,received_at,payload_json FROM events WHERE type IN ('offline_interval','process_start','process_stop','user_start','user_pause','status','user_configure') ORDER BY seq").all();
+    const output=[];let pause=null;
+    for(const row of rows){
+      const p=JSON.parse(row.payload_json);
+      if(row.type==='offline_interval'){
+        const {from,to,reason,approximate}=p;
+        if(Number.isSafeInteger(from)&&Number.isSafeInteger(to)&&to>=from)
+          output.push({kind:'app_offline',from,to,reason:reason||'Ứng dụng đã tắt',approximate:!!approximate});
+      }
+      const a=p.activity;if(!a||typeof a.running!=='boolean')continue;
+      if(!a.running&&!pause)pause={kind:'trading_paused',from:row.received_at,to:null,reason:a.reason||'Không giao dịch'};
+      if(a.running&&pause){output.push({...pause,to:row.received_at});pause=null;}
+    }
+    if(pause)output.push(pause);
+    return output.sort((x,y)=>y.from-x.from).slice(0,Math.max(1,Math.min(500,limit)));
+  }
   sessions() {
     const found=new Map();
     for(const r of this.#db.prepare("SELECT received_at,payload_json FROM events WHERE type IN ('process_start','user_reset') ORDER BY seq").all()){

@@ -19,7 +19,7 @@ Nếu chỉ tải bằng Code → Download ZIP, đó là mã nguồn chưa có r
 - Paper position ~10% equity, không đòn bẩy, chỉ dùng Multi TP v5, chốt từng phần TP1/TP2/TP3 và SL %, chưa tính funding.
 - Binance BTCUSDT perpetual public data; không API key, tài khoản hay lệnh thật.
 - Dashboard mới, biểu đồ P&L đã đóng, lịch sử phiên, thắng/thua, CSV/JSON.
-- SQLite và lịch sử trong data/ cùng thư mục. Xem [Pine SL/TP mapping](PINE_EXIT_MAPPING.md). Khởi động luôn tạm dừng, chờ bấm Bắt đầu.
+- SQLite và lịch sử trong data/ cùng thư mục. Xem [Pine SL/TP mapping](PINE_EXIT_MAPPING.md). Sau khi mở lại, ứng dụng tự tiếp tục nếu trước đó bạn đã bật mô phỏng (chỉ sau khi đồng bộ Binance); nếu đã tạm dừng thì vẫn tạm dừng.
 
 ## Phát triển / kiểm thử
 
@@ -31,3 +31,7 @@ node server.mjs
 ~~~
 
 Kết quả mô phỏng chưa được xác minh parity TradingView hoặc khả năng khớp lệnh thật. Nếu nguồn Binance trả 451/403 theo vùng, app không bypass. Dùng Windows artifact chỉ khi workflow báo thành công. Xem README_VI.md để biết chi tiết.
+
+## Dữ liệu xuyên lần mở
+
+SQLite checkpoint giữ vốn, vị thế, lệnh, P&L và cấu hình. Sửa Multi TP khi tạm dừng/không còn vị thế không tạo phiên mới. Bảng thời gian gián đoạn ghi tắt app, mất kết nối, thời điểm khôi phục (giờ Việt Nam); không replay fills trong lúc offline. Thống kê mặc định là tổng lịch sử vị thế đóng; equity vẫn là số dư tài khoản hiện tại, không cộng vốn từng đợt thử cũ.
