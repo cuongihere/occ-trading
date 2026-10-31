@@ -122,7 +122,7 @@ test('Binance production API accepts V3 positionRisk [] when account is FLAT',as
 });
 test('read-only connection identifies exact failing endpoint instead of generic account error',async t=>{
  const fx=fake({brokenConfig:true});
- const service=new BrowserFutures({dataDir:tmp(t),transportFactory:()=>fx.api});
+ const service=new BrowserFutures({dataDir:tmp(t),transportFactory:()=>fx.api,credentialVault:makeVault(tmp(t))});
  await assert.rejects(service.connect({...creds,environment:'production'}),/\/fapi\/v1\/symbolConfig/);
  assert.equal(service.snapshot().connected,false);
 });
@@ -133,7 +133,7 @@ test('Demo connections are rejected by production-only application',async t=>{
 });
 
 test('Real BTCUSDT entry failure to establish STOP triggers one reduce-only emergency close and HALT',async t=>{
- const fx=fake({failStop:true}),service=new BrowserFutures({dataDir:tmp(t),transportFactory:()=>fx.api});
+ const fx=fake({failStop:true}),service=new BrowserFutures({dataDir:tmp(t),transportFactory:()=>fx.api,credentialVault:makeVault(tmp(t))});
  await service.connect(creds);service.saveConfig({marginUSDT:500,leverage:5});
  await service.arm('CHAP NHAN BTC FUTURES');
  await service.signal({side:'LONG',barTime:900000},true);

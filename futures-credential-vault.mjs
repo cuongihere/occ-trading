@@ -5,14 +5,15 @@ import {existsSync,readFileSync,writeFileSync,renameSync,unlinkSync,mkdirSync} f
 import {dirname} from 'node:path';
 const PS_SCRIPT=[
  "$ErrorActionPreference='Stop'",
+ "Add-Type -AssemblyName System.Security",
  "$raw=[Console]::In.ReadToEnd()",
  "$bytes=[Convert]::FromBase64String($raw.Trim())",
  "$entropy=[Text.Encoding]::UTF8.GetBytes('OCC-BTCUSDT-FUTURES-API-v1')",
  "if($env:OCC_DPAPI_MODE -eq 'protect'){",
  " $data=[Security.Cryptography.ProtectedData]::Protect($bytes,$entropy,[Security.Cryptography.DataProtectionScope]::CurrentUser)",
- "}elseif($env:OCC_DPAPI_MODE -eq 'unprotect'){",
+ "} elseif($env:OCC_DPAPI_MODE -eq 'unprotect'){",
  " $data=[Security.Cryptography.ProtectedData]::Unprotect($bytes,$entropy,[Security.Cryptography.DataProtectionScope]::CurrentUser)",
- "}else{throw 'Invalid DPAPI operation'}",
+ "} else {throw 'Invalid DPAPI operation'}",
  "[Console]::Out.Write([Convert]::ToBase64String($data))"
 ].join('\n');
 function windowsDpapi(bytes,mode){
@@ -22,7 +23,10 @@ function windowsDpapi(bytes,mode){
   env:{...process.env,OCC_DPAPI_MODE:mode},timeout:12000,maxBuffer:1024*1024
  });
  if(result.error||result.status!==0||!result.stdout?.trim())
-  throw Error('Windows DPAPI không thể '+(mode==='protect'?'mã hóa':'giải mã')+' API trên tài khoản Windows này');
+  throw Error('Windows DPAPI không thể '+(mode==='protect'?'mã hóa':'giải mã')+
+   ' API (status '+String(result.status)+'): '+
+   String(result.stderr||result.error?.message||'unknown failure')
+    .replace(/[A-Za-z0-9+/=]{55,}/g,'[redacted]').slice(0,500));
  return Buffer.from(result.stdout.trim(),'base64');
 }
 export class WindowsCredentialVault{
