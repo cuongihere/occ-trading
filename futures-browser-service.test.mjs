@@ -23,7 +23,8 @@ function fake({flatRiskRows=false,brokenConfig=false,failStop=false}={}){
     {filterType:'PRICE_FILTER',tickSize:'.1'},{filterType:'MIN_NOTIONAL',notional:'5'}]}]};
    if(path==='/fapi/v1/ticker/price')return {symbol:'BTCUSDT',price:'77000'};
    if(path==='/fapi/v1/order')return {symbol:'BTCUSDT',side:'BUY',positionSide:'BOTH',
-    status:'FILLED',executedQty:'.032',avgPrice:'77000',orderId:100};
+    status:'FILLED',executedQty:'.032',avgPrice:'77000',orderId:100,
+    clientOrderId:calls.find(x=>x.method==='POST'&&x.path==='/fapi/v1/order'&&x.p.reduceOnly!=='true')?.p.newClientOrderId};
    throw Error('Unexpected GET '+path);
   },
   async post(path,p){
