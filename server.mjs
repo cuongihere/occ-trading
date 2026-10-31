@@ -6,6 +6,7 @@ import {OCCEngine} from './engine.mjs';
 import {Store} from './store.mjs';
 import {summarize} from './stats.mjs';
 import {BinanceFeed} from './server-feed.mjs';
+import {BtcMarketQuote} from './btc-market-quote.mjs';
 import {readLiveReport} from './binance-live-stats.mjs';
 import {BrowserFutures} from './futures-browser-service.mjs';
 const args=new Set(process.argv.slice(2));
@@ -24,6 +25,7 @@ let engine=saved?OCCEngine.restore(saved):new OCCEngine();
 let simulate=Boolean(args.has('--simulate')||saved?.tradingEnabled||(!Object.hasOwn(saved||{},'tradingEnabled')&&saved?.running));
 if(engine.config.exitMode!=='Multi TP v5')simulate=false;
 engine.tradingEnabled=simulate;
+const btcMarketQuote=new BtcMarketQuote();
 let status={state:'starting',message:'Synchronizing real Binance data'},
  lastMark=null,lastObserved=null,lastPriceCommit=0,closing=false;
 function commit(type,payload,exchangeAt=null,receivedAt=Date.now(),mutate=()=>{}){
@@ -72,10 +74,10 @@ const feed=new BinanceFeed({
   if(signal?.eligible&&opts.live&&feed.healthy()&&browserFutures.armed)
    browserFutures.signal(signal,true).catch(e=>console.error('Futures Auto:',e.message));
  },
- onTrade(t){lastObserved=t.receivedAt??Date.now();const due=engine.pending||engine.exitTrigger(t.price)||Date.now()-lastPriceCommit>=1000;
+ onTrade(t){btcMarketQuote.updateTrade(t);lastObserved=t.receivedAt??Date.now();const due=engine.pending||engine.exitTrigger(t.price)||Date.now()-lastPriceCommit>=1000;
   if(!due)return;lastPriceCommit=Date.now();const healthy=feed.healthy();commit(engine.pending||engine.exitTrigger(t.price)?'execution_candidate':'price_sample',{trade:t,healthy},t.time,lastObserved,()=>engine.onTrade(t,healthy));
  },
- onMark(m){lastMark=m;},
+ onMark(m){btcMarketQuote.updateMark(m);lastMark=m;},
 });
 // Always persist the offline interval BEFORE starting a new process record. If the
 // prior process crashed, the last durable event is only an estimated start boundary.
@@ -129,6 +131,7 @@ const server=createServer(async(req,res)=>{
  res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');
  if(req.url==='/'){res.setHeader('Content-Type','text/html;charset=utf-8');return res.end(html);}
  if(req.url==='/binance'){res.setHeader('Content-Type','text/html;charset=utf-8');res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'");return res.end(binancePreviewHtml);}
+ if(req.url==='/api/binance/market'){res.setHeader('Content-Type','application/json;charset=utf-8');return res.end(JSON.stringify(btcMarketQuote.snapshot({healthy:feed.healthy(),state:feed.state})));}
  if(req.url==='/api/binance/live-status'){res.setHeader('Content-Type','application/json;charset=utf-8');return res.end(JSON.stringify(browserFutures.snapshot()));}
  if(req.url==='/api/binance/live-report'){res.setHeader('Content-Type','application/json;charset=utf-8');return res.end(JSON.stringify(readLiveReport(resolve(dir,'binance-live-stats.sqlite'))));}
  if(req.url==='/api/state'){const s=engine.snapshot();res.setHeader('Content-Type','application/json');return res.end(JSON.stringify({mode:simulate?'paper_enabled':'collect_only',status,lastObservedUTC:lastObserved?new Date(lastObserved).toISOString():null,lastTrade:s.lastPrice,markPrice:lastMark?.price??null,balance:s.balance,equity:s.equity,unrealized:s.unrealized,fees:s.fees,funding:'EXCLUDED',position:s.position,levels:s.levels,capital:s.config.capital,config:s.config,trades:s.trades,signals:s.signals,signalCount:s.signals.length,fillCount:s.trades.length,running:s.running,tradingEnabled:engine.tradingEnabled,healthy:feed.healthy(),ready:s.ready,session:s.sessionId}));}

@@ -1,0 +1,40 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {BtcMarketQuote} from './btc-market-quote.mjs';
+test('BTC Futures real aggTrade price is shown from feed, independent of paper trading and account API',()=>{
+ let now=100000;
+ const q=new BtcMarketQuote({clock:()=>now,maxAgeMs:10000});
+ assert.deepEqual(q.snapshot({healthy:true,state:'live'}).lastPrice,null);
+ assert.equal(q.updateTrade({price:77302.4,time:99998,receivedAt:99999}),true);
+ assert.equal(q.updateMark({price:77301.88,time:99998,receivedAt:100000}),true);
+ const s=q.snapshot({healthy:true,state:'live'});
+ assert.equal(s.symbol,'BTCUSDT');
+ assert.equal(s.contract,'USD-M PERPETUAL');
+ assert.equal(s.live,true);
+ assert.equal(s.lastPrice,77302.4);
+ assert.equal(s.markPrice,77301.88);
+ assert.equal(s.lastReceivedAt,99999);
+ assert.equal(s.lastExchangeAt,99998);
+});
+test('Disconnected, stalled or stale market data never masquerades as a live BTC quote',()=>{
+ let now=100000;
+ const quote=new BtcMarketQuote({clock:()=>now});
+ quote.updateTrade({price:77000,time:99000,receivedAt:99999});
+ quote.updateMark({price:76997,time:99000,receivedAt:99999});
+ assert.equal(quote.snapshot({healthy:false,state:'stale'}).lastPrice,null);
+ assert.equal(quote.snapshot({healthy:false,state:'stale'}).markPrice,null);
+ now=112000;
+ const s=quote.snapshot({healthy:true,state:'live'});
+ assert.equal(s.live,false);assert.equal(s.lastPrice,null);assert.equal(s.markPrice,null);
+});
+test('No invalid, outdated or out-of-order updates to market prices',()=>{
+ let now=100000;
+ const q=new BtcMarketQuote({clock:()=>now,maxAgeMs:10000});
+ assert.equal(q.updateTrade({price:77000,time:99999,receivedAt:99999}),true);
+ assert.equal(q.updateTrade({price:1,time:99998,receivedAt:100000}),false);
+ assert.equal(q.updateTrade({price:0,time:100000,receivedAt:100000}),false);
+ assert.equal(q.updateTrade({price:NaN,time:100000,receivedAt:100000}),false);
+ assert.equal(q.updateTrade({price:78000,time:100000,receivedAt:80000}),false);
+ assert.equal(q.updateMark({price:-1,time:100000,receivedAt:100000}),false);
+ assert.equal(q.snapshot({healthy:true,state:'live'}).lastPrice,77000);
+});

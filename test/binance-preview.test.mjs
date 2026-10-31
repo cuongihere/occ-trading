@@ -43,3 +43,19 @@ test('Actual leverage differs from bot config until explicit exchange-sync actio
  assert.match(html,/leverageMismatch/);
  assert.match(html,/ÁP DỤNG/);
 });
+
+test('Binance Futures real BTC price is shown in header and refreshed independently of account API',()=>{
+ const html=read('BINANCE_UI_PREVIEW.html'),server=read('server.mjs');
+ for(const id of ['btcMarketTicker','btcLastPrice','btcMarketMark','btcLastState','btcPriceTime'])
+  assert.match(html,new RegExp('id="'+id+'"'));
+ assert.match(html,/BTCUSDT FUTURES · LAST/);
+ assert.match(html,/fetch\('\/api\/binance\/market'/);
+ assert.match(html,/setInterval\(refreshMarketPrice,1000\)/);
+ assert.match(html,/MẤT LUỒNG GIÁ/);
+ assert.match(server,/btcMarketQuote\.updateTrade\(t\)/);
+ assert.match(server,/btcMarketQuote\.updateMark\(m\)/);
+ assert.match(server,/req\.url==='\/api\/binance\/market'/);
+});
+test('Portable package contains BTC price market quote module',()=>{
+ assert.match(read('BUILD_PORTABLE.ps1'),/'btc-market-quote\.mjs'/);
+});

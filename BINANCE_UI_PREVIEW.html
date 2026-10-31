@@ -12,6 +12,14 @@
 .controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .status{border-radius:24px;padding:7px 12px;background:#263244;color:#b9c9dd;font-weight:700;font-size:12px;white-space:nowrap}
 .status.ok{background:#164c3a;color:#9cf2c1}.status.bad{background:#55272f;color:#ffb8bf}
+.marketTicker{min-width:195px;text-align:right;border:1px solid #31465f;background:#142439;border-radius:11px;padding:5px 11px;font-variant-numeric:tabular-nums}
+.marketTicker .quoteHeading{font-size:10px;color:#95b6db;letter-spacing:.3px}
+.marketTicker .quoteValue{font-size:24px;font-weight:820;letter-spacing:-.4px;line-height:1.15;color:#eaf5ff}
+.marketTicker .quoteMeta{font-size:10px;color:#a6bdd1;white-space:nowrap}
+.marketTicker .quoteState{color:#9aefbe;font-weight:700}
+.marketTicker.stale .quoteValue{color:#8796a9}
+.marketTicker.stale .quoteState{color:#f1bc88}
+@media(max-width:650px){.marketTicker{min-width:170px;text-align:left}.marketTicker .quoteValue{font-size:21px}}
 .auto{display:flex;align-items:center;gap:9px;border:1px solid #526176;padding:7px 13px;border-radius:11px;background:#222536;font-weight:750;white-space:nowrap}
 .auto input{width:17px;height:17px;accent-color:#a1f0b6}.auto.on{background:#173f2e;border-color:#3b9365}
 .link{display:block;text-decoration:none;padding:9px 14px;border:1px solid #415a72;border-radius:9px;white-space:nowrap}
@@ -71,7 +79,14 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
 <div class="app">
 <header class="topbar">
  <div><div class="brand">OCC <span style="color:#b0ecbd">/</span> BTCUSDT Futures</div><div class="small">Binance thật · USDⓈ-M Perpetual</div></div>
- <div class="controls"><span id="connection" class="status">CHƯA KẾT NỐI</span>
+ <div class="controls">
+ <div class="marketTicker stale" id="btcMarketTicker" aria-live="off" title="Giá khớp gần nhất BTCUSDT Perpetual từ Binance Futures, không phải giá Paper">
+  <div class="quoteHeading">BTCUSDT FUTURES · LAST</div>
+  <div id="btcLastPrice" class="quoteValue">—</div>
+  <div class="quoteMeta"><span id="btcLastState" class="quoteState">ĐANG KẾT NỐI</span> · Mark <span id="btcMarketMark">—</span></div>
+  <div class="quoteMeta" id="btcPriceTime">Chưa nhận được giao dịch trực tiếp</div>
+ </div>
+ <span id="connection" class="status">CHƯA KẾT NỐI</span>
  <label class="auto" id="autoWrap" style="flex-direction:row;color:#eff6ff;font-size:12px"><input id="enabled" type="checkbox" disabled><span id="autoLabel">AUTO OFF</span></label>
  <a href="/" class="link">Paper Trading</a></div>
 </header>
@@ -166,6 +181,7 @@ const color=(el,n)=>{el.classList.remove('positive','negative');if(Number(n)>0)e
 const vn=t=>t==null?'—':new Date(t).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',hour12:false});
 const numbers=['marginUSDT','leverage','sl','tp1','tp2','tp3','q1','q2'];
 let setupLoaded=false,autoBusy=false,editingUntil=0,saveTimer=null,liveReport=null;
+let marketSnapshot=null,marketRefreshing=false;
 const val=id=>$(id).value.trim()===''?NaN:Number($(id).value);
 function config(){return {side:$('side').value,marginUSDT:val('marginUSDT'),leverage:val('leverage'),
  slPercent:val('sl'),tpMode:$('mode').value,tp1Val:val('tp1'),tp2Val:val('tp2'),
@@ -280,7 +296,7 @@ async function refreshLive(){
   for(const [id,key] of Object.entries(labels)){const el=$(id);el.textContent=a?fmt(a[key],id==='btcPosition'?6:2):'—';}
   color($('unrealized'),a?.unrealizedUSDT);color($('btcPosition'),a?.positionBTC);
   $('entryPrice').textContent=a?fmt(a.entryPrice,2):'—';
-  $('markPrice').textContent=a?fmt(a.markPrice,2):'—';
+  $('markPrice').textContent=marketSnapshot?.markPrice!=null?fmt(marketSnapshot.markPrice,2):'—';
   $('liqPrice').textContent=a?fmt(a.liquidationPrice,2):'—';
   $('btcPnl').textContent=a?fmt(a.btcUnrealizedUSDT,2)+' USDT':'—';
   color($('btcPnl'),a?.btcUnrealizedUSDT);
@@ -353,6 +369,32 @@ $('statsCsv').onclick=()=>{
  const blob=new Blob(['\ufeff'+[cols.join(','),...rows].join('\r\n')],{type:'text/csv;charset=utf-8'});
  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='OCC_Binance_BTCUSDT_Real.csv';a.click();URL.revokeObjectURL(url);
 };
-refreshLive();refreshReport();setInterval(refreshLive,5000);setInterval(refreshReport,15000);
+async function refreshMarketPrice(){
+ if(marketRefreshing)return;
+ marketRefreshing=true;
+ try{
+  const response=await fetch('/api/binance/market',{cache:'no-store'});
+  if(!response.ok)throw Error('HTTP '+response.status);
+  const market=await response.json();
+  if(market.symbol!=='BTCUSDT'||market.contract!=='USD-M PERPETUAL')throw Error('Nguồn giá không đúng hợp đồng BTCUSDT');
+  marketSnapshot=market;
+  const isLive=market.live===true&&typeof market.lastPrice==='number'&&Number.isFinite(market.lastPrice)&&market.lastPrice>0;
+  $('btcLastPrice').textContent=isLive?fmt(market.lastPrice,2):'—';
+  $('btcMarketMark').textContent=market.markPrice!=null?fmt(market.markPrice,2):'—';
+  $('btcLastState').textContent=isLive?'TRỰC TIẾP':'MẤT LUỒNG GIÁ';
+  $('btcMarketTicker').classList.toggle('stale',!isLive);
+  $('btcPriceTime').textContent=isLive?'Cập nhật '+vn(market.lastReceivedAt):'Đang chờ giá trực tiếp từ Binance';
+  $('markPrice').textContent=market.markPrice!=null?fmt(market.markPrice,2):'—';
+ }catch(e){
+  marketSnapshot=null;
+  $('btcLastPrice').textContent='—';$('btcMarketMark').textContent='—';
+  $('btcLastState').textContent='KHÔNG KẾT NỐI';
+  $('btcMarketTicker').classList.add('stale');
+  $('btcPriceTime').textContent='Không có dữ liệu giá Binance';
+  $('markPrice').textContent='—';
+ }finally{marketRefreshing=false;}
+}
+refreshLive();refreshReport();refreshMarketPrice();
+setInterval(refreshLive,5000);setInterval(refreshReport,15000);setInterval(refreshMarketPrice,1000);
 </script>
 </body></html>

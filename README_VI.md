@@ -91,3 +91,8 @@ Dashboard chỉ bind 127.0.0.1, không cung cấp dịch vụ công khai. Không
 Khi đã kết nối API BTCUSDT và đã tắt Auto, không có vị thế BTCUSDT, không còn lệnh thường/SL/TP BTCUSDT, bấm **Đặt 5x trên Binance**. App sẽ yêu cầu xác nhận, gọi `POST /fapi/v1/leverage` (chỉ BTCUSDT), kiểm tra mã xác nhận từ sàn và gọi lại `GET /fapi/v1/symbolConfig` để bảo đảm thực sự là 5x. Không lặp lại lệnh POST nếu kết quả kết nối không rõ. Nếu API không có quyền Futures Trading hoặc Binance từ chối, trạng thái đòn bẩy sàn vẫn được hiển thị theo API và Auto tiếp tục bị khóa khi chưa trùng cấu hình.
 
 Không thay đổi đòn bẩy BTCUSDT từ app khi đang có vị thế/lệnh mở; không đổi Cross/Isolated hay One-way ngầm.
+
+
+## Giá BTCUSDT Futures thực trên dashboard
+
+Trong màn hình `/binance`, cạnh công tắc Auto có ô **BTCUSDT FUTURES · LAST** cập nhật giá giao dịch gần nhất từ luồng công khai Binance USDⓈ-M `btcusdt@aggTrade`, cùng **Mark Price** từ `btcusdt@markPrice@1s` và giờ nhận giá tại máy (giờ Việt Nam). Không dùng số dư Paper hay giá Entry để hiển thị giá thị trường. Tự làm mới mỗi giây, không cần API Key; khi feed ngắt hoặc giá quá 10 giây thì hiển thị dấu gạch ngang và cảnh báo **MẤT LUỒNG GIÁ** để tránh nhầm giá cũ là giá hiện tại. Số liệu trong vị thế cũng dùng Mark Price của luồng công khai khi còn kết nối.
