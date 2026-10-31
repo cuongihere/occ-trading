@@ -10,7 +10,7 @@ test('HMAC signature, BTC-only API path, and no automatic order retries',async()
  const u=new URL(calls[0].url),params=new URLSearchParams(u.searchParams);
  const signature=params.get('signature');params.delete('signature');
  assert.equal(signature,createHmac('sha256','fixture-secret').update(params.toString()).digest('hex'));
- await assert.rejects(transport.get('/fapi/v1/positionRisk',{symbol:'ETHUSDT'}),/Only BTCUSDT/);
+ await assert.rejects(transport.get('/fapi/v3/positionRisk',{symbol:'ETHUSDT'}),/Only BTCUSDT/);
  await assert.rejects(transport.get('/not-an-endpoint'),/not allowed/);
  transport.close();
 });
