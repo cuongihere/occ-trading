@@ -26,16 +26,22 @@ button.primary{background:#b1eabf;color:#0e2318;border:0}button:disabled{opacity
 <section class="card"><h2>1. Kết nối & công tắc giao dịch</h2>
 <div class="switch"><input type="checkbox" id="enabled" disabled style="width:22px"><div><strong>Giao dịch thật <span class="pill">OFF · ĐÃ KHÓA</span></strong><div class="muted">Không gửi lệnh khi chưa có xác minh an toàn.</div></div></div>
 <div style="margin-top:20px"><h2>Trạng thái API</h2><p id="connection" class="muted">Chỉ đọc: sử dụng CHECK_BINANCE_WINDOWS.bat để kiểm tra khóa API trên máy.</p>
-<p class="muted">Chế độ tài khoản dự kiến: One-way · ISOLATED · 1x. API Key không nhập vào trang này.</p></div></section>
+<p class="muted">Chế độ dự kiến: One-way · ISOLATED. Đòn bẩy trong bản nháp cần được xác minh lại trên Binance khi kết nối thực. API Key không nhập vào trang này.</p></div></section>
 <section class="card"><h2>2. Thiết lập lệnh BTCUSDT</h2>
+<p class="muted" style="margin-top:-5px">Chỉ cần chọn số USDT ký quỹ thực muốn dùng cho <strong>mỗi lệnh</strong> và mức đòn bẩy.</p>
 <div class="fields">
+<label style="grid-column:1/-1">USDT ký quỹ / lệnh
+<input id="marginUSDT" type="number" min="0.01" step="any" value="20" inputmode="decimal">
+<small>Ví dụ: tài khoản có 400 USDT, chỉ dùng 20 USDT làm ký quỹ cho một lệnh.</small></label>
+<label>Đòn bẩy (x)<input id="leverage" type="number" min="1" max="20" step="1" value="5" inputmode="numeric"></label>
 <label>Chiều giao dịch<select id="side"><option value="BOTH">LONG & SHORT</option><option value="LONG">Chỉ LONG</option><option value="SHORT">Chỉ SHORT</option></select></label>
-<label>Kiểu lệnh mở<select disabled><option>MARKET</option></select></label>
-<label>Quy mô theo Equity (%)<input id="eq" type="number" min="0.01" max="10" step=".1" value="10"></label>
-<label>Giới hạn giá trị mỗi lệnh (USDT)<input id="limit" type="number" min="100" max="10000" step="10" value="300"></label>
-<label>Margin<select disabled><option>ISOLATED</option></select></label>
-<label>Đòn bẩy<select disabled><option>1x</option></select></label>
-</div></section>
+</div>
+<div style="margin-top:17px;padding:15px;border-radius:12px;background:#10253a;border:1px solid #38546d">
+<small>Giá trị vị thế dự kiến</small><div id="notional" style="font-size:32px;font-weight:750;letter-spacing:-.5px">100 USDT</div>
+<div id="sizingFormula" class="muted">20 USDT × 5x = 100 USDT</div>
+</div>
+<p class="muted" style="margin-top:14px">Mở MARKET · Isolated dự kiến. Ký quỹ không phải mức lỗ tối đa; lỗ và phí có thể vượt số ký quỹ. Tài khoản thực phải cho phép đòn bẩy đã chọn.</p>
+</section>
 <section class="card"><h2>3. Multi TP v5 · SL & chốt lời từng phần</h2>
 <div class="fields"><label>Stop Loss (% giá Entry)<input id="sl" type="number" min=".1" max="10" step=".1" value="1"></label>
 <label>TP Mode<select id="mode"><option value="Percent">Percent (%)</option><option value="Points">Points (USD)</option></select></label>
@@ -53,22 +59,39 @@ button.primary{background:#b1eabf;color:#0e2318;border:0}button:disabled{opacity
 </div></main>
 <script>
 const $=id=>document.getElementById(id);
-const ids=['side','eq','limit','sl','mode','tp1','tp2','tp3','entry','q1','q2'];
+const ids=['side','marginUSDT','leverage','sl','mode','tp1','tp2','tp3','entry','q1','q2'];
 const fmt=n=>Number.isFinite(n)?n.toLocaleString('en-US',{maximumFractionDigits:5}):'—';
 function calc(){
- const val=id=>Number($(id).value),entry=val('entry'),sl=val('sl'),tps=[val('tp1'),val('tp2'),val('tp3')],q1=val('q1'),q2=val('q2');
- const bad=[entry,sl,q1,q2,...tps].some(x=>!Number.isFinite(x))||entry<=0||sl<=0||sl>10||tps.some(x=>x<=0)||q1<0||q2<0||q1+q2>=100;
- $('error').textContent=bad?'Giá trị không hợp lệ. TP1% + TP2% phải nhỏ hơn 100%.':'';
- $('q3').value=bad?'—':fmt(100-q1-q2);
- if(bad){$('preview').textContent='Vui lòng nhập giá trị hợp lệ.';return;}
+ const val=id=>$(id).value.trim()===''?NaN:Number($(id).value);
+ const entry=val('entry'),margin=val('marginUSDT'),leverage=val('leverage'),
+  sl=val('sl'),tps=[val('tp1'),val('tp2'),val('tp3')],q1=val('q1'),q2=val('q2');
+ const notional=margin*leverage;
+ const sizingOk=Number.isFinite(margin)&&margin>0&&Number.isInteger(leverage)&&leverage>=1&&leverage<=20&&
+  Number.isFinite(notional)&&notional>0;
+ $('notional').textContent=sizingOk?fmt(notional)+' USDT':'—';
+ $('sizingFormula').textContent=sizingOk?fmt(margin)+' USDT × '+leverage+'x = '+fmt(notional)+' USDT':
+  'Nhập ký quỹ lớn hơn 0 và đòn bẩy nguyên từ 1x đến 20x.';
+ const validTp=Number.isFinite(entry)&&entry>0&&Number.isFinite(sl)&&sl>0&&sl<=10&&
+  tps.every(x=>Number.isFinite(x)&&x>0)&&Number.isFinite(q1)&&Number.isFinite(q2)&&
+  q1>=0&&q2>=0&&q1+q2<100;
+ $('error').textContent=!sizingOk?'USDT ký quỹ phải lớn hơn 0 và đòn bẩy là số nguyên từ 1 đến 20.':
+  !validTp?'Kiểm tra giá Entry, SL/TP và tỷ lệ chốt. TP1 + TP2 phải nhỏ hơn 100%.':'';
+ $('q3').value=validTp?fmt(100-q1-q2):'—';
+ if(!sizingOk||!validTp){$('preview').textContent='Vui lòng nhập giá trị hợp lệ.';return;}
  const mode=$('mode').value;
  const levels=direction=>{
-  const d=direction==='LONG'?1:-1,stop=entry*(1-d*sl/100),tp=v=>mode==='Percent'?entry*(1+d*v/100):entry+d*v;
-  return direction+'  |  SL '+fmt(stop)+'  |  TP1 '+fmt(tp(tps[0]))+'  |  TP2 '+fmt(tp(tps[1]))+'  |  TP3 '+fmt(tp(tps[2]));
+  const d=direction==='LONG'?1:-1,stop=entry*(1-d*sl/100),
+   tp=v=>mode==='Percent'?entry*(1+d*v/100):entry+d*v;
+  return direction+' | SL '+fmt(stop)+' | TP1 '+fmt(tp(tps[0]))+
+   ' | TP2 '+fmt(tp(tps[1]))+' | TP3 '+fmt(tp(tps[2]));
  };
- $('preview').textContent=levels('LONG')+'\n'+levels('SHORT')+
-   '\nTỷ lệ chốt: '+fmt(q1)+'% / '+fmt(q2)+'% / '+fmt(100-q1-q2)+'%'+
-   '\nQuy mô tối đa: '+fmt(val('eq'))+'% equity, không vượt '+fmt(val('limit'))+' USDT.';
+ const estimatedBTC=notional/entry;
+ $('preview').textContent=
+  'Ký quỹ '+fmt(margin)+' USDT × '+leverage+'x = '+fmt(notional)+' USDT vị thế'+
+  '\nBTC ước tính: '+estimatedBTC.toLocaleString('en-US',{maximumFractionDigits:8})+' BTC (giá '+fmt(entry)+')'+
+  '\n'+levels('LONG')+'\n'+levels('SHORT')+
+  '\nTỷ lệ chốt: '+fmt(q1)+'% / '+fmt(q2)+'% / '+fmt(100-q1-q2)+'%'+
+  '\nChưa bao gồm phí, funding và quy tắc làm tròn khối lượng Binance.';
 }
 for(const id of ids)$(id).addEventListener('input',calc);
 $('save').onclick=()=>{const obj=Object.fromEntries(ids.map(id=>[id,$(id).value]));localStorage.setItem('occ-binance-draft',JSON.stringify(obj));alert('Đã lưu bản nháp cấu hình trên trình duyệt; CHƯA bật lệnh thật.');};
