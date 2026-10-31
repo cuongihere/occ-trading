@@ -34,3 +34,9 @@ See Binance USD-M API documentation for current supported endpoints. Price/quant
 Note: Binance Demo API credentials are distinct from production credentials. Exchange and order formats may differ; no real demo network execution has been verified from this environment.
 
 - `futures-protection-plan.mjs`: produces post-fill STOP close-all and three reduce-only TP descriptions for review and offline tests; it does not send these requests.
+
+## Post-entry SL / Multi TP coordinator
+
+Source helpers `futures-protection-orchestrator.mjs` and `futures-protection-checkpoint.mjs` now implement a testable sequence for a confirmed filled BTCUSDT entry: verify exchange position, persist a request marker, send `STOP_MARKET` close-all, verify it via exchange open algo orders, then send and verify TP1, TP2 and TP3 with `reduceOnly` and separate quantities. All uncertain requests halt; restart requires manual reconciliation, never duplicate submission. Unit tests use an exchange mock, not real funds.
+
+**Not yet integrated with the dashboard LIVE switch or a running execution worker.** Real trading remains OFF. Missing end-to-end Demo testing, fill/conditional-order reconciliation, protection after partial fills, cancellation of stale TP/SL when the position becomes flat, and contingency handling for unprotected entries. Binance-side orders, once verified, operate at the exchange without keeping the app open; execution is not guaranteed at a particular trigger price.
