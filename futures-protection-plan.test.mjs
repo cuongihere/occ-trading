@@ -25,3 +25,10 @@ test('SHORT stop above entry and targets below entry',()=>{
  assert.ok(Number(a.stop.triggerPrice)>77000);
  assert.ok(a.tps.every(x=>Number(x.triggerPrice)<77000));
 });
+
+test('browser-generated OCCBTC 7-byte hex ID can register STOP and three TP IDs',()=>{
+ const prefix='OCCBTC-1234567890abcd';
+ const q=protectionRequests({side:'LONG',entryPrice:77000,filledQty:0.032,stepSize:0.001,tickSize:0.1,clientPrefix:prefix},{});
+ assert.equal(q.stop.clientAlgoId,prefix+'-SL');
+ assert.deepEqual(q.tps.map(x=>x.clientAlgoId),[prefix+'-TP1',prefix+'-TP2',prefix+'-TP3']);
+});

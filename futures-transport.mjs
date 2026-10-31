@@ -40,8 +40,12 @@ export class FuturesTransport{
   catch{throw Error('Binance request outcome unknown; reconcile before any subsequent order');}
   let body;
   try{body=await response.json();}catch{throw Error('Binance response unreadable; reconcile before any subsequent order');}
-  if(!response.ok||typeof body?.code==='number'&&body.code<0)
-   throw Error('Binance rejected '+method+' '+path+': '+response.status+' / '+String(body?.code??'unknown'));
+  if(!response.ok||(typeof body?.code==='number'&&body.code<0)){
+   // Return endpoint, HTTP status and Binance error code without printing signed URL or API keys.
+   const code=Number.isInteger(body?.code)?String(body.code):'unknown';
+   const message=typeof body?.msg==='string'?body.msg.replace(/[A-Za-z0-9_-]{40,}/g,'[redacted]').slice(0,160):'';
+   throw Error('Binance '+method+' '+path+' HTTP '+response.status+' (code '+code+')'+(message?': '+message:''));
+  }
   return body;
  }
  async syncClock(){

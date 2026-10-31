@@ -5,7 +5,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {BrowserFutures} from './futures-browser-service.mjs';
 const tmp=t=>{const p=mkdtempSync(join(tmpdir(),'occ-browser-live-'));t.after(()=>rmSync(p,{force:true,recursive:true}));return p;};
-function fake(){
+function fake({flatRiskRows=false,brokenConfig=false}={}){
  const calls=[],algo=[],normal=[],position={qty:0},mode={dualSidePosition:false};
  const api={
   close(){calls.push('closed');},
@@ -14,8 +14,8 @@ function fake(){
    calls.push({method:'GET',path,p});
    if(path==='/fapi/v2/account')return {canTrade:true,assets:[{asset:'USDT',walletBalance:'800',availableBalance:'800'}]};
    if(path==='/fapi/v1/positionSide/dual')return mode;
-   if(path==='/fapi/v1/symbolConfig')return [{symbol:'BTCUSDT',marginType:'ISOLATED',leverage:5}];
-   if(path==='/fapi/v3/positionRisk')return [{symbol:'BTCUSDT',positionSide:'BOTH',positionAmt:String(position.qty)}];
+   if(path==='/fapi/v1/symbolConfig')return brokenConfig?[]:[{symbol:'BTCUSDT',marginType:'ISOLATED',leverage:5}];
+   if(path==='/fapi/v3/positionRisk')return flatRiskRows&&position.qty===0?[]:[{symbol:'BTCUSDT',positionSide:'BOTH',positionAmt:String(position.qty)}];
    if(path==='/fapi/v1/openOrders')return normal;
    if(path==='/fapi/v1/openAlgoOrders')return algo;
    if(path==='/fapi/v1/exchangeInfo')return {symbols:[{symbol:'BTCUSDT',contractType:'PERPETUAL',
@@ -95,4 +95,23 @@ test('Unfinished intent after restart blocks arming until exchange confirmed FLA
  fx.position.qty=0;fx.algo.splice(0);
  await again.reconcileFlat();await again.arm();
  assert.equal(again.snapshot().armed,true);
+});
+
+test('Binance production read-only API accepts V3 positionRisk [] when account is FLAT',async t=>{
+ const dir=tmp(t),fx=fake({flatRiskRows:true});
+ const service=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api});
+ await service.connect({...creds,environment:'production'});
+ const state=service.snapshot();
+ assert.equal(state.connected,true);
+ assert.equal(state.account.positionBTC,0);
+ assert.equal(state.account.availableUSDT,800);
+ assert.equal(state.armed,false);
+ await assert.rejects(service.api.post('/fapi/v1/order',{symbol:'BTCUSDT',type:'MARKET'}),/Production trade API is locked/);
+ await assert.rejects(service.arm(),/Chỉ cho phép Binance Demo/);
+});
+test('read-only connection identifies exact failing endpoint instead of generic account error',async t=>{
+ const fx=fake({brokenConfig:true});
+ const service=new BrowserFutures({dataDir:tmp(t),transportFactory:()=>fx.api});
+ await assert.rejects(service.connect({...creds,environment:'production'}),/\/fapi\/v1\/symbolConfig/);
+ assert.equal(service.snapshot().connected,false);
 });

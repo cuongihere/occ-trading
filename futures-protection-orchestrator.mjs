@@ -75,7 +75,7 @@ export class ProtectionCoordinator {
  async protectConfirmedEntry({entryOrderId,side,stepSize,tickSize,clientPrefix}){
   if(this.state.phase!=='IDLE'||this.state.halted||this.state.inFlight)
    throw Error('Cannot protect a second trade or resume uncertain state automatically');
-  if(!['LONG','SHORT'].includes(side)||!/^OCCBTC-[A-Za-z0-9_-]{1,18}$/.test(clientPrefix||''))
+  if(!['LONG','SHORT'].includes(side)||!/^OCCBTC-[A-Za-z0-9_-]{1,25}$/.test(clientPrefix||''))
    throw Error('Invalid BTCUSDT position request');
   try{
    const o=await this.api.get('/fapi/v1/order',{symbol:'BTCUSDT',orderId:entryOrderId});

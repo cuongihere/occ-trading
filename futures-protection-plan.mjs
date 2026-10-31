@@ -4,7 +4,7 @@ import {validateLiveConfig,floorStep,roundTick,liveTargets} from './futures-sizi
 export function protectionRequests({side,entryPrice,filledQty,stepSize,tickSize,clientPrefix},settings){
  const c=validateLiveConfig(settings);
  if(!['LONG','SHORT'].includes(side))throw Error('Invalid direction');
- if(!/^OCCBTC-[A-Za-z0-9_-]{1,18}$/.test(clientPrefix||''))throw Error('Invalid client prefix');
+ if(!/^OCCBTC-[A-Za-z0-9_-]{1,25}$/.test(clientPrefix||''))throw Error('Invalid client prefix');
  if(!Number.isFinite(filledQty)||filledQty<=0||!Number.isFinite(entryPrice)||entryPrice<=0)throw Error('Missing verified fill');
  const qty=floorStep(filledQty,stepSize),levels=liveTargets(entryPrice,side,c);
  if(qty<=0)throw Error('No executable BTC quantity');

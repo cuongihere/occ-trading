@@ -49,6 +49,8 @@ export class BrowserFutures{
  async inspect(){
   if(!this.api)throw Error('Chưa kết nối API');
   await this.api.syncClock();
+  // The V3 positionRisk API deliberately omits symbols without positions/orders.
+  // Never treat an absent BTCUSDT row as a failed API connection.
   const [account,mode,config,positions,orders,algos,info]=await Promise.all([
    this.api.get('/fapi/v2/account'),this.api.get('/fapi/v1/positionSide/dual'),
    this.api.get('/fapi/v1/symbolConfig',{symbol:'BTCUSDT'}),
@@ -56,22 +58,48 @@ export class BrowserFutures{
    this.api.get('/fapi/v1/openOrders',{symbol:'BTCUSDT'}),
    this.api.get('/fapi/v1/openAlgoOrders',{symbol:'BTCUSDT'}),
    this.api.get('/fapi/v1/exchangeInfo')]);
-  const c=config.find(x=>x.symbol==='BTCUSDT');
-  const p=positions.find(x=>x.symbol==='BTCUSDT'&&x.positionSide==='BOTH');
-  const symbol=info.symbols?.find(x=>x.symbol==='BTCUSDT'&&x.contractType==='PERPETUAL'&&x.status==='TRADING');
-  if(!c||!p||!symbol||!Array.isArray(orders)||!Array.isArray(algos))
-   throw Error('Không kiểm tra được toàn bộ tài khoản BTCUSDT Futures');
+  if(!account||typeof account!=='object'||!Array.isArray(account.assets))
+   throw Error('Binance /fapi/v2/account: thiếu assets; kiểm tra quyền đọc tài khoản Futures');
+  if(!mode||typeof mode.dualSidePosition!=='boolean')
+   throw Error('Binance /fapi/v1/positionSide/dual: dữ liệu One-way/Hedge không hợp lệ');
+  if(!Array.isArray(config))throw Error('Binance /fapi/v1/symbolConfig: phản hồi không phải danh sách');
+  const c=config.find(x=>x?.symbol==='BTCUSDT');
+  if(!c)throw Error('Binance /fapi/v1/symbolConfig: không có cấu hình BTCUSDT');
+  if(!Array.isArray(positions))throw Error('Binance /fapi/v3/positionRisk: phản hồi không phải danh sách');
+  if(!Array.isArray(orders))throw Error('Binance /fapi/v1/openOrders: phản hồi không phải danh sách');
+  if(!Array.isArray(algos))throw Error('Binance /fapi/v1/openAlgoOrders: phản hồi không phải danh sách');
+  if(!info||!Array.isArray(info.symbols))
+   throw Error('Binance /fapi/v1/exchangeInfo: thiếu thông tin hợp đồng');
+  const symbol=info.symbols.find(x=>x?.symbol==='BTCUSDT'&&x.contractType==='PERPETUAL'&&x.status==='TRADING');
+  if(!symbol)throw Error('Binance /fapi/v1/exchangeInfo: BTCUSDT Perpetual chưa ở trạng thái TRADING');
   const f=k=>symbol.filters?.find(x=>x.filterType===k);
-  const lot=f('MARKET_LOT_SIZE')?.stepSize!=='0'?f('MARKET_LOT_SIZE'):f('LOT_SIZE');
+  const marketLot=f('MARKET_LOT_SIZE'),regularLot=f('LOT_SIZE');
+  const lot=marketLot&&Number(marketLot.stepSize)>0&&Number(marketLot.minQty)>0?marketLot:regularLot;
   this.filters={stepSize:Number(lot?.stepSize),minQty:Number(lot?.minQty),
    minNotional:Number(f('MIN_NOTIONAL')?.notional||0),tickSize:Number(f('PRICE_FILTER')?.tickSize)};
-  const usdt=account.assets?.find(x=>x.asset==='USDT');
+  if(!(this.filters.stepSize>0)||!(this.filters.minQty>0)||!(this.filters.tickSize>0))
+   throw Error('Binance /fapi/v1/exchangeInfo: thiếu quy tắc bước khối lượng hoặc giá BTCUSDT');
+  const usdt=account.assets.find(x=>x.asset==='USDT');
+  if(!usdt)throw Error('Binance /fapi/v2/account: không thấy tài sản USDT Futures');
+  const availableUSDT=Number(usdt.availableBalance),walletUSDT=Number(usdt.walletBalance);
+  if(!Number.isFinite(availableUSDT)||!Number.isFinite(walletUSDT))
+   throw Error('Binance /fapi/v2/account: số dư USDT không hợp lệ');
+  const matching=positions.filter(x=>x?.symbol==='BTCUSDT');
+  if(matching.some(x=>x.positionSide!=='BOTH')||matching.length>1)
+   throw Error('Binance /fapi/v3/positionRisk: vị thế BTCUSDT không ở chế độ One-way');
+  const p=matching[0]??null;
+  const positionBTC=p?Number(p.positionAmt):0; // An absent V3 record means FLAT.
+  if(!Number.isFinite(positionBTC))throw Error('Binance /fapi/v3/positionRisk: số lượng BTC không hợp lệ');
+  const leverage=Number(c.leverage);
+  if(!Number.isInteger(leverage)||leverage<=0)
+   throw Error('Binance /fapi/v1/symbolConfig: đòn bẩy BTCUSDT không hợp lệ');
   this.account={
    symbol:'BTCUSDT',contractType:'PERPETUAL',dualSidePosition:mode.dualSidePosition,
-   marginType:c.marginType,leverage:Number(c.leverage),canTrade:account.canTrade===true,
-   hasOtherPositions:false,hasUnknownOrders:orders.length>0||algos.length>0,
-   positionBTC:Number(p.positionAmt),availableUSDT:Number(usdt?.availableBalance),
-   walletUSDT:Number(usdt?.walletBalance),openOrders:orders.length,openAlgos:algos.length
+   marginType:c.marginType,leverage,canTrade:account.canTrade===true,
+   hasOtherPositions:Array.isArray(account.positions)&&account.positions.some(
+    x=>x.symbol!=='BTCUSDT'&&Number(x.positionAmt)!==0),
+   hasUnknownOrders:orders.length>0||algos.length>0,
+   positionBTC,availableUSDT,walletUSDT,openOrders:orders.length,openAlgos:algos.length
   };
   return this.account;
  }
