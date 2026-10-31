@@ -2,48 +2,35 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=path=>readFileSync(new URL('../'+path,import.meta.url),'utf8');
-test('Binance preview is linked from paper dashboard and served locally',()=>{
+test('Binance /binance dashboard is linked from paper page and served locally',()=>{
  const server=read('server.mjs'),dashboard=read('dashboard.html');
  assert.match(server,/BINANCE_UI_PREVIEW\.html/);
  assert.match(server,/req\.url==='\/binance'/);
  assert.match(dashboard,/href="\/binance"/);
 });
-test('BTC Futures shows margin USDT and leverage inputs, not equity percent or cap',()=>{
+test('Real Binance single-screen UI shows account balance and position without price preview',()=>{
  const html=read('BINANCE_UI_PREVIEW.html');
- for(const id of ['enabled','side','marginUSDT','leverage','notional','sizingFormula',
-                  'sl','mode','tp1','tp2','tp3','entry','q1','q2','q3','preview','save'])
+ for(const id of ['enabled','apiKey','apiSecret','rememberApi','credentialEditor','wallet','available','equity',
+    'unrealized','btcPosition','marginUSDT','leverage','side','sl','mode','tp1','tp2','tp3','q1','q2','q3','save',
+    'realNet','realHistory','realCurve','apiConnect','apiForget','apiDisconnect','apiReconcile'])
   assert.ok(html.includes('id="'+id+'"'),'Missing '+id);
- assert.doesNotMatch(html,/id="eq"|id="limit"/);
- assert.match(html,/id="marginUSDT"[^>]*value="20"/);
- assert.match(html,/id="leverage"[^>]*value="5"/);
- assert.match(html,/margin\*leverage/);
- assert.match(html,/notional\/entry/);
+ assert.doesNotMatch(html,/id="preview"|id="notional"|id="sizingFormula"|id="entry"/);
+ assert.match(html,/height:100dvh/);
+ assert.match(html,/Lưu API mã hóa trên Windows/);
+ assert.doesNotMatch(html,/Binance Demo|tiền thử/);
 });
-test('Binance preview cannot submit actual trades or enable LIVE',()=>{
+test('Credentials are submitted only to loopback backend, not localStorage',()=>{
  const html=read('BINANCE_UI_PREVIEW.html');
- assert.match(html,/id="enabled" style=/);
- assert.match(html,/id="apiKey" type="password"/);
- assert.match(html,/id="apiSecret" type="password"/);
- assert.match(html,/id="apiEnvironment"/);
- assert.match(html,/requestLive\('on',\{acceptance\}\)/);
- assert.match(html,/requestLive\('off'\)/);
- assert.doesNotMatch(html,/\/fapi\/v1\/order|\/fapi\/v1\/algoOrder/);
- assert.match(html,/fetch\('\/api\/binance\/live-report'/);
- assert.match(html,/Bản nháp|bản nháp/);
-});
-test('Frontend script parses without syntax errors',()=>{
- const html=read('BINANCE_UI_PREVIEW.html');
- const js=html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
- assert.ok(js);
- assert.doesNotThrow(()=>new Function(js));
-});
-test('Portable packager includes Binance settings page',()=>{
- assert.match(read('BUILD_PORTABLE.ps1'),/'BINANCE_UI_PREVIEW\.html'/);
-});
-
-test('Live frontend only offers real BTCUSDT, no Demo trading option',()=>{
- const html=read('BINANCE_UI_PREVIEW.html');
- assert.doesNotMatch(html,/Binance Demo|Tiền thử|tiền thử|Demo.*Auto/);
- assert.match(html,/id="apiEnvironment" value="Binance Futures THẬT/);
+ assert.match(html,/type="password"/);
+ assert.match(html,/request\('connect',\{apiKey:key,apiSecret:secret,environment:'production',remember\}\)/);
+ assert.doesNotMatch(html,/localStorage/);
+ assert.match(html,/request\('on',\{acceptance\}\)/);
  assert.match(html,/CHAP NHAN BTC FUTURES/);
+ const js=html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
+ assert.ok(js);assert.doesNotThrow(()=>new Function(js));
+});
+test('Portable Windows includes credential vault and consolidated dashboard',()=>{
+ const build=read('BUILD_PORTABLE.ps1');
+ assert.match(build,/'BINANCE_UI_PREVIEW\.html'/);
+ assert.match(build,/'futures-credential-vault\.mjs'/);
 });

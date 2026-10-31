@@ -8,17 +8,20 @@ import {validateLiveConfig,floorStep} from './futures-sizing.mjs';
 import {draftProtectedOrder} from './futures-order-plan.mjs';
 import {ProtectionCoordinator} from './futures-protection-orchestrator.mjs';
 import {ProtectionCheckpoint} from './futures-protection-checkpoint.mjs';
+import {WindowsCredentialVault} from './futures-credential-vault.mjs';
 
 const DEFAULT={side:'BOTH',marginUSDT:20,leverage:5,slPercent:1,tpMode:'Percent',
  tp1Val:1,tp2Val:2,tp3Val:3,tp1Qty:33,tp2Qty:33};
 const safeJSON=(value)=>JSON.parse(JSON.stringify(value));
 export class BrowserFutures{
- constructor({dataDir,transportFactory=null}){
+ constructor({dataDir,transportFactory=null,credentialVault=null}){
   this.dir=resolve(dataDir);this.path=resolve(this.dir,'futures-browser-settings.json');
   this.intentPath=resolve(this.dir,'futures-live-intent.json');
   this.protectionPath=resolve(this.dir,'futures-live-protection.json');
   this.config=validateLiveConfig(existsSync(this.path)?JSON.parse(readFileSync(this.path,'utf8')):DEFAULT);
   this.transportFactory=transportFactory||((params)=>new FuturesTransport(params));
+  this.vault=credentialVault||new WindowsCredentialVault(resolve(this.dir,'futures-api.dpapi.json'));
+  this.lastAccountSync=null;
   this.api=null;this.environment=null;this.account=null;this.filters=null;
   this.armed=false;this.busy=false;this.halted=false;this.error=null;this.events=[];this.activeProtection=null;
   const unresolved=existsSync(this.intentPath)?JSON.parse(readFileSync(this.intentPath,'utf8')):null;
@@ -43,7 +46,8 @@ export class BrowserFutures{
   return {connected:!!this.api,environment:this.environment,armed:this.armed,
    realFuturesOnly:true,halted:this.halted,busy:this.busy,error:this.error,
    protectedPosition:this.activeProtection?{entry:this.activeProtection.entry,stop:this.activeProtection.stop,tps:this.activeProtection.tps}:null,
-   config:this.config,account:this.account,events:this.events.slice(-20),
+   config:this.config,account:this.account,credentialSaved:this.vault.exists(),lastAccountSync:this.lastAccountSync,
+   events:this.events.slice(-20),
    warning:'Giao dịch tiền thật có thể mất vốn. API Key/Secret chỉ giữ trong RAM; cần xác nhận mỗi khi bật Auto.'};
  }
  async inspect(){
@@ -93,17 +97,31 @@ export class BrowserFutures{
   const leverage=Number(c.leverage);
   if(!Number.isInteger(leverage)||leverage<=0)
    throw Error('Binance /fapi/v1/symbolConfig: đòn bẩy BTCUSDT không hợp lệ');
+  const totalWallet=Number(account.totalWalletBalance),totalMargin=Number(account.totalMarginBalance),
+   totalUnrealized=Number(account.totalUnrealizedProfit),initialMargin=Number(account.totalInitialMargin);
+  const unrealizedBTC=p?Number(p.unRealizedProfit??p.unrealizedProfit??0):0;
+  const markPrice=p?Number(p.markPrice??0):null;
+  const liquidationPrice=p?Number(p.liquidationPrice??0):null;
   this.account={
    symbol:'BTCUSDT',contractType:'PERPETUAL',dualSidePosition:mode.dualSidePosition,
    marginType:c.marginType,leverage,canTrade:account.canTrade===true,
    hasOtherPositions:Array.isArray(account.positions)&&account.positions.some(
     x=>x.symbol!=='BTCUSDT'&&Number(x.positionAmt)!==0),
    hasUnknownOrders:orders.length>0||algos.length>0,
-   positionBTC,availableUSDT,walletUSDT,openOrders:orders.length,openAlgos:algos.length
+   positionBTC,entryPrice:p?Number(p.entryPrice)||0:0,availableUSDT,walletUSDT,
+   totalWalletUSDT:Number.isFinite(totalWallet)?totalWallet:walletUSDT,
+   equityUSDT:Number.isFinite(totalMargin)?totalMargin:walletUSDT+(Number.isFinite(totalUnrealized)?totalUnrealized:0),
+   unrealizedUSDT:Number.isFinite(totalUnrealized)?totalUnrealized:unrealizedBTC,
+   initialMarginUSDT:Number.isFinite(initialMargin)?initialMargin:0,
+   btcUnrealizedUSDT:unrealizedBTC,
+   markPrice:Number.isFinite(markPrice)&&markPrice>0?markPrice:null,
+   liquidationPrice:Number.isFinite(liquidationPrice)&&liquidationPrice>0?liquidationPrice:null,
+   openOrders:orders.length,openAlgos:algos.length
   };
+  this.lastAccountSync=Date.now();
   return this.account;
  }
- async connect({apiKey,apiSecret,environment='production'}){
+ async connect({apiKey,apiSecret,environment='production',remember=true}){
   if(this.armed||this.busy||this.activeProtection)throw Error('Tắt Auto và xử lý vị thế đang quản lý trước khi đổi API');
   if(environment!=='production')throw Error('Chỉ sử dụng Binance Futures thật');
   if(typeof apiKey!=='string'||typeof apiSecret!=='string'||apiKey.length<8||apiSecret.length<8)
@@ -113,9 +131,50 @@ export class BrowserFutures{
    productionConsent:'I_ACCEPT_LIVE_BTCUSDT'});
   this.api=connection;
   try{await this.inspect();this.error=this.halted?this.error:null;
+   if(remember===true)this.vault.save({apiKey,apiSecret});
+   else if(remember===false&&this.vault.exists())this.vault.delete();
    this.log('CONNECTED','Đã xác minh Binance Futures thật; Auto mặc định OFF');}
   catch(e){this.api.close();this.api=null;this.account=null;this.error=e.message;throw e;}
   return this.snapshot();
+ }
+ async restoreSavedConnection(){
+  if(this.api||!this.vault.exists())return this.snapshot();
+  try{
+   const creds=this.vault.load();
+   await this.connect({...creds,environment:'production',remember:null});
+   this.armed=false;
+   this.log('RESTORED','API được giải mã theo tài khoản Windows; Auto vẫn OFF');
+  }catch(e){
+   this.armed=false;this.error='Không thể khôi phục API đã lưu: '+e.message;
+   this.log('API_RESTORE_FAILED',this.error);
+  }
+  return this.snapshot();
+ }
+ forgetSavedCredentials(){
+  if(this.armed||this.busy)throw Error('Tắt Auto trước khi xóa thông tin API');
+  this.vault.delete();this.close();return this.snapshot();
+ }
+ async refreshAccountOverview(){
+  if(!this.api||this.busy)return this.account;
+  const [account,positions]=await Promise.all([
+   this.api.get('/fapi/v2/account'),this.api.get('/fapi/v3/positionRisk',{symbol:'BTCUSDT'})]);
+  if(!account||!Array.isArray(account.assets)||!Array.isArray(positions))throw Error('Không đọc được số dư/vị thế Binance');
+  const usdt=account.assets.find(x=>x.asset==='USDT');
+  if(!usdt)throw Error('Tài khoản Futures không có tài sản USDT');
+  const btc=positions.find(x=>x.symbol==='BTCUSDT'&&x.positionSide==='BOTH');
+  const numberOr=(a,b)=>Number.isFinite(Number(a))?Number(a):b;
+  const wallet=numberOr(usdt.walletBalance,this.account?.walletUSDT??0);
+  const unrealized=numberOr(account.totalUnrealizedProfit,numberOr(btc?.unRealizedProfit,0));
+  this.account={...this.account,
+   walletUSDT:wallet,availableUSDT:numberOr(usdt.availableBalance,0),
+   totalWalletUSDT:numberOr(account.totalWalletBalance,wallet),
+   equityUSDT:numberOr(account.totalMarginBalance,wallet+unrealized),
+   unrealizedUSDT:unrealized,initialMarginUSDT:numberOr(account.totalInitialMargin,0),
+   positionBTC:numberOr(btc?.positionAmt,0),entryPrice:numberOr(btc?.entryPrice,0),btcUnrealizedUSDT:numberOr(btc?.unRealizedProfit,0),
+   markPrice:numberOr(btc?.markPrice,0)||null,
+   liquidationPrice:numberOr(btc?.liquidationPrice,0)||null};
+  this.lastAccountSync=Date.now();
+  return this.account;
  }
  async arm(acceptance){
   if(!this.api)throw Error('Kết nối API trên trang Binance trước');

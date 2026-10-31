@@ -1,279 +1,330 @@
-<!doctype html><html lang="vi"><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>OCC — Binance BTCUSDT Futures</title>
+<!doctype html>
+<html lang="vi">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OCC · Binance BTCUSDT Futures</title>
 <style>
-:root{font-family:system-ui,"Segoe UI",sans-serif;color:#eaf2fb;background:#0d1420}
-*{box-sizing:border-box}body{margin:0;padding:24px}main{max-width:1100px;margin:auto}
-header{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:25px}
-h1{font-size:25px;margin:0 0 5px}h2{font-size:17px;margin:0 0 18px}
-small,.muted{color:#a0b3c6}.note{padding:15px;border:1px solid #72522d;border-radius:12px;background:#322619;color:#ffdda9;margin:17px 0}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.card{padding:24px;background:#182437;border:1px solid #34465a;border-radius:15px;margin-bottom:17px}
-.switch{display:flex;align-items:center;gap:15px;padding:16px;background:#2a2126;border-radius:11px}
-.pill{display:inline-block;padding:6px 12px;background:#4b2833;border-radius:20px;color:#ffc1c8}
-.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}
-label{font-size:13px;color:#b6c7d8;display:flex;flex-direction:column;gap:7px}
-input,select{width:100%;background:#0f1b2c;border:1px solid #4b647e;border-radius:9px;color:#fff;font-size:15px;padding:10px 12px}
-input[disabled]{opacity:.56}button,.link{display:inline-block;padding:12px 18px;border-radius:10px;text-decoration:none;background:#253a50;border:1px solid #526d87;color:#fff;font-weight:600;cursor:pointer}
-button.primary{background:#b1eabf;color:#0e2318;border:0}button:disabled{opacity:.45;cursor:not-allowed}
-.row{display:flex;align-items:center;gap:13px;flex-wrap:wrap}
-#preview{white-space:pre-line;line-height:2;color:#cfe3f5;font-variant-numeric:tabular-nums}
-@media(max-width:800px){.grid,.fields{grid-template-columns:1fr}body{padding:12px}}
+:root{color-scheme:dark;font-family:system-ui,"Segoe UI",Arial,sans-serif;background:#0b1422;color:#e9f3ff;font-size:13px}
+*{box-sizing:border-box}body{margin:0}button,input,select{font:inherit}button{cursor:pointer}a{color:#c7dbf4}
+.app{max-width:1660px;height:100dvh;margin:0 auto;padding:12px 18px;display:grid;grid-template-rows:52px 96px minmax(298px,1.15fr) minmax(220px,.88fr) 20px;gap:12px}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:16px}
+.brand{font-weight:800;font-size:21px;letter-spacing:-.6px;white-space:nowrap}
+.small{font-size:11px;color:#99adc6}.muted{color:#a6bad0}
+.controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.status{border-radius:24px;padding:7px 12px;background:#263244;color:#b9c9dd;font-weight:700;font-size:12px;white-space:nowrap}
+.status.ok{background:#164c3a;color:#9cf2c1}.status.bad{background:#55272f;color:#ffb8bf}
+.auto{display:flex;align-items:center;gap:9px;border:1px solid #526176;padding:7px 13px;border-radius:11px;background:#222536;font-weight:750;white-space:nowrap}
+.auto input{width:17px;height:17px;accent-color:#a1f0b6}.auto.on{background:#173f2e;border-color:#3b9365}
+.link{display:block;text-decoration:none;padding:9px 14px;border:1px solid #415a72;border-radius:9px;white-space:nowrap}
+.kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;min-height:0}
+.kpi,.panel{background:#172538;border:1px solid #31465f;border-radius:13px}
+.kpi{padding:12px 15px;overflow:hidden}.kpi .label{font-size:11px;color:#94b4d6;text-transform:uppercase;letter-spacing:.2px}
+.kpi .value{font-size:26px;font-weight:790;letter-spacing:-.4px;margin:5px 0 3px;white-space:nowrap}
+.kpi .detail{font-size:11px;color:#9cafc4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.positive{color:#96f0b7}.negative{color:#ff9ea0}
+.topgrid{display:grid;grid-template-columns:minmax(270px,.95fr) minmax(460px,1.56fr) minmax(240px,.82fr);gap:12px;min-height:0}
+.panel{padding:14px 16px;min-width:0;min-height:0;overflow:hidden}
+h2{font-size:15px;margin:0 0 12px;line-height:1.2}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+label{display:flex;flex-direction:column;gap:5px;font-size:11px;color:#aac2df;min-width:0}
+input:not([type=checkbox]),select{background:#0c1829;color:#eaf4ff;border:1px solid #40576e;border-radius:7px;padding:7px 9px;width:100%;height:35px;outline:none}
+input:focus,select:focus{border-color:#90b9e3}
+button{border:1px solid #536780;background:#263b51;border-radius:8px;padding:8px 11px;color:#eef6ff;font-weight:650}
+button.primary{background:#9feab5;color:#092019;border:0}button.minor{background:#182b40;color:#acc3d8}
+button:disabled{opacity:.42;cursor:not-allowed}
+.fields2,.fields3{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.fields3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.credentials{margin-top:10px;background:#102031;border-radius:10px;border:1px solid #2b4058;padding:10px}
+.credentials summary{cursor:pointer;font-weight:650;list-style:none}
+.credentials summary:after{content:" ▾";font-weight:400}
+.credentials[open] summary{margin-bottom:10px}
+.savebox{display:flex;gap:6px;align-items:center;margin:8px 0;color:#b9cee1;font-size:11px}
+.savebox input{accent-color:#9feab5}
+.apiActions{margin-top:8px;display:flex;gap:7px;flex-wrap:wrap}
+.apiActions button{font-size:11px;padding:7px 10px}
+.message{font-size:11px;line-height:1.35;max-height:48px;overflow:auto;margin:8px 0;color:#ffd0a8}
+.formSection{margin-bottom:9px}.formSection:last-child{margin-bottom:0}
+.settingActions{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:9px}
+.settingActions .small{text-align:right}
+.positionGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px}
+.positionGrid .label{color:#93abc5;font-size:11px}
+.positionGrid strong{display:block;font-size:16px;margin-top:3px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.botState{margin-top:14px;border-top:1px solid #31465f;padding-top:10px;font-size:12px;line-height:1.65}
+.botState .key{color:#93abc5}
+.below{display:grid;grid-template-columns:minmax(360px,.83fr) minmax(520px,1.5fr);gap:12px;min-height:0}
+.statLine{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:8px}
+.stat{padding:8px 10px;background:#101f30;border-radius:8px;font-size:10px;color:#9fb3c9}
+.stat strong{display:block;font-size:18px;color:#edf6ff;margin-top:3px}
+#realCurve{display:block;width:100%;height:calc(100% - 83px);background:#102032;border-radius:8px}
+.historyHead{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.tableScroll{height:calc(100% - 57px);overflow:auto}
+table{border-collapse:collapse;width:100%;min-width:690px;font-size:11px}
+td,th{text-align:left;padding:8px 7px;border-bottom:1px solid #2f4155;white-space:nowrap}
+th{position:sticky;top:0;background:#1c2d43;color:#a9c3df;z-index:1}
+footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;overflow:hidden}
+#apiStatusText{font-weight:700;color:#a6c0d8}
+@media(max-height:780px) and (min-width:1000px){.app{grid-template-rows:46px 80px minmax(258px,1.2fr) minmax(170px,.78fr) 18px;gap:8px;padding:8px 12px}.kpi .value{font-size:22px}.panel{padding:10px 12px}.fields2,.fields3{gap:5px}input:not([type=checkbox]),select{height:30px}}
+@media(max-width:1100px){.app{height:auto;min-height:100vh;display:block}.topbar,.kpis,.topgrid,.below{margin-bottom:12px}.kpis{grid-template-columns:repeat(3,1fr)}.topgrid{grid-template-columns:1fr 1fr}.topgrid .accountPanel{grid-column:1/-1}.below{grid-template-columns:1fr}.panel{overflow:visible}#realCurve{height:190px}.tableScroll{height:270px}footer{padding-bottom:14px}}
+@media(max-width:650px){.kpis{grid-template-columns:repeat(2,1fr)}.topgrid{grid-template-columns:1fr}.topgrid .accountPanel{grid-column:auto}.topbar{flex-wrap:wrap}.statLine{grid-template-columns:repeat(2,1fr)}}
 </style>
-<main>
-<header><div><h1>Binance Futures · BTCUSDT</h1><div class="muted">Binance thật · USDⓈ-M BTCUSDT Perpetual</div></div>
-<a class="link" href="/">Về Paper Trading</a></header>
-<div class="note"><b>Binance USDⓈ-M Futures · tài khoản thật.</b> Nhập API Binance thật và cấu hình BTCUSDT bên dưới. Công tắc Auto chỉ bật sau xác nhận giao dịch bằng tiền thật, kiểm tra số dư/vị thế và điều kiện bảo vệ. Khi OFF, bot không mở lệnh mới; SL/TP đã đặt trên sàn vẫn được giữ.</div>
-<div class="grid">
-<section class="card"><h2>1. Kết nối & công tắc giao dịch</h2>
-<div class="fields" style="margin-bottom:15px">
-<label>Môi trường Binance<input id="apiEnvironment" value="Binance Futures THẬT · BTCUSDT" disabled></label>
-<label>Trạng thái API<strong id="connection" style="padding:11px 2px;color:#c2d6ea">Chưa kết nối</strong></label>
-<label>API Key<input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="Nhập key trên máy của bạn"></label>
-<label>API Secret<input id="apiSecret" type="password" autocomplete="off" spellcheck="false" placeholder="Nhập secret (không lưu)"></label>
-</div>
-<div class="row" style="margin-bottom:18px"><button id="apiConnect" class="primary">Kết nối & kiểm tra API</button><button id="apiDisconnect">Ngắt API</button><button id="apiReconcile" title="Chỉ khi Binance Futures thật không còn vị thế hoặc lệnh BTCUSDT">Kiểm tra đã sạch lệnh</button></div>
-<div class="switch"><input type="checkbox" id="enabled" style="width:22px;accent-color:#b1eabf"><div>
-<strong>Auto Trade BTCUSDT <span class="pill" id="autoLabel">OFF</span></strong>
-<div class="muted" id="autoHint">Chỉ BTCUSDT Futures thật. Khi OFF không mở lệnh mới. SL/TP đã xác nhận trên Binance vẫn được giữ.</div>
-</div></div>
-<div class="muted" id="liveAccount" style="margin-top:14px">Số dư / vị thế: chưa kết nối.</div>
-<p id="apiError" style="color:#ffadad;white-space:pre-line"></p>
-<p class="muted">Khóa API chỉ giữ trong RAM của app, không lưu vào file, không lưu trong trình duyệt hay GitHub. Khởi động lại phải nhập lại. Hãy giới hạn quyền API và tắt quyền rút tiền.</p></section>
-<section class="card"><h2>2. Thiết lập lệnh BTCUSDT</h2>
-<p class="muted" style="margin-top:-5px">Chỉ cần chọn số USDT ký quỹ thực muốn dùng cho <strong>mỗi lệnh</strong> và mức đòn bẩy.</p>
-<div class="fields">
-<label style="grid-column:1/-1">USDT ký quỹ / lệnh
-<input id="marginUSDT" type="number" min="0.01" step="any" value="20" inputmode="decimal">
-<small>Ví dụ: tài khoản có 400 USDT, chỉ dùng 20 USDT làm ký quỹ cho một lệnh.</small></label>
-<label>Đòn bẩy (x)<input id="leverage" type="number" min="1" max="20" step="1" value="5" inputmode="numeric"></label>
-<label>Chiều giao dịch<select id="side"><option value="BOTH">LONG & SHORT</option><option value="LONG">Chỉ LONG</option><option value="SHORT">Chỉ SHORT</option></select></label>
-</div>
-<div style="margin-top:17px;padding:15px;border-radius:12px;background:#10253a;border:1px solid #38546d">
-<small>Giá trị vị thế dự kiến</small><div id="notional" style="font-size:32px;font-weight:750;letter-spacing:-.5px">100 USDT</div>
-<div id="sizingFormula" class="muted">20 USDT × 5x = 100 USDT</div>
-</div>
-<p class="muted" style="margin-top:14px">Mở MARKET · Isolated dự kiến. Ký quỹ không phải mức lỗ tối đa; lỗ và phí có thể vượt số ký quỹ. Tài khoản Binance phải đang ở chế độ One-way, Isolated và đúng đòn bẩy đã chọn.</p>
+</head>
+<body>
+<div class="app">
+<header class="topbar">
+ <div><div class="brand">OCC <span style="color:#b0ecbd">/</span> BTCUSDT Futures</div><div class="small">Binance thật · USDⓈ-M Perpetual</div></div>
+ <div class="controls"><span id="connection" class="status">CHƯA KẾT NỐI</span>
+ <label class="auto" id="autoWrap" style="flex-direction:row;color:#eff6ff;font-size:12px"><input id="enabled" type="checkbox" disabled><span id="autoLabel">AUTO OFF</span></label>
+ <a href="/" class="link">Paper Trading</a></div>
+</header>
+<section class="kpis">
+ <div class="kpi"><div class="label">Ví Futures</div><div id="wallet" class="value">—</div><div class="detail">USDT · Wallet</div></div>
+ <div class="kpi"><div class="label">Khả dụng</div><div id="available" class="value">—</div><div class="detail">USDT · Available</div></div>
+ <div class="kpi"><div class="label">Tài sản Equity</div><div id="equity" class="value">—</div><div class="detail">USDT · Margin balance</div></div>
+ <div class="kpi"><div class="label">P&L chưa chốt</div><div id="unrealized" class="value">—</div><div class="detail">USDT · Futures</div></div>
+ <div class="kpi"><div class="label">Vị thế BTC</div><div id="btcPosition" class="value">—</div><div class="detail">BTCUSDT · +Long / −Short</div></div>
+ <div class="kpi"><div class="label">Net bot đã ghi nhận</div><div id="realNet" class="value">—</div><div class="detail">USDT · chưa gồm funding</div></div>
 </section>
-<section class="card"><h2>3. Multi TP v5 · SL & chốt lời từng phần</h2>
-<div class="fields"><label>Stop Loss (% giá Entry)<input id="sl" type="number" min=".1" max="10" step=".1" value="1"></label>
-<label>TP Mode<select id="mode"><option value="Percent">Percent (%)</option><option value="Points">Points (USD)</option></select></label>
-<label>TP1<input id="tp1" type="number" min=".01" step=".1" value="1"></label>
-<label>TP2<input id="tp2" type="number" min=".01" step=".1" value="2"></label>
-<label>TP3<input id="tp3" type="number" min=".01" step=".1" value="3"></label>
-<label>Giá Entry giả định (USDT)<input id="entry" type="number" min="1" value="77000"></label>
-<label>TP1 · Chốt (%)<input id="q1" type="number" min="0" max="100" step="1" value="33"></label>
-<label>TP2 · Chốt (%)<input id="q2" type="number" min="0" max="100" step="1" value="33"></label>
-<label>TP3 · Chốt phần còn lại (%)<input id="q3" disabled value="34"></label>
-</div><p id="error" style="color:#ffb7b8"></p></section>
-<section class="card"><h2>4. Xem trước mức giá</h2>
-<div id="preview"></div><div class="row" style="margin-top:24px"><button class="primary" id="save">Lưu bản nháp trên trình duyệt</button><button id="reset">Khôi phục mặc định</button></div>
-<p class="muted">Lưu cấu hình vào máy không bao gồm API Key/Secret. Binance thật phải cho phép Isolated, One-way và đòn bẩy đã chọn. Nếu ba TP không đạt khối lượng tối thiểu, bot sẽ bỏ qua tín hiệu.</p></section>
-</div>
-
-<section class="card" id="realStats" style="margin-top:20px">
- <div class="row" style="justify-content:space-between;margin-bottom:8px"><h2 style="margin:0">5. Thống kê giao dịch thật do OCC thực hiện</h2>
- <div class="row"><button id="statsRefresh" type="button">Làm mới báo cáo</button><button id="statsCsv" type="button">Xuất CSV</button></div></div>
- <p class="muted" id="statsStatus">Đang đọc nhật ký lệnh thật đã xác minh từ Binance...</p>
- <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:12px;margin:15px 0">
-  <div class="card" style="margin:0;padding:15px;background:#0e1a2a">Vị thế đã đóng<strong id="realClosed" style="display:block;font-size:24px">0</strong></div>
-  <div class="card" style="margin:0;padding:15px;background:#0e1a2a">Thắng / Thua / Hòa<strong id="realWl" style="display:block;font-size:22px">0 / 0 / 0</strong></div>
-  <div class="card" style="margin:0;padding:15px;background:#0e1a2a">Win rate<strong id="realWin" style="display:block;font-size:24px">—</strong></div>
-  <div class="card" style="margin:0;padding:15px;background:#0e1a2a">Gross realized (USDT)<strong id="realGross" style="display:block;font-size:24px">0</strong></div>
-  <div class="card" style="margin:0;padding:15px;background:#0e1a2a">Phí USDT<strong id="realFees" style="display:block;font-size:24px">0</strong></div>
-  <div class="card" style="margin:0;padding:15px;background:#0e1a2a">P&L sau phí USDT<strong id="realNet" style="display:block;font-size:24px">0</strong></div>
+<section class="topgrid">
+ <div class="panel">
+  <h2>API Binance</h2>
+  <div class="row"><span id="apiStatusText">Chưa kết nối</span><span class="small" id="savedInfo"></span></div>
+  <details id="credentialEditor" class="credentials">
+   <summary id="credentialSummary">Nhập / thay API Key</summary>
+   <div class="fields2"><label>API Key<input id="apiKey" type="password" autocomplete="off" spellcheck="false"></label>
+   <label>API Secret<input id="apiSecret" type="password" autocomplete="off" spellcheck="false"></label></div>
+   <label class="savebox" style="flex-direction:row"><input id="rememberApi" type="checkbox" checked>Lưu API mã hóa trên Windows</label>
+   <button class="primary" id="apiConnect">Kết nối & lưu API</button>
+  </details>
+  <div class="apiActions"><button id="apiDisconnect">Ngắt kết nối</button><button id="apiForget" class="minor">Xóa API đã lưu</button>
+  <button id="apiReconcile" class="minor">Đối soát vị thế</button></div>
+  <div id="apiError" class="message" role="status"></div>
+  <div class="small" id="lastSync">Dữ liệu tài khoản sẽ tự cập nhật.</div>
  </div>
- <p class="muted">P&L này chỉ lấy các khớp lệnh thật thuộc bot OCC, chưa tính funding và phí bằng tài sản khác; không phải lợi nhuận ròng đầy đủ của tài khoản Binance.</p>
- <h2 style="margin-top:24px">Biểu đồ P&L đã đóng (USDT)</h2>
- <canvas id="realCurve" width="980" height="200" style="width:100%;height:200px;max-width:100%;background:#0e1a2a;border-radius:10px"></canvas>
- <h2 style="margin-top:24px">Lịch sử vị thế bot · BTCUSDT</h2>
- <div style="overflow:auto;max-height:440px"><table style="border-collapse:collapse;width:100%;min-width:880px;font-size:13px">
- <thead><tr><th>Thời điểm vào / ra (VN)</th><th>Chiều</th><th>BTC</th><th>Entry / Exit</th><th>TP/SL</th><th>Gross P&L</th><th>Phí USDT</th><th>Net</th><th>Kết quả</th></tr></thead>
- <tbody id="realHistory"><tr><td colspan="9">Chưa có giao dịch thật do OCC đăng ký và xác minh.</td></tr></tbody>
- </table></div>
- <p class="muted" id="realOpen" style="margin-top:12px"></p>
- <p class="muted">Báo cáo dành cho lệnh BTCUSDT Futures thật của OCC, không cộng Paper Trading. Funding và các phí khác USDT được tách riêng khi chưa đủ dữ liệu.</p>
+ <div class="panel">
+  <h2>Cấu hình Auto · Multi TP v5</h2>
+  <div class="formSection fields3"><label>Ký quỹ / lệnh (USDT)<input id="marginUSDT" type="number" step="any" min=".01"></label>
+   <label>Đòn bẩy (x)<input id="leverage" type="number" step="1" min="1" max="20"></label>
+   <label>Chiều<select id="side"><option value="BOTH">Long & Short</option><option value="LONG">Chỉ Long</option><option value="SHORT">Chỉ Short</option></select></label></div>
+  <div class="formSection fields2"><label>Stop Loss (%)<input id="sl" type="number" min=".1" max="10" step=".1"></label>
+   <label>Chế độ TP<select id="mode"><option value="Percent">Percent (%)</option><option value="Points">Points (USDT)</option></select></label></div>
+  <div class="formSection fields3">
+   <label>TP1<input id="tp1" type="number" step="any" min=".001"></label>
+   <label>TP2<input id="tp2" type="number" step="any" min=".001"></label>
+   <label>TP3<input id="tp3" type="number" step="any" min=".001"></label>
+  </div>
+  <div class="fields3"><label>Chốt TP1 (%)<input id="q1" type="number" step="any" min="0" max="100"></label>
+  <label>Chốt TP2 (%)<input id="q2" type="number" step="any" min="0" max="100"></label>
+  <label>TP3 còn lại (%)<input id="q3" type="text" disabled></label></div>
+  <div class="settingActions"><button id="save" class="primary">Lưu cấu hình</button><span id="settingStatus" class="small">Tự lưu khi thay đổi · Auto phải OFF</span></div>
+ </div>
+ <div class="panel accountPanel">
+  <h2>Vị thế & lệnh trên sàn</h2>
+  <div class="positionGrid">
+   <div><span class="label">Entry</span><strong id="entryPrice">—</strong></div>
+   <div><span class="label">Mark Price</span><strong id="markPrice">—</strong></div>
+   <div><span class="label">Liq. Price</span><strong id="liqPrice">—</strong></div>
+   <div><span class="label">P&L vị thế</span><strong id="btcPnl">—</strong></div>
+   <div><span class="label">Margin</span><strong id="marginMode">—</strong></div>
+   <div><span class="label">Leverage</span><strong id="accountLeverage">—</strong></div>
+  </div>
+  <div class="botState"><div><span class="key">Lệnh đang chờ:</span> <strong id="openOrderCount">—</strong></div>
+   <div><span class="key">Lệnh SL/TP:</span> <strong id="openAlgoCount">—</strong></div>
+   <div><span class="key">Bot:</span> <strong id="botState">OFF</strong></div>
+   <div class="small" id="autoHint">Bật Auto mới cho phép mở lệnh.</div></div>
+ </div>
 </section>
-<style>#realStats th,#realStats td{padding:10px 8px;border-bottom:1px solid #33485b;text-align:left}
-#realStats th{position:sticky;top:0;background:#182437;color:#bfd1e3}#realStats strong{font-variant-numeric:tabular-nums}</style>
-</main>
+<section class="below">
+ <div class="panel" id="realStats">
+  <div class="row" style="justify-content:space-between;margin-bottom:8px"><h2 style="margin:0">Hiệu suất OCC · thực tế</h2><span class="small" id="statsStatus">Chưa có dữ liệu</span></div>
+  <div class="statLine">
+   <div class="stat">Đã đóng<strong id="realClosed">0</strong></div>
+   <div class="stat">Thắng/Thua/Hòa<strong id="realWl">0/0/0</strong></div>
+   <div class="stat">Win rate<strong id="realWin">—</strong></div>
+   <div class="stat">Phí (USDT)<strong id="realFees">0</strong></div>
+  </div>
+  <canvas id="realCurve" width="720" height="170" aria-label="P&L cộng dồn lệnh bot"></canvas>
+  <span id="realGross" hidden></span>
+ </div>
+ <div class="panel">
+  <div class="historyHead"><h2>Lịch sử lệnh OCC trên Binance</h2><div class="row"><button class="minor" id="statsRefresh">Làm mới</button><button class="minor" id="statsCsv">Xuất CSV</button></div></div>
+  <div class="small" id="realOpen" style="margin-bottom:8px"></div>
+  <div class="tableScroll"><table>
+   <thead><tr><th>Vào / Ra (VN)</th><th>Chiều</th><th>BTC</th><th>Entry → Exit</th><th>TP/SL</th><th>Gross</th><th>Phí</th><th>Net USDT</th><th>Kết quả</th></tr></thead>
+   <tbody id="realHistory"><tr><td colspan="9">Chưa có lệnh OCC đã xác minh.</td></tr></tbody>
+  </table></div>
+ </div>
+</section>
+<footer><span id="lastUpdate">Binance USDⓈ-M</span><span>Auto mặc định OFF khi mở app · P&L bot chưa gồm funding/phí ngoài USDT</span><span>Futures có rủi ro mất vốn</span></footer>
+</div>
 <script>
+'use strict';
 const $=id=>document.getElementById(id);
-const ids=['side','marginUSDT','leverage','sl','mode','tp1','tp2','tp3','entry','q1','q2'];
-
-function liveConfig(){
- const n=id=>$(id).value.trim()===''?NaN:Number($(id).value);
- return {side:$('side').value,marginUSDT:n('marginUSDT'),leverage:n('leverage'),
-  slPercent:n('sl'),tpMode:$('mode').value,tp1Val:n('tp1'),tp2Val:n('tp2'),
-  tp3Val:n('tp3'),tp1Qty:n('q1'),tp2Qty:n('q2')};
+const fmt=(n,d=3)=>n===null||n===undefined||!Number.isFinite(Number(n))?'—':Number(n).toLocaleString('en-US',{maximumFractionDigits:d});
+const color=(el,n)=>{el.classList.remove('positive','negative');if(Number(n)>0)el.classList.add('positive');if(Number(n)<0)el.classList.add('negative');};
+const vn=t=>t==null?'—':new Date(t).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',hour12:false});
+const numbers=['marginUSDT','leverage','sl','tp1','tp2','tp3','q1','q2'];
+let setupLoaded=false,autoBusy=false,editingUntil=0,saveTimer=null,liveReport=null;
+const val=id=>$(id).value.trim()===''?NaN:Number($(id).value);
+function config(){return {side:$('side').value,marginUSDT:val('marginUSDT'),leverage:val('leverage'),
+ slPercent:val('sl'),tpMode:$('mode').value,tp1Val:val('tp1'),tp2Val:val('tp2'),
+ tp3Val:val('tp3'),tp1Qty:val('q1'),tp2Qty:val('q2')};}
+function applyConfig(c){
+ for(const [id,value] of Object.entries({side:c.side,marginUSDT:c.marginUSDT,leverage:c.leverage,
+  sl:c.slPercent,mode:c.tpMode,tp1:c.tp1Val,tp2:c.tp2Val,tp3:c.tp3Val,q1:c.tp1Qty,q2:c.tp2Qty}))
+  if($(id))$(id).value=value??'';
+ quantities();
 }
-let autoBusy=false;
-async function requestLive(name,data={}){
- const r=await fetch('/control/live/'+name,{method:'POST',
+function quantities(){
+ const x=val('q1'),y=val('q2');
+ $('q3').value=Number.isFinite(x)&&Number.isFinite(y)&&x+y<=100?fmt(100-x-y,4):'—';
+}
+async function request(name,data={}){
+ const response=await fetch('/control/live/'+name,{method:'POST',
   headers:{'Content-Type':'application/json','X-OCC-Local':'1'},body:JSON.stringify(data)});
- const content=await r.json();if(!r.ok)throw Error(content.error||'Thao tác không thành công');return content;
+ const result=await response.json();if(!response.ok)throw Error(result.error||'Thao tác thất bại');
+ return result;
 }
-async function refreshLive(){
- try{
-  const r=await fetch('/api/binance/live-status',{cache:'no-store'});if(!r.ok)throw Error('API status HTTP '+r.status);
-  const s=await r.json();
-  $('connection').textContent=s.connected?'Đã kết nối Binance thật':'Chưa kết nối';
-  $('connection').style.color=s.connected?'#b1eabf':'#ffadad';
-  $('liveAccount').textContent=s.account?
-   'Ví: '+fmt(s.account.walletUSDT)+' USDT · Khả dụng: '+fmt(s.account.availableUSDT)+
-   ' USDT · Vị thế BTC: '+fmt(s.account.positionBTC)+' · '+s.account.marginType+
-   ' · '+s.account.leverage+'x':'Số dư / vị thế: chưa kết nối';
-  if(!autoBusy)$('enabled').checked=Boolean(s.armed);
-  $('enabled').disabled=!s.connected||s.halted||autoBusy;
-  $('autoLabel').textContent=s.armed?'ON · TIỀN THẬT':s.halted?'HALTED':'OFF';
-  $('autoLabel').style.background=s.armed?'#1f664d':'#4b2833';
-  $('autoHint').textContent=s.halted?'ĐANG KHÓA. Kiểm tra vị thế và lệnh SL/TP trên Binance thật trước khi tiếp tục.':
-   s.armed?'Đang cho phép mở lệnh thật theo tín hiệu BTCUSDT mới. Tắt OFF để ngăn lệnh mới.':
-   'AUTO OFF · Binance Futures THẬT, chỉ BTCUSDT. Cần xác nhận bằng tay mỗi lần bật.';
-  if(s.error&&s.halted)$('apiError').textContent='ĐÃ KHÓA: '+s.error;
-  $('apiReconcile').disabled=!s.connected||s.armed;
- }catch(e){$('connection').textContent='Không đọc được trạng thái app';$('apiError').textContent=e.message;}
+async function saveConfig(force=false){
+ if(autoBusy&&!force)return false;
+ try{await request('config',config());$('settingStatus').textContent='Đã lưu vào máy ✓';return true;}
+ catch(e){$('settingStatus').textContent='Chưa lưu: '+e.message;return false;}
 }
+for(const id of [...numbers,'side','mode']){
+ $(id).addEventListener('input',()=>{
+  editingUntil=Date.now()+1500;quantities();
+  $('settingStatus').textContent='Đang sửa…';
+  clearTimeout(saveTimer);saveTimer=setTimeout(saveConfig,900);
+ });
+}
+$('save').onclick=()=>{clearTimeout(saveTimer);saveConfig();};
+$('credentialEditor').open=true;
 $('apiConnect').onclick=async()=>{
- const button=$('apiConnect');button.disabled=true;
- const apiKey=$('apiKey').value.trim(),apiSecret=$('apiSecret').value.trim();
+ const key=$('apiKey').value.trim(),secret=$('apiSecret').value.trim(),remember=$('rememberApi').checked;
+ $('apiConnect').disabled=true;
  try{
-  await requestLive('connect',{apiKey,apiSecret,environment:'production'});
-  $('apiError').textContent='Kết nối API thành công. Key và Secret đang nằm trong RAM của app.';
+  await request('connect',{apiKey:key,apiSecret:secret,environment:'production',remember});
+  $('apiError').textContent='Kết nối thành công.';
+  $('credentialEditor').open=false;
  }catch(e){$('apiError').textContent=e.message;}
- finally{$('apiKey').value='';$('apiSecret').value='';button.disabled=false;await refreshLive();}
+ finally{
+  $('apiKey').value='';$('apiSecret').value='';
+  $('apiConnect').disabled=false;await refreshLive();
+ }
 };
-$('apiReconcile').onclick=async()=>{
- if(!confirm('Chỉ tiếp tục nếu đã kiểm tra Binance thật không có vị thế/lệnh BTCUSDT. App sẽ xác minh trực tiếp trước khi mở khóa.'))return;
- try{await requestLive('reconcile');$('apiError').textContent='Đã xác nhận Binance thật không còn vị thế/lệnh BTCUSDT.';}
+$('apiDisconnect').onclick=async()=>{
+ try{await request('disconnect');$('apiError').textContent='Đã ngắt kết nối. API đã lưu vẫn được giữ.';}
  catch(e){$('apiError').textContent=e.message;}
  await refreshLive();
 };
-$('apiDisconnect').onclick=async()=>{
- try{await requestLive('disconnect');$('apiError').textContent='Đã ngắt API, Auto OFF.';}
+$('apiForget').onclick=async()=>{
+ if(!confirm('Xóa khóa API đã mã hóa trên Windows và ngắt kết nối?'))return;
+ try{await request('forget');$('apiError').textContent='Đã xóa khóa API trên máy.';$('credentialEditor').open=true;}
+ catch(e){$('apiError').textContent=e.message;}
+ await refreshLive();
+};
+$('apiReconcile').onclick=async()=>{
+ if(!confirm('Chỉ đối soát nếu Binance không còn vị thế hoặc lệnh BTCUSDT. Tiếp tục?'))return;
+ try{await request('reconcile');$('apiError').textContent='BTCUSDT đã xác nhận sạch vị thế/lệnh.';}
  catch(e){$('apiError').textContent=e.message;}
  await refreshLive();
 };
 $('enabled').onchange=async()=>{
- if(autoBusy)return;autoBusy=true;
- const requested=$('enabled').checked;$('enabled').disabled=true;
+ const wantsOn=$('enabled').checked;autoBusy=true;$('enabled').disabled=true;
  try{
-  if(requested){
-   if(!confirm('BẠN ĐANG CHO PHÉP ĐẶT LỆNH BTCUSDT FUTURES BẰNG TIỀN THẬT.\nPhí, trượt giá, thanh lý và mất vốn có thể xảy ra. Bật Auto?'))throw Error('Đã hủy bật Auto');
-   const acceptance=prompt('Nhập chính xác CHAP NHAN BTC FUTURES để xác nhận bật giao dịch tiền thật:');
-   if(acceptance!=='CHAP NHAN BTC FUTURES')throw Error('Chưa xác nhận giao dịch tiền thật');
-   await requestLive('config',liveConfig());await requestLive('on',{acceptance});
-   $('apiError').textContent='Auto Futures THẬT đang ON; chỉ mở khi có tín hiệu mới và kiểm tra an toàn.';
-  }else{
-   await requestLive('off');$('apiError').textContent='Auto OFF. Lệnh SL/TP đã đặt trên Binance thật vẫn còn.';
-  }
+  if(wantsOn){
+   clearTimeout(saveTimer);if(!await saveConfig(true))throw Error('Cấu hình chưa hợp lệ hoặc chưa lưu được');
+   if(!confirm('BẬT BOT BTCUSDT FUTURES BẰNG TIỀN THẬT? Có thể thua lỗ hoặc thanh lý.'))throw Error('Đã hủy bật Auto');
+   const acceptance=prompt('Nhập CHAP NHAN BTC FUTURES để bật Auto tiền thật:');
+   if(acceptance!=='CHAP NHAN BTC FUTURES')throw Error('Chưa xác nhận');
+   await request('on',{acceptance});$('apiError').textContent='Đã bật Auto BTCUSDT Futures.';
+  }else{await request('off');$('apiError').textContent='Auto OFF · SL/TP trên Binance vẫn giữ nguyên.';}
  }catch(e){$('apiError').textContent=e.message;}
  finally{autoBusy=false;await refreshLive();}
 };
-refreshLive();setInterval(refreshLive,5000);
-const fmt=n=>Number.isFinite(n)?n.toLocaleString('en-US',{maximumFractionDigits:5}):'—';
-function calc(){
- const val=id=>$(id).value.trim()===''?NaN:Number($(id).value);
- const entry=val('entry'),margin=val('marginUSDT'),leverage=val('leverage'),
-  sl=val('sl'),tps=[val('tp1'),val('tp2'),val('tp3')],q1=val('q1'),q2=val('q2');
- const notional=margin*leverage;
- const sizingOk=Number.isFinite(margin)&&margin>0&&Number.isInteger(leverage)&&leverage>=1&&leverage<=20&&
-  Number.isFinite(notional)&&notional>0;
- $('notional').textContent=sizingOk?fmt(notional)+' USDT':'—';
- $('sizingFormula').textContent=sizingOk?fmt(margin)+' USDT × '+leverage+'x = '+fmt(notional)+' USDT':
-  'Nhập ký quỹ lớn hơn 0 và đòn bẩy nguyên từ 1x đến 20x.';
- const validTp=Number.isFinite(entry)&&entry>0&&Number.isFinite(sl)&&sl>0&&sl<=10&&
-  tps.every(x=>Number.isFinite(x)&&x>0)&&Number.isFinite(q1)&&Number.isFinite(q2)&&
-  q1>=0&&q2>=0&&q1+q2<100;
- $('error').textContent=!sizingOk?'USDT ký quỹ phải lớn hơn 0 và đòn bẩy là số nguyên từ 1 đến 20.':
-  !validTp?'Kiểm tra giá Entry, SL/TP và tỷ lệ chốt. TP1 + TP2 phải nhỏ hơn 100%.':'';
- $('q3').value=validTp?fmt(100-q1-q2):'—';
- if(!sizingOk||!validTp){$('preview').textContent='Vui lòng nhập giá trị hợp lệ.';return;}
- const mode=$('mode').value;
- const levels=direction=>{
-  const d=direction==='LONG'?1:-1,stop=entry*(1-d*sl/100),
-   tp=v=>mode==='Percent'?entry*(1+d*v/100):entry+d*v;
-  return direction+' | SL '+fmt(stop)+' | TP1 '+fmt(tp(tps[0]))+
-   ' | TP2 '+fmt(tp(tps[1]))+' | TP3 '+fmt(tp(tps[2]));
- };
- const estimatedBTC=notional/entry;
- $('preview').textContent=
-  'Ký quỹ '+fmt(margin)+' USDT × '+leverage+'x = '+fmt(notional)+' USDT vị thế'+
-  '\nBTC ước tính: '+estimatedBTC.toLocaleString('en-US',{maximumFractionDigits:8})+' BTC (giá '+fmt(entry)+')'+
-  '\n'+levels('LONG')+'\n'+levels('SHORT')+
-  '\nTỷ lệ chốt: '+fmt(q1)+'% / '+fmt(q2)+'% / '+fmt(100-q1-q2)+'%'+
-  '\nChưa bao gồm phí, funding và quy tắc làm tròn khối lượng Binance.';
-}
-for(const id of ids)$(id).addEventListener('input',calc);
-$('save').onclick=async()=>{try{
- const config=liveConfig();await requestLive('config',config);
- localStorage.setItem('occ-binance-draft',JSON.stringify(Object.fromEntries(ids.map(id=>[id,$(id).value]))));
- $('apiError').textContent='Đã lưu cấu hình vào app; API Key/Secret không được lưu.';
- }catch(e){$('apiError').textContent=e.message;}
-};
-$('reset').onclick=()=>{localStorage.removeItem('occ-binance-draft');location.reload();};
-try{const d=JSON.parse(localStorage.getItem('occ-binance-draft')||'{}');for(const [k,v]of Object.entries(d))if(ids.includes(k))$(k).value=v;}catch{}
-calc();
-
-let liveReport=null;
-const fmtReal=n=>n==null?'—':Number(n).toLocaleString('en-US',{maximumFractionDigits:4});
-const vntime=t=>t==null?'—':new Date(t).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',hour12:false});
-function plotRealCurve(points){
- const cv=$('realCurve'),ctx=cv.getContext('2d'),w=cv.width,h=cv.height,p=32;
- ctx.clearRect(0,0,w,h);ctx.strokeStyle='#31455b';ctx.fillStyle='#9bb2c9';ctx.font='12px system-ui';
- const vals=[0,...points.map(x=>Number(x.cumulative))],lo=Math.min(...vals),hi=Math.max(...vals);
- const delta=Math.max(1,hi-lo),min=lo-delta*.15,max=hi+delta*.15;
- const y=v=>p+(max-v)/(max-min)*(h-2*p),x=i=>p+i/Math.max(1,vals.length-1)*(w-2*p);
- for(let z=0;z<=4;z++){const level=min+(max-min)*z/4,yy=y(level);
-  ctx.beginPath();ctx.moveTo(p,yy);ctx.lineTo(w-p,yy);ctx.stroke();
-  ctx.fillText(fmtReal(level),2,yy-4);}
- ctx.strokeStyle='#a6f0c1';ctx.lineWidth=2;ctx.beginPath();
- vals.forEach((v,i)=>i?ctx.lineTo(x(i),y(v)):ctx.moveTo(x(i),y(v)));ctx.stroke();
- if(!points.length){ctx.fillStyle='#acbdce';ctx.textAlign='center';ctx.fillText('Chưa có vị thế thực đã đóng',w/2,h/2);ctx.textAlign='start';}
-}
-function renderRealStats(data){
- liveReport=data;const s=data.summary;
- $('realClosed').textContent=s.closed;$('realWl').textContent=s.wins+' / '+s.losses+' / '+s.breakeven;
- $('realWin').textContent=s.winRate==null?'—':fmtReal(s.winRate)+'%';
- $('realGross').textContent=fmtReal(s.grossRealizedUSDT);
- $('realFees').textContent=fmtReal(s.usdtFees);
- $('realNet').textContent=fmtReal(s.netExFundingUSDT);
- $('realNet').style.color=s.netExFundingUSDT>0?'#a8eebb':s.netExFundingUSDT<0?'#ff999b':'#eef5ff';
- $('statsStatus').textContent='Đã đăng ký '+data.registeredOrders+' ID lệnh OCC · '+s.closed+
-  ' vị thế hoàn tất · '+s.open+' vị thế chưa đóng'+
-  (s.incomplete?' · '+s.incomplete+' vị thế chưa xác minh đầy đủ phí':'')+
-  (data.registeredOrders===0?' · Chưa có lệnh thực từ bộ thực thi OCC.':'');
- const tbody=$('realHistory');tbody.replaceChildren();
- if(!data.positions.length){const tr=document.createElement('tr'),td=document.createElement('td');
-  td.colSpan=9;td.textContent='Chưa có giao dịch thật do OCC xác minh. Bảng Paper Trading không được cộng vào đây.';
-  tr.append(td);tbody.append(tr);}
- for(const t of [...data.positions].reverse().slice(0,100)){
-  const tr=document.createElement('tr'),items=[
-   vntime(t.entryAt)+' / '+vntime(t.exitAt),t.side,fmtReal(t.qty),
-   fmtReal(t.entryPrice)+' / '+fmtReal(t.exitPrice),t.exitReasons.join(', '),
-   fmtReal(t.grossRealizedUSDT),fmtReal(t.usdtFees),fmtReal(t.netExFundingUSDT),t.result
-  ];
-  for(const item of items){const td=document.createElement('td');td.textContent=item;tr.append(td);}tbody.append(tr);
- }
- $('realOpen').textContent=s.open?'Vị thế chưa đóng do bot đã xác minh: '+s.open+' (chưa tính thắng/thua).':
-  'Không có vị thế OCC chưa đóng trong các fill đã ghi nhận.';
- plotRealCurve(data.curve||[]);
-}
-async function refreshRealStats(){
+async function refreshLive(){
  try{
-  const resp=await fetch('/api/binance/live-report',{cache:'no-store'});
-  if(!resp.ok)throw Error('HTTP '+resp.status);
-  renderRealStats(await resp.json());
- }catch(e){$('statsStatus').textContent='Không đọc được báo cáo giao dịch thật: '+e.message;}
+  const r=await fetch('/api/binance/live-status',{cache:'no-store'});
+  if(!r.ok)throw Error('HTTP '+r.status);
+  const s=await r.json(),a=s.account||null;
+  if(!setupLoaded&&s.config){applyConfig(s.config);setupLoaded=true;if(s.connected)$('credentialEditor').open=false;}
+  $('connection').textContent=s.connected?'BINANCE KẾT NỐI':s.credentialSaved?'ĐANG KẾT NỐI':'CHƯA KẾT NỐI';
+  $('connection').className='status'+(s.connected?' ok':s.error?' bad':'');
+  $('apiStatusText').textContent=s.connected?'Đã kết nối':s.credentialSaved?'Đã lưu API · đang thử kết nối':'Chưa có API';
+  $('savedInfo').textContent=s.credentialSaved?'DPAPI Windows ✓':'Chưa lưu khóa';
+  $('rememberApi').checked=s.credentialSaved||$('rememberApi').checked;
+  $('apiError').textContent=s.error?('Cần kiểm tra: '+s.error):$('apiError').textContent;
+  $('enabled').checked=!!s.armed;
+  $('enabled').disabled=!s.connected||s.halted||autoBusy;
+  $('autoLabel').textContent=s.armed?'AUTO ON · THẬT':s.halted?'HALTED':'AUTO OFF';
+  $('autoWrap').className='auto'+(s.armed?' on':'');
+  const labels={wallet:'walletUSDT',available:'availableUSDT',equity:'equityUSDT',unrealized:'unrealizedUSDT',btcPosition:'positionBTC'};
+  for(const [id,key] of Object.entries(labels)){const el=$(id);el.textContent=a?fmt(a[key],id==='btcPosition'?6:2):'—';}
+  color($('unrealized'),a?.unrealizedUSDT);color($('btcPosition'),a?.positionBTC);
+  $('entryPrice').textContent=a?fmt(a.entryPrice,2):'—';
+  $('markPrice').textContent=a?fmt(a.markPrice,2):'—';
+  $('liqPrice').textContent=a?fmt(a.liquidationPrice,2):'—';
+  $('btcPnl').textContent=a?fmt(a.btcUnrealizedUSDT,2)+' USDT':'—';
+  color($('btcPnl'),a?.btcUnrealizedUSDT);
+  $('marginMode').textContent=a?.marginType||'—';
+  $('accountLeverage').textContent=a?.leverage?a.leverage+'x':'—';
+  $('openOrderCount').textContent=a?String(a.openOrders):'—';
+  $('openAlgoCount').textContent=a?String(a.openAlgos):'—';
+  $('botState').textContent=s.halted?'HALTED · KIỂM TRA BINANCE':s.armed?'Đang chạy':'Tạm dừng';
+  $('autoHint').textContent=s.halted?'Có lỗi hoặc vị thế chưa được đối soát. Kiểm tra Binance trước khi bật lại.':
+   s.armed?'Bot có thể mở lệnh BTCUSDT theo tín hiệu OCC.':'Auto OFF, không mở lệnh mới.';
+  $('apiReconcile').disabled=!s.connected||s.armed;
+  $('lastSync').textContent=s.lastAccountSync?'Đồng bộ tài khoản: '+vn(s.lastAccountSync):'Chưa có đồng bộ tài khoản.';
+  $('lastUpdate').textContent=s.connected?'Binance thật · Cập nhật '+vn(s.lastAccountSync):'Binance thật · Offline';
+ }catch(e){$('connection').textContent='MẤT KẾT NỐI APP';$('connection').className='status bad';$('apiError').textContent=e.message;$('enabled').disabled=true;}
 }
-$('statsRefresh').onclick=refreshRealStats;
+let curveData=[];
+function drawCurve(){
+ const cv=$('realCurve'),ctx=cv.getContext('2d'),w=cv.width,h=cv.height,p=30;
+ ctx.clearRect(0,0,w,h);ctx.strokeStyle='#34485d';ctx.fillStyle='#9db3c8';ctx.font='12px system-ui';
+ const vals=[0,...curveData.map(d=>Number(d.cumulative))],lo=Math.min(...vals),hi=Math.max(...vals),delta=Math.max(1,hi-lo);
+ const min=lo-delta*.15,max=hi+delta*.15;
+ const x=i=>p+(w-2*p)*i/Math.max(1,vals.length-1),y=v=>p+(max-v)/(max-min)*(h-2*p);
+ for(let i=0;i<=3;i++){const yy=p+(h-2*p)*i/3;ctx.beginPath();ctx.moveTo(p,yy);ctx.lineTo(w-p,yy);ctx.stroke();}
+ ctx.beginPath();ctx.lineWidth=2;ctx.strokeStyle='#a2eeb7';
+ vals.forEach((v,i)=>i?ctx.lineTo(x(i),y(v)):ctx.moveTo(x(i),y(v)));ctx.stroke();
+ if(!curveData.length){ctx.fillStyle='#9db3c8';ctx.textAlign='center';ctx.fillText('Chưa có giao dịch OCC đã xác minh',w/2,h/2);ctx.textAlign='start';}
+}
+async function refreshReport(){
+ try{
+  const r=await fetch('/api/binance/live-report',{cache:'no-store'});
+  if(!r.ok)throw Error('HTTP '+r.status);
+  const data=await r.json();liveReport=data;
+  const s=data.summary||{};
+  $('realNet').textContent=fmt(s.netExFundingUSDT,2);
+  color($('realNet'),s.netExFundingUSDT);
+  $('realClosed').textContent=s.closed??0;
+  $('realWl').textContent=(s.wins??0)+' / '+(s.losses??0)+' / '+(s.breakeven??0);
+  $('realWin').textContent=s.winRate==null?'—':fmt(s.winRate,1)+'%';
+  $('realFees').textContent=fmt(s.usdtFees??0,2);
+  $('realGross').textContent=fmt(s.grossRealizedUSDT??0,2);
+  $('statsStatus').textContent=(data.registeredOrders||0)+' lệnh được đối soát';
+  $('realOpen').textContent=(s.open||0)+' vị thế bot chưa đóng · '+(s.closed||0)+' đã đóng';
+  curveData=data.curve||[];drawCurve();
+  const body=$('realHistory');body.replaceChildren();
+  const positions=[...(data.positions||[])].reverse();
+  if(!positions.length){const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=9;
+   td.textContent='Chưa có lệnh OCC được đối soát với Binance';tr.append(td);body.append(tr);}
+  for(const t of positions.slice(0,100)){
+   const cells=[vn(t.entryAt)+' / '+vn(t.exitAt),t.side,fmt(t.qty,6),
+    fmt(t.entryPrice,2)+' → '+fmt(t.exitPrice,2),(t.exitReasons||[]).join('/'),
+    fmt(t.grossRealizedUSDT,2),fmt(t.usdtFees,2),fmt(t.netExFundingUSDT,2),t.result];
+   const tr=document.createElement('tr');
+   for(const c of cells){const td=document.createElement('td');td.textContent=c;tr.append(td);}body.append(tr);
+  }
+ }catch(e){$('statsStatus').textContent='Lỗi báo cáo: '+e.message;}
+}
+$('statsRefresh').onclick=refreshReport;
 $('statsCsv').onclick=()=>{
- if(!liveReport||!liveReport.positions.length){alert('Chưa có vị thế thật đã đóng để xuất CSV.');return;}
- const cols=['id','side','qty','entryAt','exitAt','entryPrice','exitPrice','exitReasons',
-   'grossRealizedUSDT','usdtFees','netExFundingUSDT','result'];
- const csv=[cols.join(','),...liveReport.positions.map(t=>cols.map(k=>
-  '"'+String(Array.isArray(t[k])?t[k].join(';'):t[k]??'').replaceAll('"','""')+'"').join(','))].join('\r\n');
- const a=document.createElement('a'),url=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}));
- a.href=url;a.download='occ-binance-real-btcusdt.csv';a.click();URL.revokeObjectURL(url);
+ if(!liveReport?.positions?.length){$('statsStatus').textContent='Chưa có lệnh để xuất';return;}
+ const cols=['id','side','qty','entryAt','exitAt','entryPrice','exitPrice','grossRealizedUSDT','usdtFees','netExFundingUSDT','result'];
+ const rows=liveReport.positions.map(t=>cols.map(k=>'"'+String(t[k]??'').replaceAll('"','""')+'"').join(','));
+ const blob=new Blob(['\ufeff'+[cols.join(','),...rows].join('\r\n')],{type:'text/csv;charset=utf-8'});
+ const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='OCC_Binance_BTCUSDT_Real.csv';a.click();URL.revokeObjectURL(url);
 };
-refreshRealStats();setInterval(refreshRealStats,15000);
-
-</script></html>
+refreshLive();refreshReport();setInterval(refreshLive,5000);setInterval(refreshReport,15000);
+</script>
+</body></html>

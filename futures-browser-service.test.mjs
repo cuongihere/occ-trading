@@ -4,6 +4,12 @@ import {mkdtempSync,rmSync,existsSync,readFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {BrowserFutures} from './futures-browser-service.mjs';
+import {WindowsCredentialVault} from './futures-credential-vault.mjs';
+const PREFIX=Buffer.from('OCC_MOCK_ENCRYPTED_');
+const fakeCrypt=(buf,mode)=>mode==='protect'
+ ?Buffer.concat([PREFIX,Buffer.from(buf).reverse()])
+ :Buffer.from(buf.subarray(PREFIX.length)).reverse();
+const makeVault=dir=>new WindowsCredentialVault(join(dir,'futures-api.dpapi.json'),{crypt:fakeCrypt});
 const tmp=t=>{const p=mkdtempSync(join(tmpdir(),'occ-browser-live-'));t.after(()=>rmSync(p,{force:true,recursive:true}));return p;};
 function fake({flatRiskRows=false,brokenConfig=false,failStop=false}={}){
  const calls=[],algo=[],normal=[],position={qty:0},mode={dualSidePosition:false};
@@ -12,7 +18,7 @@ function fake({flatRiskRows=false,brokenConfig=false,failStop=false}={}){
   async syncClock(){calls.push('time');},
   async get(path,p={}){
    calls.push({method:'GET',path,p});
-   if(path==='/fapi/v2/account')return {canTrade:true,assets:[{asset:'USDT',walletBalance:'800',availableBalance:'800'}]};
+   if(path==='/fapi/v2/account')return {canTrade:true,totalWalletBalance:'800',totalMarginBalance:'812',totalUnrealizedProfit:'12',totalInitialMargin:'60',assets:[{asset:'USDT',walletBalance:'800',availableBalance:'800'}]};
    if(path==='/fapi/v1/positionSide/dual')return mode;
    if(path==='/fapi/v1/symbolConfig')return brokenConfig?[]:[{symbol:'BTCUSDT',marginType:'ISOLATED',leverage:5}];
    if(path==='/fapi/v3/positionRisk')return flatRiskRows&&position.qty===0?[]:[{symbol:'BTCUSDT',positionSide:'BOTH',positionAmt:String(position.qty)}];
@@ -49,7 +55,7 @@ function fake({flatRiskRows=false,brokenConfig=false,failStop=false}={}){
 }
 const creds={apiKey:'dummy-api-key',apiSecret:'dummy-secret',environment:'production'};
 test('UI backend accepts credentials in memory, stores only harmless configuration, restarts OFF',async t=>{
- const dir=tmp(t),fx=fake(),service=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api});
+ const dir=tmp(t),fx=fake(),service=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
  await service.connect(creds);
  assert.equal(service.snapshot().connected,true);
  assert.equal(service.snapshot().environment,'production');
@@ -58,19 +64,19 @@ test('UI backend accepts credentials in memory, stores only harmless configurati
  assert.doesNotMatch(content,/dummy-api-key|dummy-secret/);
  await service.arm('CHAP NHAN BTC FUTURES');assert.equal(service.snapshot().armed,true);
  service.disarm();assert.equal(service.snapshot().armed,false);
- const again=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api});
+ const again=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
  assert.equal(again.snapshot().armed,false);
  assert.equal(again.snapshot().config.marginUSDT,500);
  assert.equal(existsSync(join(dir,'futures-live-intent.json')),false);
 });
 test('Production Auto requires explicit confirmation and rejects missing consent',async t=>{
- const service=new BrowserFutures({dataDir:tmp(t),transportFactory:()=>fake().api});
+ const service=new BrowserFutures({dataDir:tmp(t),transportFactory:()=>fake().api,credentialVault:makeVault(tmp(t))});
  await service.connect({...creds,environment:'production'});
  await assert.rejects(service.arm(),/Chưa xác nhận giao dịch tiền thật/);
  await service.arm('CHAP NHAN BTC FUTURES');assert.equal(service.snapshot().armed,true);
 });
 test('Production Auto mock sends MARKET then confirmed STOP and three TP, never opens duplicate',async t=>{
- const dir=tmp(t),fx=fake(),service=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api});
+ const dir=tmp(t),fx=fake(),service=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
  await service.connect(creds);service.saveConfig({marginUSDT:500,leverage:5});
  await service.arm('CHAP NHAN BTC FUTURES');
  await service.signal({side:'LONG',barTime:900000},true);
@@ -90,10 +96,10 @@ test('Production Auto mock sends MARKET then confirmed STOP and three TP, never 
  service.disarm();
 });
 test('Live unfinished intent after restart blocks arming until exchange confirmed FLAT',async t=>{
- const dir=tmp(t),fx=fake(),service=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api});
+ const dir=tmp(t),fx=fake(),service=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
  await service.connect(creds);service.saveConfig({marginUSDT:500,leverage:5});await service.arm('CHAP NHAN BTC FUTURES');
  await service.signal({side:'LONG',barTime:900000},true);
- const again=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api});
+ const again=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
  assert.equal(again.snapshot().armed,false);assert.equal(again.snapshot().halted,true);
  await again.connect(creds);
  await assert.rejects(again.arm('CHAP NHAN BTC FUTURES'),/chưa đối soát/);
@@ -105,7 +111,7 @@ test('Live unfinished intent after restart blocks arming until exchange confirme
 
 test('Binance production API accepts V3 positionRisk [] when account is FLAT',async t=>{
  const dir=tmp(t),fx=fake({flatRiskRows:true});
- const service=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api});
+ const service=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
  await service.connect({...creds,environment:'production'});
  const state=service.snapshot();
  assert.equal(state.connected,true);
@@ -122,7 +128,7 @@ test('read-only connection identifies exact failing endpoint instead of generic 
 });
 
 test('Demo connections are rejected by production-only application',async t=>{
- const svc=new BrowserFutures({dataDir:tmp(t),transportFactory:()=>fake().api});
+ const svc=new BrowserFutures({dataDir:tmp(t),transportFactory:()=>fake().api,credentialVault:makeVault(tmp(t))});
  await assert.rejects(svc.connect({...creds,environment:'demo'}),/Chỉ sử dụng Binance Futures thật/);
 });
 
@@ -142,4 +148,27 @@ test('Real BTCUSDT entry failure to establish STOP triggers one reduce-only emer
  assert.equal(fx.position.qty,0);
  await service.signal({side:'SHORT',barTime:1800000},true);
  assert.equal(fx.calls.filter(x=>x.method==='POST').length,3);
+});
+
+test('Restarts restore Windows-encrypted API automatically but never re-arm real trading',async t=>{
+ const dir=tmp(t),fx=fake();
+ const one=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await one.connect(creds);
+ one.saveConfig({marginUSDT:77,leverage:5,tp1Qty:25,tp2Qty:25});
+ const saved=readFileSync(join(dir,'futures-api.dpapi.json'),'utf8');
+ assert.doesNotMatch(saved,/dummy-api-key|dummy-secret/);
+ assert.match(saved,/DPAPI-CurrentUser/);
+ one.close();
+ const two=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ assert.equal(two.snapshot().connected,false);
+ await two.restoreSavedConnection();
+ assert.equal(two.snapshot().connected,true);
+ assert.equal(two.snapshot().armed,false);
+ assert.equal(two.snapshot().config.marginUSDT,77);
+ assert.equal(two.snapshot().credentialSaved,true);
+ assert.equal(two.snapshot().account.equityUSDT,812);
+ assert.equal(two.snapshot().account.unrealizedUSDT,12);
+ two.forgetSavedCredentials();
+ assert.equal(two.snapshot().credentialSaved,false);
+ assert.equal(two.snapshot().connected,false);
 });

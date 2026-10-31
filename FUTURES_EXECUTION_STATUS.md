@@ -14,3 +14,7 @@ OFF chỉ ngừng mở lệnh mới; không hủy SL/TP đang trên Binance. Res
 Funding, lệnh algo kích hoạt tạo order ID thực và P&L đầy đủ vẫn cần đồng bộ user data trước khi có thể coi báo cáo thật là hoàn chỉnh.
 Khả năng mất mạng, lỗi API, stop không khớp và thanh lý có thể gây mất vốn. Theo dõi vị thế và SL/TP trực tiếp trên Binance.
 API Key/Secret không được lưu lên GitHub hoặc ổ đĩa; chỉ giữ trong RAM app tới khi ngắt kết nối.
+
+## Dashboard and protected credentials
+
+Dashboard UI now fits one desktop screen. Futures wallet/available/equity/unrealized P&L/active BTC positions come directly from Binance GET account & positionRisk. Live bot-history summary is separate and can be incomplete until conditional fills are reconciled. API credentials are optionally encrypted with Windows DPAPI CurrentUser and restored on application startup; Auto always starts OFF. Config is persisted server-side, not localStorage. Risk: same-Windows-user malware can decrypt DPAPI data.

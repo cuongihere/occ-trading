@@ -70,41 +70,16 @@ Dashboard chỉ bind 127.0.0.1, không cung cấp dịch vụ công khai. Không
 - **Tổng thống kê**: mặc định xem tổng vị thế đóng, win rate, phí và P&L của toàn bộ lịch sử. Các đợt cũ do nhấn Tạo phiên mới trước đây vẫn được giữ dưới mục xem riêng. Không cộng vốn đầu kỳ của nhiều đợt cũ thành một equity duy nhất, vì đó là các phép thử có vốn riêng; equity ở ô trên chỉ là tài khoản hiện tại.
 - **Giới hạn**: Dữ liệu/khớp lệnh chỉ mô phỏng, không tương đương hoàn toàn Pine TradingView, không tính funding. Muốn sao lưu, dừng chương trình rồi copy toàn bộ data/; không copy SQLite đang mở.
 
-## Kiểm tra API Binance Futures (chỉ đọc)
 
-Bản portable có CHECK_BINANCE_WINDOWS.bat để kiểm tra API key và BTCUSDT USD-M Futures trên máy. Chương trình KHÔNG có khả năng đặt lệnh thật; paper trading và dữ liệu SQLite giữ riêng. Xem [BINANCE_API_SETUP.md](BINANCE_API_SETUP.md). Tuyệt đối không gửi API key/secret vào chat hoặc commit vào GitHub.
+## OCC Binance Futures thật · dashboard một màn hình
 
-## Màn hình Binance Futures riêng
+- Mở **START_WINDOWS.bat** rồi vào `http://127.0.0.1:8080/binance`.
+- Giao diện gọn một màn hình trên desktop: **Ví Futures, Available, Equity, P&L chưa thực hiện, BTC position, P&L bot đã đối soát**, cấu hình SL/TP và lịch sử lệnh. Đã **loại bỏ giá Entry giả định và phần xem trước SL/TP**.
+- **Cấu hình** (USDT ký quỹ/lệnh, đòn bẩy, Long/Short, SL, TP1/2/3, % chia) được ghi vào `data/futures-browser-settings.json`; app tự lấy lại khi mở. Tự lưu sau thay đổi hoặc chọn **Lưu cấu hình** khi Auto OFF.
+- **API Key/Secret**: nhập trên browser, đánh dấu **Lưu API mã hóa trên Windows** (mặc định ON). Key được mã hóa bằng **Windows DPAPI CurrentUser**, lưu tại `data/futures-api.dpapi.json`, không lưu trong JavaScript localStorage hay commit lên Git. App tự giải mã và kết nối Binance Futures khi mở lại trên **cùng tài khoản Windows**. Nếu chạy trên Windows user khác/máy khác, cần nhập lại Key/Secret.
+- Nút **Xóa API đã lưu** xóa file được mã hóa và ngắt kết nối. Nút **Ngắt kết nối** chỉ xóa Key/Secret khỏi RAM, không xóa bản mã hóa đã lưu.
+- DPAPI bảo vệ dữ liệu nằm trên đĩa khi máy bị đọc bởi tài khoản Windows khác; **phần mềm độc hại chạy dưới cùng Windows user vẫn có thể truy cập và giải mã khóa**. Chỉ cấp quyền giao dịch Futures cần thiết, tuyệt đối không cấp quyền rút tiền và dùng IP whitelist khi có thể.
+- **Auto Trade luôn mặc định OFF sau mỗi lần khởi động**, kể cả khi API đã tự kết nối. Muốn ON phải xác nhận nguy cơ giao dịch tiền thật. OFF không tự đóng vị thế đang mở, SL/TP đã được Binance chấp nhận vẫn nằm trên sàn.
+- Số dư, Equity, P&L chưa thực hiện và thông tin vị thế lấy trực tiếp từ REST Binance; tự đồng bộ định kỳ. Báo cáo lệnh **do bot OCC đã đối soát** lưu SQLite riêng `data/binance-live-stats.sqlite`, không cộng lệnh thủ công hoặc Paper. **Lưu ý**: thống kê bot có thể chưa đầy đủ vì tích hợp lệnh Algo kích hoạt/funding chưa hoàn tất; không diễn giải 0 là tài khoản không có giao dịch.
+- Sau khi Entry khớp, bot cố đặt SL close-all trước TP1/TP2/TP3. Nhưng chưa có xác nhận end-to-end bằng tiền thật với Binance Production. **Đừng bật Auto tiền thật khi chưa kiểm tra kỹ cơ chế lệnh bảo vệ trên tài khoản**. Không có đảm bảo SL khớp đúng giá, có nguy cơ lỗ hoặc thanh lý.
 
-Trong dashboard Paper, bấm **Binance Futures · Cài đặt riêng** (địa chỉ localhost:8080/binance). Màn hình này cho nhập trực tiếp **USDT ký quỹ mỗi lệnh** và **đòn bẩy** (ví dụ 20 USDT × 5x = 100 USDT giá trị vị thế dự kiến), chọn LONG/SHORT, tùy chỉnh Multi TP v5 và xem trước giá. Đã bỏ hai ô % Equity và giới hạn USDT. Đây là phép tính minh họa, chưa kiểm tra số dư và quy tắc giao dịch Binance; ký quỹ không đồng nghĩa mức lỗ tối đa. Công tắc thực thi tiền thật hiển thị **OFF / KHÓA**, bởi phần thực thi lệnh thật chưa được kiểm tra đủ điều kiện; không có lệnh nào được gửi lên Binance từ màn hình này. Nút Lưu chỉ lưu bản nháp bằng localStorage của trình duyệt, không phải cấu hình live backend. Kiểm tra kết nối tài khoản read-only bằng CHECK_BINANCE_WINDOWS.bat.
-
-## Báo cáo hiệu suất Binance Futures thực (tách biệt với Paper)
-
-Mở **/binance** trong dashboard OCC để xem mục **Thống kê giao dịch thật do OCC thực hiện**:
-- Tổng vị thế đã đóng, Thắng/Thua/Hòa, Win rate, P&L thực hiện (realizedPnl), phí tính bằng USDT và **P&L sau phí USDT, chưa tính funding**.
-- Biểu đồ P&L tích lũy của các vị thế đã đóng; lịch sử BTCUSDT có giờ vào/ra, LONG/SHORT, entry/exit, khối lượng, TP/SL, phí và kết quả.
-- TP1/TP2/TP3 là các lần khớp từng phần; chỉ khi đóng hết vị thế mới tính thành 1 giao dịch.
-- Chỉ lấy **fill thật do Binance xác minh**, đã gắn với **orderId thuộc OCC** trong SQLite `data/binance-live-stats.sqlite`. Không lấy lệnh thủ công Binance, không trộn dữ liệu paper.
-- Khi chạy **CHECK_BINANCE_WINDOWS.bat**, tiện ích cũng tìm và đồng bộ khớp lệnh đã được đăng ký của bot (nếu có). Cần chạy lại để cập nhật sau lần đặt lệnh mới; hiện chưa có worker live đặt lệnh thật.
-- Phải đăng ký **orderId, groupId, clientId bắt đầu bằng OCCBTC- và role (ENTRY/TP1/TP2/TP3/SL/CLOSE/REVERSE)** trong ledger khi có bộ thực thi live tương lai. Mỗi lần kiểm tra chỉ đọc sẽ truy vấn `GET /fapi/v1/userTrades` cho các orderId đã đăng ký. Chưa có ID được đăng ký → bảng trống, không được tự gán lệnh Binance của người dùng là lệnh OCC.
-- Funding chưa được phân bổ theo từng vị thế; các phí không phải USDT cũng chưa được quy đổi. Vì vậy không thể coi **netExFundingUSDT** là P&L ròng đầy đủ. Giao diện sẽ đánh dấu vị thế phí khác USDT là chưa xác minh P&L ròng.
-- Binance có giới hạn truy vấn lịch sử; cần đồng bộ thường xuyên để giữ được các fill trong dữ liệu cục bộ.
-
-## Cài đặt Binance API ngay trên trình duyệt (Demo Auto)
-
-1. Mở `http://127.0.0.1:8080/binance` từ **START_WINDOWS.bat** và chọn **Binance Futures thật · tiền thử**.
-2. Nhập **API Key + API Secret** vào hai ô mật khẩu và nhấn **Kết nối & kiểm tra API**. Key chỉ được giữ trong RAM của tiến trình Node đang chạy, không lưu trên ổ đĩa và không lưu localStorage.
-3. Chọn số ký quỹ USDT/lệnh, đòn bẩy, chiều LONG/SHORT, SL và TP1/2/3; nhấn **Lưu cấu hình** (chỉ lưu tham số, không lưu key).
-4. Cài trên Binance Futures thật: **One-way, Isolated BTCUSDT, đòn bẩy trùng cấu hình, không có lệnh/vị thế BTCUSDT khác**. Khi luồng giá đã khỏe, bật **Auto Trade** trên trang để thử.
-5. Bot chỉ dùng **tín hiệu OCC M15 mới**, không hồi diễn lệnh lịch sử. Trước lệnh kiểm tra lượng USDT ký quỹ đủ và từng TP đạt quy tắc `stepSize/minQty`; 20 USDT × 5x thường không thể tách 3 TP trên BTCUSDT.
-6. Sau khi gửi lệnh Entry trên Demo, bot xác nhận thực tế `FILLED`, rồi gửi SL đóng toàn bộ và TP1–TP3 từng phần; xác minh lại các lệnh trên sàn. Khi không chắc chắn, bot sẽ khóa Auto và không gửi lại mù quáng.
-7. Nút **OFF** chặn mở lệnh mới, không hủy SL/TP đã được Binance nhận. Nếu app khởi động lại với lệnh chưa đối soát, Auto vẫn OFF và cần kiểm tra trên Binance Futures thật. Nút **Kiểm tra đã sạch lệnh** chỉ mở khóa khi Binance xác nhận BTCUSDT không còn vị thế hoặc lệnh.
-8. Nếu chọn **Binance thật · chỉ đọc**, app chỉ xác minh tài khoản/số dư; công tắc Auto bị khóa. **Chưa thể dùng tiền thật trong bản này.** API Futures phải đúng quyền và Binance phải hỗ trợ tại khu vực của bạn.
-
-Lưu ý: Tín hiệu Demo hiện lấy từ dữ liệu công khai BTCUSDT thực (Binance Futures) còn khớp lệnh diễn ra trên Demo. Kết quả thử có thể khác thực tế. App chưa có worker User Data Stream để xác minh toàn bộ khớp, funding và tính P&L Demo chi tiết; báo cáo giao dịch thật trong app tách riêng và **không tính Demo là lãi/lỗ tiền thật**.
-
-## Binance Futures THẬT · BTCUSDT
-
-Giao diện /binance chỉ còn Binance Futures thật. Key và Secret nhập ngay trên trình duyệt, chỉ giữ RAM. Auto yêu cầu xác nhận bằng câu CHAP NHAN BTC FUTURES. Cài đặt USDT ký quỹ × đòn bẩy, TP1/2/3, SL và LONG/SHORT. Khi OFF không mở lệnh mới nhưng SL/TP đã đặt vẫn còn trên Binance. Dùng One-way, ISOLATED và đòn bẩy khớp cài đặt; bot từ chối nếu ba TP không đạt khối lượng tối thiểu. Sau Entry xác nhận FILLED mới gửi SL rồi ba TP; khi lỗi bot HALT và cố gắng đóng reduce-only nếu không có stop trên sàn.
-
-**Chưa kiểm chứng trực tiếp trên Binance Production:** Chỉ có kiểm thử tự động bằng API giả lập; không đảm bảo khớp SL, TP hay đóng lệnh khi mất mạng. Giao dịch Futures có thể lỗ và bị thanh lý, cần theo dõi trực tiếp trên Binance. Thống kê khớp lệnh thật còn thiếu liên kết hoàn chỉnh với các TP/SL đã kích hoạt và funding.

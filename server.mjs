@@ -9,7 +9,7 @@ import {BinanceFeed} from './server-feed.mjs';
 import {readLiveReport} from './binance-live-stats.mjs';
 import {BrowserFutures} from './futures-browser-service.mjs';
 const args=new Set(process.argv.slice(2));
-if(args.has('--help')){console.log('node server.mjs [--simulate]\nDefault: data collection only. --simulate explicitly enables paper simulation after synchronization. Dashboard localhost:8080. DATA_DIR and PORT optional. No keys/accounts/orders.');process.exit(0);}
+if(args.has('--help')){console.log('node server.mjs [--simulate]\nPaper default: collection only; --simulate enables paper. Binance Futures API and Auto have separate controls at localhost:8080/binance. DATA_DIR and PORT optional.');process.exit(0);}
 if([...args].some(x=>x!=='--simulate'))throw Error('Unknown argument; use --help');
 const dir=resolve(process.env.DATA_DIR||'./data');mkdirSync(dir,{recursive:true,mode:0o700});
 // A separate SQLite exclusive transaction is a crash-safe, OS-released single-process lock.
@@ -98,7 +98,7 @@ const server=createServer(async(req,res)=>{
   try{let body='';for await(const chunk of req){body+=chunk;if(body.length>4096)throw Error('Request too large');}const p=JSON.parse(body||'{}');
    if(req.url==='/control/live/connect'){
     // Credentials are not logged, journaled, cached or stored in the browser.
-    await browserFutures.connect({apiKey:p.apiKey,apiSecret:p.apiSecret,environment:p.environment});
+    await browserFutures.connect({apiKey:p.apiKey,apiSecret:p.apiSecret,environment:'production',remember:p.remember!==false});
    }
    else if(req.url==='/control/live/config'){browserFutures.saveConfig(p);}
    else if(req.url==='/control/live/on'){
@@ -109,6 +109,7 @@ const server=createServer(async(req,res)=>{
    else if(req.url==='/control/live/off'){browserFutures.disarm();}
    else if(req.url==='/control/live/reconcile'){await browserFutures.reconcileFlat();}
    else if(req.url==='/control/live/disconnect'){browserFutures.close();}
+   else if(req.url==='/control/live/forget'){browserFutures.forgetSavedCredentials();}
    else if(req.url==='/control/start'){if(engine.config.exitMode!=='Multi TP v5')throw Error('Phiên cũ không dùng Multi TP v5. Hãy tạo phiên mới để chuyển chế độ.');if(!feed.healthy()||!engine.ready)throw Error('Chưa có dữ liệu Binance liên tục. Kết nối lại trước.');commit('user_start',{},null,Date.now(),()=>{engine.setHealthy(true);engine.setRunning(true);engine.tradingEnabled=true;});simulate=true;}
    else if(req.url==='/control/pause'){simulate=false;commit('user_pause',{},null,Date.now(),()=>{engine.setRunning(false);engine.tradingEnabled=false;});}
    else if(req.url==='/control/connect'){commit('feed_reconnect',{},null,Date.now(),()=>engine.setRunning(false));feed.connect();}
@@ -151,11 +152,18 @@ const server=createServer(async(req,res)=>{
 });
 server.on('error',error=>{console.error(error.message);shutdown(1);});
 const port=Number(process.env.PORT||8080);if(!Number.isInteger(port)||port<1||port>65535)throw Error('Invalid PORT');
-const demoMonitor=setInterval(()=>browserFutures.monitor().catch(e=>console.error('Demo position monitor:',e.message)),15000);demoMonitor.unref();
-server.listen(port,'127.0.0.1',()=>{console.log(`Local dashboard http://127.0.0.1:${port}; ${simulate?'paper simulation explicitly enabled':'collection only'}`);feed.connect();});
+const futuresMonitor=setInterval(()=>browserFutures.monitor().catch(e=>console.error('Futures position monitor:',e.message)),15000);futuresMonitor.unref();
+const accountRefresh=setInterval(()=>browserFutures.refreshAccountOverview().catch(e=>{
+  console.error('Futures account refresh:',e.message);
+}),25000);accountRefresh.unref();
+server.listen(port,'127.0.0.1',()=>{
+ console.log('Local dashboard http://127.0.0.1:'+port+'; Futures Auto OFF by default');
+ browserFutures.restoreSavedConnection().catch(e=>console.error('Saved Binance credentials:',e.message));
+ feed.connect();
+});
 function shutdown(code=0){
  if(closing)return;closing=true;
- clearInterval(demoMonitor);
+ clearInterval(futuresMonitor);clearInterval(accountRefresh);
  // Commit an explicit shutdown checkpoint. No pending orders are replayed later.
  if(code===0){try{commit('process_stop',{tradingEnabled:engine.tradingEnabled},null,Date.now(),()=>engine.setRunning(false));}
  catch(e){console.error('Failed to persist shutdown:',e.message);code=1;}}

@@ -82,6 +82,6 @@ test('Real stats endpoint and UI are independent of paper report and do not arm 
  assert.match(server,/readLiveReport/);
  assert.match(ui,/id="realHistory"/);assert.match(ui,/id="realCurve"/);
  assert.match(ui,/id="realNet"/);assert.match(ui,/realStats/);
- assert.match(ui,/id="enabled" style=/);
+ assert.match(ui,/id="enabled" type="checkbox"/);
  assert.match(build,/'binance-live-stats\.mjs'/);
 });
