@@ -16,10 +16,10 @@ Nếu chỉ tải bằng Code → Download ZIP, đó là mã nguồn chưa có r
 ## Ứng dụng
 
 - OCC R5.1: SMMA8, M15/H4, delay 0, BOTH; H4 đang hình thành có thể đổi tín hiệu.
-- Paper position ~10% equity, không đòn bẩy, không stop loss, chưa tính funding.
+- Paper position ~10% equity, không đòn bẩy, SL/TP cấu hình Classic v3 hoặc Multi TP v5, chưa tính funding.
 - Binance BTCUSDT perpetual public data; không API key, tài khoản hay lệnh thật.
 - Dashboard mới, biểu đồ P&L đã đóng, lịch sử phiên, thắng/thua, CSV/JSON.
-- SQLite và lịch sử trong data/ cùng thư mục. Khởi động luôn tạm dừng, chờ bấm Bắt đầu.
+- SQLite và lịch sử trong data/ cùng thư mục. Xem [Pine SL/TP mapping](PINE_EXIT_MAPPING.md). Khởi động luôn tạm dừng, chờ bấm Bắt đầu.
 
 ## Phát triển / kiểm thử
 

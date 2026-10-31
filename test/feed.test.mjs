@@ -49,7 +49,7 @@ test('transient failure schedules bounded backoff and disconnect cancels retry',
 });
 test('WebSocket envelope is audited before downstream trade callback',async()=>{
   const oldFetch=globalThis.fetch,oldWS=globalThis.WebSocket;const order=[];let socket;
-  globalThis.fetch=async url=>({ok:true,json:async()=>url.endsWith('/time')?{serverTime:BASE}:url.endsWith('/exchangeInfo')?{symbols:[{symbol:'BTCUSDT',contractType:'PERPETUAL',status:'TRADING',filters:[{filterType:'LOT_SIZE',stepSize:'0.001',minQty:'0.001'},{filterType:'MIN_NOTIONAL',notional:'100'}]}]}:[[BASE-900000,'50000','50001','49999','50000','1',BASE-1]]});
+  globalThis.fetch=async url=>({ok:true,json:async()=>url.endsWith('/time')?{serverTime:BASE}:url.endsWith('/exchangeInfo')?{symbols:[{symbol:'BTCUSDT',contractType:'PERPETUAL',status:'TRADING',filters:[{filterType:'LOT_SIZE',stepSize:'0.001',minQty:'0.001'},{filterType:'MIN_NOTIONAL',notional:'100'},{filterType:'PRICE_FILTER',tickSize:'0.10'}]}]}:[[BASE-900000,'50000','50001','49999','50000','1',BASE-1]]});
   globalThis.WebSocket=class {constructor(url){assert.match(url,/^wss:\/\/fstream\.binance\.com\/market\/stream\?/);socket=this;queueMicrotask(()=>this.onopen?.());}close(){}};
   const f=new BinanceFeed({clock:()=>BASE,onRaw:x=>{order.push('raw');assert.equal(x.receivedAt,BASE);assert.equal(x.exchangeAt,BASE);},onTrade:()=>order.push('trade')});
   try {await f.connect();socket.onmessage({data:JSON.stringify({data:{e:'kline',E:BASE,s:'BTCUSDT',k:{i:'15m',x:false}}})});socket.onmessage({data:JSON.stringify({data:{e:'aggTrade',E:BASE,T:BASE,s:'BTCUSDT',a:4,p:'50000'}})});assert.deepEqual(order,['raw','raw','trade']);}

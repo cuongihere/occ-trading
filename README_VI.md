@@ -37,15 +37,17 @@ Lần đầu cần Internet và quyền ghi vào thư mục. PowerShell có sẵ
 - Biểu đồ P&L cộng dồn của **vị thế đã đóng**; thắng/thua/hòa, tỷ lệ thắng và chuỗi thua.
 - Chọn phiên hiện tại, toàn bộ phiên hoặc từng phiên; bảng hiển thị 100 vị thế mới nhất.
 - Xuất **CSV đầy đủ** vị thế đã đóng, từng lần khớp và JSON tín hiệu.
-- Tạo phiên mới cho phép chỉnh vốn/giả định phí/slippage, bắt buộc xác nhận. Lịch sử phiên cũ giữ lại.
+- Tạo phiên mới cho phép chỉnh vốn, phí, slippage và SL/TP (Classic v3 / Multi TP v5), bắt buộc xác nhận. Lịch sử phiên cũ giữ lại.
 
 Tỷ lệ thắng = số vị thế thắng chia tổng số vị thế đóng, bao gồm vị thế hòa. Thống kê dựa trên P&L trừ **cả phí mở và đóng**; slippage đã có trong giá mô phỏng. Vị thế đang mở không tính thắng/thua. Funding chưa được tính.
 
-## 5. Cấu hình chiến lược cố định
+## 5. Cấu hình chiến lược và SL/TP
 
 **BTCUSDT perpetual · M15/H4 · SMMA 8 · delay 0 · BOTH · Classic SL/TP=0**.
 
-Khoảng 10% equity được dùng làm **giá trị danh nghĩa mỗi vị thế**, không phải ký quỹ đòn bẩy. Không sử dụng stop loss. Nến H4 đang hình thành có thể biến động tín hiệu. Tín hiệu mô phỏng theo thời gian thực chưa được xác nhận giống TradingView backtest hoặc giao dịch thật.
+**Exit Mode theo Pine:** Classic mặc định SL 0 tick/TP 0 tick (tắt); Multi TP mặc định SL 1%, TP 1/2/3% và chia 33/33/34. Hỗ trợ TP Percent hoặc Points giá tuyệt đối. Xem [PINE_EXIT_MAPPING.md](PINE_EXIT_MAPPING.md) về quy tắc và giới hạn mô phỏng.
+
+Khoảng 10% equity được dùng làm **giá trị danh nghĩa mỗi vị thế**, không phải ký quỹ đòn bẩy. **Có SL/TP cấu hình được theo Classic v3 hoặc Multi TP v5.** Nến H4 đang hình thành có thể biến động tín hiệu. Tín hiệu mô phỏng theo thời gian thực chưa được xác nhận giống TradingView backtest hoặc giao dịch thật.
 
 ## 6. Lưu dữ liệu, backup và cập nhật
 

@@ -60,12 +60,13 @@ export class BinanceFeed {
       if (!symbol || !Array.isArray(h4) || !Array.isArray(m15)) throw new Error('Không xác nhận được hợp đồng BTCUSDT perpetual hoặc nến.');
       const lot = symbol.filters.find(f=>f.filterType==='LOT_SIZE');
       const notional = symbol.filters.find(f=>f.filterType==='MIN_NOTIONAL');
-      if (!lot || !(Number(lot.stepSize)>0)) throw new Error('Thiếu quy tắc khối lượng hợp đồng.');
+      const priceFilter = symbol.filters.find(f=>f.filterType==='PRICE_FILTER');
+      if (!lot || !(Number(lot.stepSize)>0) || !priceFilter || !(Number(priceFilter.tickSize)>0)) throw new Error('Thiếu quy tắc khối lượng hoặc bước giá hợp đồng.');
       const now = this.now(); const closed = m15.filter(b=>Number(b[6]) < now);
       for(let i=1;i<closed.length;i++) if(Number(closed[i][0])-Number(closed[i-1][0])!==M15) throw new Error('Lịch sử M15 có khoảng trống.');
       if (!closed.length || now - Number(closed.at(-1)[6]) > M15 + 10000) throw new Error('Lịch sử M15 chưa cập nhật.');
       this.lastClosed = Number(closed.at(-1)[0]);
-      this.cb.onReady?.({h4,m15,now,stepSize:Number(lot.stepSize),minQty:Number(lot.minQty),minNotional:Number(notional?.notional || 0)});
+      this.cb.onReady?.({h4,m15,now,stepSize:Number(lot.stepSize),minQty:Number(lot.minQty),minNotional:Number(notional?.notional || 0),tickSize:Number(priceFilter.tickSize)});
       // Catch-up affects indicators only: never replay buffered history as live profit.
       for (const {d,receivedAt} of queue) { if(gen !== this.generation) return; this.consume(d, false, receivedAt); }
       if(gen !== this.generation) return;

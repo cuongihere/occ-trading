@@ -30,7 +30,7 @@ select,input{font:inherit;background:#101925;color:var(--text);border:1px solid 
 .scroll{overflow:auto;max-height:440px}table{border-collapse:collapse;width:100%;font-size:12px;min-width:700px}th,td{text-align:left;border-bottom:1px solid var(--line);padding:11px 10px;vertical-align:top}th{color:var(--muted);font-weight:600;position:sticky;top:0;background:#141e2b}
 .flag{display:inline-block;padding:3px 9px;border-radius:30px;background:#223b39;color:var(--lime);font-size:11px;font-weight:700}.flag.short{background:#472e34;color:#ffb6b7}
 .settings{margin-top:18px}.fields{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin:12px 0}.fields label{display:flex;gap:5px;flex-direction:column;font-size:12px;color:var(--muted)}
-pre{white-space:pre-wrap;overflow:auto;max-height:260px;background:#0b131e;border-radius:9px;padding:14px;font-size:12px}.muted{color:var(--muted)}
+pre{white-space:pre-wrap;overflow:auto;max-height:260px;background:#0b131e;border-radius:9px;padding:14px;font-size:12px}.muted{color:var(--muted)}[hidden]{display:none!important}
 footer{color:var(--muted);font-size:12px;margin-top:22px;line-height:1.8}.danger{color:var(--red)}
 @media(max-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.columns{grid-template-columns:1fr}}
 @media(max-width:570px){.wrap{padding:18px 12px 40px}.grid{grid-template-columns:1fr 1fr;gap:9px}.card{padding:14px}.big{font-size:22px}.stats{grid-template-columns:1fr 1fr}.notice{align-items:start}.chartbox{height:190px}}
@@ -41,13 +41,13 @@ footer{color:var(--muted);font-size:12px;margin-top:22px;line-height:1.8}.danger
  <div class="brand"><div class="logo">OCC</div><div><h1>Trading Dashboard</h1><p class="sub">BTCUSDT Perpetual · M15 / H4 · SMMA 8 · delay 0</p></div></div>
  <div class="state"><span class="dot" id="dot"></span><div><strong id="state">Đang kết nối...</strong><div class="tiny" id="source">Binance USD-M Futures · dữ liệu công khai</div></div></div>
 </header>
-<div class="notice"><strong>SIMULATION ONLY</strong><span>Tiền ảo, không đặt lệnh thật. Không stop loss, không đòn bẩy; chưa tính funding. H4 đang hình thành có thể thay đổi tín hiệu.</span></div>
+<div class="notice"><strong>SIMULATION ONLY</strong><span>Tiền ảo, không đặt lệnh thật, không đòn bẩy; SL/TP tùy cấu hình. Chưa tính funding. H4 đang hình thành có thể thay đổi tín hiệu.</span></div>
 <div class="toolbar"><div class="actions"><button class="primary" id="start" disabled>Bắt đầu mô phỏng</button><button id="pause" disabled>Tạm dừng</button><button id="connect">Kết nối lại Binance</button></div><div class="tiny" id="received">Chưa có dữ liệu giá</div></div>
 <section class="grid">
  <div class="card"><div class="label">GIÁ GIAO DỊCH BTC</div><div class="big" id="price">—</div><div class="detail">Mark price: <span id="mark">—</span></div></div>
  <div class="card"><div class="label">TÀI SẢN ẢO (USDT)</div><div class="big" id="equity">—</div><div class="detail">Vốn ban đầu: <span id="capitalValue">—</span></div></div>
  <div class="card"><div class="label">P&L TỔNG PHIÊN</div><div class="big" id="pnl">—</div><div class="detail">Bao gồm P&L chưa thực hiện, chưa tính funding</div></div>
- <div class="card"><div class="label">VỊ THẾ HIỆN TẠI</div><div class="big" id="position">—</div><div class="detail" id="positionDetail">Quy mô khoảng 10% equity mỗi lần mở</div></div>
+ <div class="card"><div class="label">VỊ THẾ HIỆN TẠI</div><div class="big" id="position">—</div><div class="detail" id="positionDetail">Quy mô khoảng 10% equity mỗi lần mở</div><div class="detail" id="levels" style="margin-top:8px;white-space:pre-line">SL/TP: Chưa có vị thế</div></div>
 </section>
 <div class="columns">
  <section class="card"><div class="charthead"><h2>Đường lợi nhuận vị thế đã đóng</h2><span class="tiny">P&L cộng dồn · USDT</span></div><div class="chartbox"><canvas id="curve" aria-label="Biểu đồ P&L tích lũy"></canvas></div><div class="tiny">Chỉ dùng lệnh đã đóng. Các vị thế đang mở không được tính vào đường này.</div></section>
@@ -65,10 +65,24 @@ footer{color:var(--muted);font-size:12px;margin-top:22px;line-height:1.8}.danger
 </div>
 <section class="card"><div class="charthead"><h2>Lịch sử vị thế đã đóng</h2><span class="tiny">Giờ Việt Nam UTC+7</span></div>
  <div class="links"><a id="positionsCsv" href="/positions.csv">Tải CSV vị thế</a><a id="fillsCsv" href="/trades.csv">Tải CSV khớp lệnh</a><a id="signalsJson" href="/signals.json">Tải nhật ký tín hiệu</a></div>
- <div class="scroll"><table><thead><tr><th>Thời gian vào / ra</th><th>Chiều</th><th>Khối lượng BTC</th><th>Giá vào / ra</th><th>Phí</th><th>P&L sau phí</th><th>Kết quả</th></tr></thead><tbody id="trades"><tr><td colspan="7">Chưa có giao dịch đã đóng</td></tr></tbody></table></div>
+ <div class="scroll"><table><thead><tr><th>Thời gian vào / ra</th><th>Chiều</th><th>Khối lượng BTC</th><th>Giá vào / ra</th><th>Phí</th><th>P&L sau phí</th><th>Thoát cuối</th><th>Kết quả</th></tr></thead><tbody id="trades"><tr><td colspan="7">Chưa có giao dịch đã đóng</td></tr></tbody></table></div>
 </section>
 <details class="card settings"><summary><strong>Thiết lập mô phỏng & nhật ký tín hiệu</strong></summary>
  <div class="fields"><label>Vốn ban đầu (USDT)<input id="capital" type="number" min="1" value="10000"></label><label>Phí mỗi phía (%)<input id="fee" type="number" min="0" max="5" step=".01" value=".05"></label><label>Slippage (bps)<input id="slip" type="number" min="0" max="1000" step=".5" value="1"></label><button id="reset">Tạo phiên mới</button></div>
+ <h2 style="margin-top:18px">Cấu hình thoát lệnh theo Pine v5</h2>
+ <div class="fields"><label>Exit Mode<select id="exitMode"><option value="Classic v3">Classic v3</option><option value="Multi TP v5">Multi TP v5</option></select></label></div>
+ <div class="fields" id="classicSettings"><label>Classic SL (ticks)<input id="classicSl" type="number" min="0" step="1" value="0"></label><label>Classic TP (ticks)<input id="classicTp" type="number" min="0" step="1" value="0"></label><span class="tiny">0 = tắt mức tương ứng. Số tick nhân với bước giá Binance (tickSize).</span></div>
+ <div id="multiSettings">
+ <div class="fields"><label>SL (% giá vào)<input id="slPercent" type="number" min="0" step=".1" value="1"></label>
+ <label>TP theo<select id="tpMode"><option value="Percent">Percent (%)</option><option value="Points">Points (USD)</option></select></label>
+ <label>TP1<input id="tp1Val" type="number" min="0" step=".1" value="1"></label>
+ <label>TP2<input id="tp2Val" type="number" min="0" step=".1" value="2"></label>
+ <label>TP3<input id="tp3Val" type="number" min="0" step=".1" value="3"></label></div>
+ <div class="fields"><label>Chốt TP1 (%)<input id="tp1Qty" type="number" min="0" max="100" step="1" value="33"></label>
+ <label>Chốt TP2 (%)<input id="tp2Qty" type="number" min="0" max="100" step="1" value="33"></label>
+ <label>TP3 (% còn lại)<input id="tp3Qty" type="number" disabled value="34"></label></div>
+ </div>
+ <p class="tiny">Pine mặc định Classic SL/TP = 0 (không có lệnh thoát tự động). Multi TP v5 mặc định SL 1%, TP 1/2/3% với tỷ lệ 33/33/34; bấm Tạo phiên mới để áp dụng cấu hình, không sửa phiên cũ. Lệnh TP nhỏ hơn bước khối lượng sẽ dồn phần làm tròn vào TP3.</p>
  <p class="tiny">Tạo phiên mới sẽ xóa vị thế mô phỏng của phiên hiện tại (nhưng vẫn lưu nhật ký phiên cũ). Xuất CSV nếu cần sao lưu. Vị thế chưa đóng không tính thắng/thua.</p>
  <h2 style="margin-top:20px">20 tín hiệu gần nhất của phiên hiện tại</h2><pre id="signals">[]</pre>
 </details>
@@ -101,8 +115,12 @@ function renderState(s){
  $('position').textContent=s.position?s.position.side:'Đang trống';
  $('position').className='big'+(s.position?(s.position.side==='LONG'?' positive':' negative'):'');
  $('positionDetail').textContent=s.position?num(s.position.qty)+' BTC @ '+num(s.position.entryPrice):'Quy mô khoảng 10% equity mỗi lần mở';
+ const levels=s.levels;
+ $('levels').textContent=levels?'SL: '+num(levels.sl)+' | TP1: '+num(levels.tp1)+' | TP2: '+num(levels.tp2)+' | TP3: '+num(levels.tp3)+'\nKhối lượng còn: '+num(levels.remaining)+' BTC':'SL/TP: Chưa có vị thế';
  $('signals').textContent=JSON.stringify(s.signals.slice(-20),null,2);
- if(!initial){$('capital').value=s.config.capital;$('fee').value=s.config.feeBps/100;$('slip').value=s.config.slippageBps;initial=true;}
+ if(!initial){$('capital').value=s.config.capital;$('fee').value=s.config.feeBps/100;$('slip').value=s.config.slippageBps;
+ for(const [id,key] of Object.entries({exitMode:'exitMode',classicSl:'classicSlPoints',classicTp:'classicTpPoints',slPercent:'slPercent',tpMode:'tpMode',tp1Val:'tp1Val',tp2Val:'tp2Val',tp3Val:'tp3Val',tp1Qty:'tp1Qty',tp2Qty:'tp2Qty'}))$(id).value=s.config[key]??$(id).value;
+ updateExitSettings();initial=true;}
 }
 function setReport(r,s,selected){
  const st=r.summary;
@@ -112,8 +130,8 @@ function setReport(r,s,selected){
  for(const [id,url] of Object.entries({positionsCsv:'/positions.csv',fillsCsv:'/trades.csv',signalsJson:'/signals.json'}))$(id).href=url+'?session='+encodeURIComponent(selected);
  const body=$('trades');body.replaceChildren();
  const positions=r.positions.slice().reverse();
- if(!positions.length){const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=7;td.textContent='Chưa có vị thế đã đóng';tr.append(td);body.append(tr);}
- for(const t of positions.slice(0,100)){const tr=document.createElement('tr');const items=[when(t.entryTime)+' / '+when(t.exitTime),t.side,num(t.qty),num(t.entryPrice)+' / '+num(t.exitPrice),num(t.fees),num(t.netPnl),({WIN:'Thắng',LOSS:'Thua',BREAKEVEN:'Hòa'})[t.outcome]||t.outcome];
+ if(!positions.length){const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=8;td.textContent='Chưa có vị thế đã đóng';tr.append(td);body.append(tr);}
+ for(const t of positions.slice(0,100)){const tr=document.createElement('tr');const items=[when(t.entryTime)+' / '+when(t.exitTime),t.side,num(t.qty),num(t.entryPrice)+' / '+num(t.exitPrice),num(t.fees),num(t.netPnl),t.exitReason??'—',({WIN:'Thắng',LOSS:'Thua',BREAKEVEN:'Hòa'})[t.outcome]||t.outcome];
   for(let i=0;i<items.length;i++){const td=document.createElement('td');td.textContent=items[i];if(i===5)color(td,t.netPnl);tr.append(td);}body.append(tr);}
  drawCurve(r.positions);
 }
@@ -142,7 +160,21 @@ async function refresh(){
  finally{refreshing=false;}
 }
 $('start').onclick=()=>control('start');$('pause').onclick=()=>control('pause');$('connect').onclick=()=>control('connect');
-$('reset').onclick=()=>{if(confirm('Tạo phiên mới và bỏ vị thế ảo hiện tại? Lịch sử phiên cũ vẫn lưu trong SQLite.'))control('reset',{capital:Number($('capital').value),feeBps:Number($('fee').value)*100,slippageBps:Number($('slip').value)});};
+function updateExitSettings(){
+ $('classicSettings').hidden=$('exitMode').value!=='Classic v3';
+ $('multiSettings').hidden=$('exitMode').value!=='Multi TP v5';
+ $('tp3Qty').value=Math.max(0,100-Number($('tp1Qty').value)-Number($('tp2Qty').value));
+}
+$('exitMode').onchange=updateExitSettings;
+$('tp1Qty').oninput=updateExitSettings;$('tp2Qty').oninput=updateExitSettings;
+$('reset').onclick=()=>{
+ if(!confirm('Tạo phiên mới và bỏ vị thế ảo hiện tại? Lịch sử phiên cũ vẫn lưu trong SQLite.'))return;
+ const val=id=>Number($(id).value);
+ control('reset',{capital:val('capital'),feeBps:val('fee')*100,slippageBps:val('slip'),
+  exitMode:$('exitMode').value,classicSlPoints:val('classicSl'),classicTpPoints:val('classicTp'),
+  slPercent:val('slPercent'),tpMode:$('tpMode').value,tp1Val:val('tp1Val'),tp2Val:val('tp2Val'),
+  tp3Val:val('tp3Val'),tp1Qty:val('tp1Qty'),tp2Qty:val('tp2Qty')});
+};
 $('session').onchange=refresh;window.addEventListener('resize',()=>reportData&&drawCurve(reportData.positions));
 refresh();setInterval(refresh,2500);
 </script>

@@ -8,10 +8,62 @@ export function smma(values, length=8) { if(values.length<length) return null; l
 export class OCCEngine {
  constructor(config={}) { this.reset(config); }
  reset(config=this.config) {
-  const c={capital:10000,feeBps:5,slippageBps:1,qtyStep:0.001,minQty:0.001,minNotional:0,...config};
-  for(const k of Object.keys(c)) c[k]=num(c[k],k);
-  if(c.capital<=0||c.feeBps<0||c.slippageBps<0||c.slippageBps>=10000||c.qtyStep<=0||c.minQty<0||c.minNotional<0) throw Error('Invalid simulation assumptions');
-  this.config=c; this.balance=c.capital; this.fees=0; this.position=null; this.trades=[];this.signals=[];this.history=[];this.running=false;this.healthy=false;this.ready=false;this.pending=null;this.lastPrice=null;this.lastTradeTime=-1;this.lastTradeId=null;this.lastCandleTime=null;this.previous=null;this.baseOpen=null;this.baseClose=null;this.currentH4=null;this.sessionId=`${Date.now()}-${Math.random().toString(36).slice(2,9)}`;
+  const c={capital:10000,feeBps:5,slippageBps:1,qtyStep:0.001,minQty:0.001,minNotional:0,
+   tickSize:0.1,exitMode:'Classic v3',classicSlPoints:0,classicTpPoints:0,
+   slPercent:1,tpMode:'Percent',tp1Val:1,tp2Val:2,tp3Val:3,tp1Qty:33,tp2Qty:33,...config};
+  const numeric=['capital','feeBps','slippageBps','qtyStep','minQty','minNotional','tickSize',
+   'classicSlPoints','classicTpPoints','slPercent','tp1Val','tp2Val','tp3Val','tp1Qty','tp2Qty'];
+  for(const k of numeric)c[k]=num(c[k],k);
+  if(c.capital<=0||c.feeBps<0||c.slippageBps<0||c.slippageBps>=10000||
+     c.qtyStep<=0||c.minQty<0||c.minNotional<0||c.tickSize<=0||
+     !['Classic v3','Multi TP v5'].includes(c.exitMode)||!['Percent','Points'].includes(c.tpMode)||
+     c.classicSlPoints<0||!Number.isSafeInteger(c.classicSlPoints)||
+     c.classicTpPoints<0||!Number.isSafeInteger(c.classicTpPoints)||
+     [c.slPercent,c.tp1Val,c.tp2Val,c.tp3Val,c.tp1Qty,c.tp2Qty].some(x=>x<0)||
+     c.tp1Qty>100||c.tp2Qty>100) throw Error('Invalid simulation/exit settings');
+  this.config=c;this.balance=c.capital;this.fees=0;this.position=null;this.trades=[];this.signals=[];this.history=[];
+  this.running=false;this.healthy=false;this.ready=false;this.pending=null;this.lastPrice=null;
+  this.lastTradeTime=-1;this.lastTradeId=null;this.lastCandleTime=null;this.previous=null;
+  this.baseOpen=null;this.baseClose=null;this.currentH4=null;
+  this.sessionId=String(Date.now())+'-'+Math.random().toString(36).slice(2,9);
+ }
+ levels() {
+  const p=this.position;if(!p)return null;
+  const c=this.config,long=p.side==='LONG',entry=p.entryPrice,d=long?1:-1;
+  if(c.exitMode==='Classic v3')return {mode:c.exitMode,entry,
+   sl:c.classicSlPoints?entry-d*c.classicSlPoints*c.tickSize:null,
+   tp1:c.classicTpPoints?entry+d*c.classicTpPoints*c.tickSize:null,
+   tp2:null,tp3:null,qty1:p.qty,qty2:0,qty3:0,remaining:p.qty};
+  const target=v=>v>0?(c.tpMode==='Percent'?entry*(1+d*v/100):entry+d*v):null;
+  return {mode:c.exitMode,entry,sl:c.slPercent?entry*(1-d*c.slPercent/100):null,
+   tp1:target(c.tp1Val),tp2:target(c.tp2Val),tp3:target(c.tp3Val),
+   qty1:p.legs?.find(x=>x.id==='TP1')?.qty??0,qty2:p.legs?.find(x=>x.id==='TP2')?.qty??0,
+   qty3:p.legs?.find(x=>x.id==='TP3')?.qty??0,remaining:p.qty};
+ }
+ makeLegs(qty,entry,side){
+  const c=this.config,d=side==='LONG'?1:-1,round=x=>Number(x.toFixed(12));
+  if(c.exitMode==='Classic v3')return [{id:'CLASSIC',qty,
+   target:c.classicTpPoints?entry+d*c.classicTpPoints*c.tickSize:null,
+   stop:c.classicSlPoints?entry-d*c.classicSlPoints*c.tickSize:null}];
+  const stop=c.slPercent?entry*(1-d*c.slPercent/100):null;
+  const target=v=>v>0?(c.tpMode==='Percent'?entry*(1+d*v/100):entry+d*v):null;
+  const weights=[Math.min(100,c.tp1Qty),Math.min(100-c.tp1Qty,c.tp2Qty)];
+  const shares=weights.map(w=>round(Math.floor(qty*w/100/c.qtyStep+1e-10)*c.qtyStep));
+  const portions=[shares[0],shares[1],0];
+  const rest=round(Math.max(0,qty-shares[0]-shares[1]));
+  const lastWeight=100-weights[0]-weights[1];
+  const lastEligible=lastWeight>0?2:weights[1]>0?1:0;
+  portions[lastEligible]=round(portions[lastEligible]+rest);
+  const targets=[target(c.tp1Val),target(c.tp2Val),target(c.tp3Val)];
+  return portions.map((q,i)=>({id:'TP'+(i+1),qty:q,target:targets[i],stop})).filter(l=>l.qty>1e-12);
+ }
+ // Check every trade event without writing every tick to SQLite.
+ exitTrigger(price){
+  const p=this.position;if(!p||!Number.isFinite(price)||price<=0)return false;
+  const long=p.side==='LONG';
+  return !!p.legs?.some(l=>l.qty>1e-12&&
+   ((l.stop!==null&&(long?price<=l.stop:price>=l.stop))||
+    (l.target!==null&&(long?price>=l.target:price<=l.target))));
  }
  setRunning(value) { if(value&&!this.ready) throw Error('Warmup required'); this.running=!!value;if(!value)this.pending=null; }
  setHealthy(value) { this.healthy=!!value; if(!value)this.pending=null; }
@@ -58,27 +110,67 @@ export class OCCEngine {
   return signal;
  }
  onTrade({price,time,id},healthy=this.healthy) {
-  price=num(price,'trade price');time=num(time,'trade time'); if(price<=0)throw Error('Invalid price');
+  price=num(price,'trade price');time=num(time,'trade time');if(price<=0)throw Error('Invalid price');
   if(time<this.lastTradeTime||(id!==undefined&&id===this.lastTradeId))return [];
   this.lastPrice=price;this.lastTradeTime=time;this.lastTradeId=id??null;
-  if(!healthy){this.setHealthy(false);return [];}
-  this.healthy=true;
-  const p=this.pending;
-  if(!p||!this.running||time<p.time||time<p.observedAt)return [];
+  if(!healthy){this.setHealthy(false);return [];}this.healthy=true;
+  const fills=[],c=this.config,round=x=>Number(x.toFixed(12));
+  const close=(qty,fillPrice,reason,signalId,fillId)=>{
+   const p=this.position;if(!p||qty<=0)return;
+   if(qty>p.qty+1e-9)throw Error('Exit exceeds remaining position');
+   const pnl=(fillPrice-p.entryPrice)*qty*(p.side==='LONG'?1:-1);
+   const fee=qty*fillPrice*c.feeBps/10000;
+   this.fees+=fee;this.balance+=pnl-fee;
+   const f={id:fillId,signalId,time,tradeId:id??null,action:'CLOSE',side:p.side,
+    qty,price:fillPrice,marketPrice:price,fee,pnl,balance:this.balance,reason};
+   this.trades.push(Object.freeze(f));fills.push(f);
+   p.qty=round(Math.max(0,p.qty-qty));if(p.qty<=1e-12)this.position=null;
+  };
+  // Exit orders remain active while new entries are paused; stale feeds never fill.
+  if(this.position?.legs?.length){
+   const p=this.position,long=p.side==='LONG',sell=long?-1:1;
+   const stopLegs=p.legs.filter(l=>l.qty>1e-12&&l.stop!==null&&(long?price<=l.stop:price>=l.stop));
+   if(stopLegs.length){
+    const stopQty=round(stopLegs.reduce((sum,l)=>sum+l.qty,0));
+    const stopPrice=price*(1+sell*c.slippageBps/10000);
+    const exitId=p.signalId+':EXIT:SL:'+time+':'+String(id??'none');
+    p.legs=p.legs.filter(l=>!stopLegs.includes(l));
+    close(stopQty,stopPrice,'SL',p.signalId,exitId);
+   }
+   if(this.position){
+    for(const leg of [...(this.position.legs||[])]){
+     if(leg.qty>1e-12&&leg.target!==null&&(long?price>=leg.target:price<=leg.target)){
+      const exitId=p.signalId+':EXIT:'+leg.id;
+      const qty=leg.qty;this.position.legs=this.position.legs.filter(l=>l!==leg);
+      close(qty,leg.target,leg.id,p.signalId,exitId);
+      if(!this.position)break;
+     }
+    }
+   }
+  }
+  const pending=this.pending;
+  if(!pending||!this.running||time<pending.time||time<pending.observedAt)return clone(fills);
   this.pending=null;
-  if(this.position?.side===p.side)return [];
-  const fills=[], direction=p.side==='LONG'?1:-1;
-  // Reversal is one directional market action: close old, then open new, fee each side.
-  const fillPrice=price*(1+direction*this.config.slippageBps/10000);
-  const add=(action,qty,pnl=0)=>{const fee=qty*fillPrice*this.config.feeBps/10000;this.fees+=fee;this.balance+=pnl-fee;
-   const f={id:`${p.id}:${action}`,signalId:p.id,time,tradeId:id??null,action,side:p.side,qty,price:fillPrice,marketPrice:price,fee,pnl,balance:this.balance};this.trades.push(Object.freeze(f));fills.push(f);};
-  if(this.position){const old=this.position;add('CLOSE',old.qty,(fillPrice-old.entryPrice)*old.qty*(old.side==='LONG'?1:-1));this.position=null;}
-  const qty=Math.floor(Math.max(0,this.balance)*0.1/fillPrice/this.config.qtyStep+1e-10)*this.config.qtyStep;
-  if(qty>=this.config.minQty&&qty*fillPrice>=this.config.minNotional&&qty>0){add('OPEN',qty);this.position={side:p.side,qty,entryPrice:fillPrice,entryTime:time,signalId:p.id};}
+  if(this.position?.side===pending.side)return clone(fills);
+  const direction=pending.side==='LONG'?1:-1;
+  const fillPrice=price*(1+direction*c.slippageBps/10000);
+  if(this.position){close(this.position.qty,fillPrice,'REVERSE',pending.id,pending.id+':CLOSE');}
+  const qty=round(Math.floor(Math.max(0,this.balance)*0.1/fillPrice/c.qtyStep+1e-10)*c.qtyStep);
+  if(qty>=c.minQty&&qty*fillPrice>=c.minNotional&&qty>0){
+   const fee=qty*fillPrice*c.feeBps/10000;this.fees+=fee;this.balance-=fee;
+   const f={id:pending.id+':OPEN',signalId:pending.id,time,tradeId:id??null,
+    action:'OPEN',side:pending.side,qty,price:fillPrice,marketPrice:price,fee,pnl:0,balance:this.balance};
+   this.trades.push(Object.freeze(f));fills.push(f);
+   this.position={side:pending.side,qty,entryQty:qty,entryPrice:fillPrice,entryTime:time,
+    signalId:pending.id,legs:this.makeLegs(qty,fillPrice,pending.side)};
+  }
   return clone(fills);
  }
- snapshot(){const unrealized=this.position&&this.lastPrice!==null?(this.lastPrice-this.position.entryPrice)*this.position.qty*(this.position.side==='LONG'?1:-1):0;return clone({config:this.config,sessionId:this.sessionId,balance:this.balance,equity:this.balance+unrealized,unrealized,fees:this.fees,position:this.position,trades:this.trades,signals:this.signals,history:this.history,pending:this.pending,running:this.running,healthy:this.healthy,lastCandleTime:this.lastCandleTime,lastPrice:this.lastPrice,ready:this.ready,funding:'excluded'});}
+ snapshot(){const unrealized=this.position&&this.lastPrice!==null?(this.lastPrice-this.position.entryPrice)*this.position.qty*(this.position.side==='LONG'?1:-1):0;return clone({config:this.config,sessionId:this.sessionId,balance:this.balance,equity:this.balance+unrealized,unrealized,fees:this.fees,position:this.position,levels:this.levels(),trades:this.trades,signals:this.signals,history:this.history,pending:this.pending,running:this.running,healthy:this.healthy,lastCandleTime:this.lastCandleTime,lastPrice:this.lastPrice,ready:this.ready,funding:'excluded'});}
  serialize(){return clone({version:1,...this});}
- static restore(data){if(data?.version!==1)throw Error('Unsupported session');const e=new OCCEngine(data.config);for(const k of Object.keys(e))if(k in data)e[k]=clone(data[k]);e.running=false;e.healthy=false;e.pending=null;return e;}
+ static restore(data){if(data?.version!==1)throw Error('Unsupported session');const e=new OCCEngine(data.config);for(const k of Object.keys(e))if(k in data)e[k]=clone(data[k]);
+  e.config={...new OCCEngine(data.config).config,...data.config};
+  if(e.position&&!e.position.legs)e.position.legs=e.makeLegs(e.position.qty,e.position.entryPrice,e.position.side);
+  e.running=false;e.healthy=false;e.pending=null;return e;}
  exportCSV(){const columns=['id','signalId','time','tradeId','action','side','qty','price','marketPrice','fee','pnl','balance'];const esc=x=>'"'+String(x??'').replaceAll('"','""')+'"';return [columns.join(','),...this.trades.map(r=>columns.map(k=>esc(r[k])).join(','))].join('\r\n');}
 }
