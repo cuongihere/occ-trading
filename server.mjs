@@ -101,6 +101,7 @@ const server=createServer(async(req,res)=>{
     await browserFutures.connect({apiKey:p.apiKey,apiSecret:p.apiSecret,environment:'production',remember:p.remember!==false});
    }
    else if(req.url==='/control/live/config'){browserFutures.saveConfig(p);}
+   else if(req.url==='/control/live/leverage'){await browserFutures.applyExchangeLeverage(p);}
    else if(req.url==='/control/live/on'){
     if(!feed.healthy()||!liveSignalEngine.ready||!liveSignalEngine.healthy)
      throw Error('Cần dữ liệu Binance liên tục và nến OCC đã đồng bộ trước khi bật Auto');

@@ -114,7 +114,9 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
   <div class="fields3"><label>Chốt TP1 (%)<input id="q1" type="number" step="any" min="0" max="100"></label>
   <label>Chốt TP2 (%)<input id="q2" type="number" step="any" min="0" max="100"></label>
   <label>TP3 còn lại (%)<input id="q3" type="text" disabled></label></div>
-  <div class="settingActions"><button id="save" class="primary">Lưu cấu hình</button><span id="settingStatus" class="small">Tự lưu khi thay đổi · Auto phải OFF</span></div>
+  <div class="settingActions"><div class="row"><button id="save" class="primary">Lưu cấu hình</button>
+<button id="applyLeverage" class="minor" disabled>Áp dụng đòn bẩy lên Binance</button></div>
+<span id="settingStatus" class="small">Tự lưu · Auto OFF khi sửa</span></div>
  </div>
  <div class="panel accountPanel">
   <h2>Vị thế & lệnh trên sàn</h2>
@@ -124,7 +126,8 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
    <div><span class="label">Liq. Price</span><strong id="liqPrice">—</strong></div>
    <div><span class="label">P&L vị thế</span><strong id="btcPnl">—</strong></div>
    <div><span class="label">Margin</span><strong id="marginMode">—</strong></div>
-   <div><span class="label">Leverage</span><strong id="accountLeverage">—</strong></div>
+   <div><span class="label">Đòn bẩy Binance</span><strong id="accountLeverage">—</strong>
+<span id="leverageMismatch" class="small" role="status"></span></div>
   </div>
   <div class="botState"><div><span class="key">Lệnh đang chờ:</span> <strong id="openOrderCount">—</strong></div>
    <div><span class="key">Lệnh SL/TP:</span> <strong id="openAlgoCount">—</strong></div>
@@ -196,6 +199,21 @@ for(const id of [...numbers,'side','mode']){
  });
 }
 $('save').onclick=()=>{clearTimeout(saveTimer);saveConfig();};
+$('applyLeverage').onclick=async()=>{
+ clearTimeout(saveTimer);
+ const requestedLeverage=val('leverage');
+ if(!await saveConfig())return;
+ if(!Number.isInteger(requestedLeverage)||requestedLeverage<1||requestedLeverage>20){
+  $('apiError').textContent='Chỉ hỗ trợ đòn bẩy 1–20x.';return;
+ }
+ if(!confirm('ÁP DỤNG '+requestedLeverage+'x LÊN BINANCE BTCUSDT THẬT?\nChỉ thực hiện khi không có vị thế và lệnh mở.'))return;
+ const button=$('applyLeverage');button.disabled=true;
+ try{
+  await request('leverage',{requestedLeverage,confirmation:'SYNC_BTCUSDT_LEVERAGE'});
+  $('apiError').textContent='Binance đã xác nhận BTCUSDT '+requestedLeverage+'x.';
+ }catch(e){$('apiError').textContent='Chưa đồng bộ đòn bẩy: '+e.message;}
+ finally{await refreshLive();}
+};
 $('credentialEditor').open=true;
 $('apiConnect').onclick=async()=>{
  const key=$('apiKey').value.trim(),secret=$('apiSecret').value.trim(),remember=$('rememberApi').checked;
@@ -253,7 +271,9 @@ async function refreshLive(){
   $('rememberApi').checked=s.credentialSaved||$('rememberApi').checked;
   $('apiError').textContent=s.error?('Cần kiểm tra: '+s.error):$('apiError').textContent;
   $('enabled').checked=!!s.armed;
-  $('enabled').disabled=!s.connected||s.halted||autoBusy;
+  const desiredLeverage=Number(s.config?.leverage);
+  const leverageMismatch=!!a&&Number.isInteger(desiredLeverage)&&Number(a.leverage)!==desiredLeverage;
+  $('enabled').disabled=!s.connected||s.halted||autoBusy||(!s.armed&&leverageMismatch);
   $('autoLabel').textContent=s.armed?'AUTO ON · THẬT':s.halted?'HALTED':'AUTO OFF';
   $('autoWrap').className='auto'+(s.armed?' on':'');
   const labels={wallet:'walletUSDT',available:'availableUSDT',equity:'equityUSDT',unrealized:'unrealizedUSDT',btcPosition:'positionBTC'};
@@ -266,11 +286,19 @@ async function refreshLive(){
   color($('btcPnl'),a?.btcUnrealizedUSDT);
   $('marginMode').textContent=a?.marginType||'—';
   $('accountLeverage').textContent=a?.leverage?a.leverage+'x':'—';
+  $('accountLeverage').style.color=leverageMismatch?'#ff9ea0':'#edf6ff';
+  $('leverageMismatch').textContent=leverageMismatch?'Bot '+desiredLeverage+'x · Chưa đồng bộ':'';
+  $('leverageMismatch').style.color=leverageMismatch?'#ff9ea0':'#9feab5';
+  $('applyLeverage').textContent=leverageMismatch?'Đặt '+desiredLeverage+'x trên Binance':'Đòn bẩy đã đồng bộ';
+  $('applyLeverage').disabled=!a||!s.connected||s.armed||s.busy||s.halted||
+   !leverageMismatch||a.positionBTC!==0||a.openOrders>0||a.openAlgos>0;
   $('openOrderCount').textContent=a?String(a.openOrders):'—';
   $('openAlgoCount').textContent=a?String(a.openAlgos):'—';
   $('botState').textContent=s.halted?'HALTED · KIỂM TRA BINANCE':s.armed?'Đang chạy':'Tạm dừng';
   $('autoHint').textContent=s.halted?'Có lỗi hoặc vị thế chưa được đối soát. Kiểm tra Binance trước khi bật lại.':
-   s.armed?'Bot có thể mở lệnh BTCUSDT theo tín hiệu OCC.':'Auto OFF, không mở lệnh mới.';
+   s.armed?'Bot có thể mở lệnh BTCUSDT theo tín hiệu OCC.':
+   leverageMismatch?'Đòn bẩy sàn '+a.leverage+'x khác cấu hình '+desiredLeverage+'x. Cần áp dụng trước khi bật Auto.':
+   'Auto OFF, không mở lệnh mới.';
   $('apiReconcile').disabled=!s.connected||s.armed;
   $('lastSync').textContent=s.lastAccountSync?'Đồng bộ tài khoản: '+vn(s.lastAccountSync):'Chưa có đồng bộ tài khoản.';
   $('lastUpdate').textContent=s.connected?'Binance thật · Cập nhật '+vn(s.lastAccountSync):'Binance thật · Offline';

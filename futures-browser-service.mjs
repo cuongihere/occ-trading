@@ -176,6 +176,41 @@ export class BrowserFutures{
   this.lastAccountSync=Date.now();
   return this.account;
  }
+ async applyExchangeLeverage({requestedLeverage,confirmation}={}){
+  if(!this.api||this.environment!=='production')throw Error('Cần kết nối Binance Futures thật');
+  if(this.armed||this.busy||this.halted||this.activeProtection)
+   throw Error('Tắt Auto và xử lý hết lệnh/vị thế BTC trước khi thay đòn bẩy');
+  const requested=Number(requestedLeverage);
+  if(confirmation!=='SYNC_BTCUSDT_LEVERAGE'||!Number.isInteger(requested)||
+     requested!==this.config.leverage||requested<1||requested>20)
+   throw Error('Cần xác nhận áp dụng đúng đòn bẩy đã lưu cho BTCUSDT');
+  this.busy=true;
+  try{
+   const before=await this.inspect();
+   if(!before.canTrade||before.dualSidePosition!==false||before.marginType!=='ISOLATED'||
+      before.hasOtherPositions||before.positionBTC!==0||before.openOrders!==0||before.openAlgos!==0)
+    throw Error('Không thể thay đòn bẩy khi còn vị thế/lệnh hoặc cấu hình tài khoản không phù hợp');
+   if(before.leverage===requested){
+    this.log('LEVERAGE_MATCH','Binance BTCUSDT đã ở '+requested+'x');
+    this.error=null;return this.snapshot();
+   }
+   this.log('LEVERAGE_CHANGE_REQUEST','Yêu cầu thay BTCUSDT '+before.leverage+'x → '+requested+'x');
+   // Never retry a leverage POST on unknown network outcome; inspect before further actions.
+   const acknowledgement=await this.api.post('/fapi/v1/leverage',{symbol:'BTCUSDT',leverage:requested});
+   if(acknowledgement?.symbol!=='BTCUSDT'||Number(acknowledgement.leverage)!==requested)
+    throw Error('Binance chưa xác nhận thay đòn bẩy BTCUSDT');
+   const verified=await this.inspect();
+   if(verified.leverage!==requested)
+    throw Error('Binance chưa báo đòn bẩy mới khi đọc lại tài khoản BTCUSDT');
+   this.log('LEVERAGE_APPLIED','Binance xác nhận BTCUSDT đã chuyển thành '+requested+'x');
+   this.error=null;
+   return this.snapshot();
+  }catch(e){
+   this.log('LEVERAGE_ERROR',e.message);
+   this.error='Đổi đòn bẩy chưa được xác nhận: '+e.message;
+   throw e;
+  }finally{this.busy=false;}
+ }
  async arm(acceptance){
   if(!this.api)throw Error('Kết nối API trên trang Binance trước');
   if(this.environment!=='production')throw Error('Chỉ sử dụng Binance Futures thật');

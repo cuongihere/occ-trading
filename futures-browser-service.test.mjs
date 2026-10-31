@@ -11,8 +11,8 @@ const fakeCrypt=(buf,mode)=>mode==='protect'
  :Buffer.from(buf.subarray(PREFIX.length)).reverse();
 const makeVault=dir=>new WindowsCredentialVault(join(dir,'futures-api.dpapi.json'),{crypt:fakeCrypt});
 const tmp=t=>{const p=mkdtempSync(join(tmpdir(),'occ-browser-live-'));t.after(()=>rmSync(p,{force:true,recursive:true}));return p;};
-function fake({flatRiskRows=false,brokenConfig=false,failStop=false}={}){
- const calls=[],algo=[],normal=[],position={qty:0},mode={dualSidePosition:false};
+function fake({flatRiskRows=false,brokenConfig=false,failStop=false,leverage=5,leverageAckMismatch=false}={}){
+ const calls=[],algo=[],normal=[],position={qty:0},mode={dualSidePosition:false},leverageState={value:leverage};
  const api={
   close(){calls.push('closed');},
   async syncClock(){calls.push('time');},
@@ -20,7 +20,7 @@ function fake({flatRiskRows=false,brokenConfig=false,failStop=false}={}){
    calls.push({method:'GET',path,p});
    if(path==='/fapi/v2/account')return {canTrade:true,totalWalletBalance:'800',totalMarginBalance:'812',totalUnrealizedProfit:'12',totalInitialMargin:'60',assets:[{asset:'USDT',walletBalance:'800',availableBalance:'800'}]};
    if(path==='/fapi/v1/positionSide/dual')return mode;
-   if(path==='/fapi/v1/symbolConfig')return brokenConfig?[]:[{symbol:'BTCUSDT',marginType:'ISOLATED',leverage:5}];
+   if(path==='/fapi/v1/symbolConfig')return brokenConfig?[]:[{symbol:'BTCUSDT',marginType:'ISOLATED',leverage:leverageState.value}];
    if(path==='/fapi/v3/positionRisk')return flatRiskRows&&position.qty===0?[]:[{symbol:'BTCUSDT',positionSide:'BOTH',positionAmt:String(position.qty)}];
    if(path==='/fapi/v1/openOrders')return normal;
    if(path==='/fapi/v1/openAlgoOrders')return algo;
@@ -35,6 +35,11 @@ function fake({flatRiskRows=false,brokenConfig=false,failStop=false}={}){
   },
   async post(path,p){
    calls.push({method:'POST',path,p});
+   if(path==='/fapi/v1/leverage'){
+    if(p.symbol!=='BTCUSDT'||!Number.isInteger(p.leverage))throw Error('Invalid BTCUSDT leverage request');
+    if(!leverageAckMismatch)leverageState.value=p.leverage;
+    return {symbol:'BTCUSDT',leverage:leverageAckMismatch?p.leverage+1:p.leverage,maxNotionalValue:'1000000'};
+   }
    if(path==='/fapi/v1/order'){
     if(p.reduceOnly==='true'){position.qty=0;return {orderId:999,status:'FILLED'};}
     position.qty=.032;return {orderId:100,status:'FILLED'};
@@ -51,7 +56,7 @@ function fake({flatRiskRows=false,brokenConfig=false,failStop=false}={}){
   },
   async del(path,p){calls.push({method:'DELETE',path,p});const idx=algo.findIndex(x=>String(x.algoId)===String(p.algoId));if(idx>=0)algo.splice(idx,1);return {};}
  };
- return {api,calls,algo,normal,position,mode};
+ return {api,calls,algo,normal,position,mode,leverageState};
 }
 const creds={apiKey:'dummy-api-key',apiSecret:'dummy-secret',environment:'production'};
 test('UI backend accepts credentials in memory, stores only harmless configuration, restarts OFF',async t=>{
@@ -171,4 +176,42 @@ test('Restarts restore Windows-encrypted API automatically but never re-arm real
  two.forgetSavedCredentials();
  assert.equal(two.snapshot().credentialSaved,false);
  assert.equal(two.snapshot().connected,false);
+});
+
+test('5x saved in bot and 150x on Binance blocks Auto until explicit readback-verified change',async t=>{
+ const dir=tmp(t),fx=fake({leverage:150});
+ const service=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await service.connect(creds);
+ assert.equal(service.snapshot().config.leverage,5);
+ assert.equal(service.snapshot().account.leverage,150);
+ await assert.rejects(service.arm('CHAP NHAN BTC FUTURES'),/đúng đòn bẩy/);
+ assert.equal(fx.calls.filter(x=>x.method==='POST').length,0);
+ await assert.rejects(service.applyExchangeLeverage({requestedLeverage:5}),/xác nhận/);
+ await service.applyExchangeLeverage({requestedLeverage:5,confirmation:'SYNC_BTCUSDT_LEVERAGE'});
+ assert.equal(service.snapshot().account.leverage,5);
+ assert.equal(fx.leverageState.value,5);
+ const updates=fx.calls.filter(x=>x.method==='POST');
+ assert.equal(updates.length,1);
+ assert.equal(updates[0].path,'/fapi/v1/leverage');
+ assert.deepEqual(updates[0].p,{symbol:'BTCUSDT',leverage:5});
+ await service.arm('CHAP NHAN BTC FUTURES');assert.equal(service.snapshot().armed,true);
+ await assert.rejects(service.applyExchangeLeverage({requestedLeverage:5,confirmation:'SYNC_BTCUSDT_LEVERAGE'}),/Tắt Auto/);
+ assert.equal(fx.calls.filter(x=>x.method==='POST').length,1);
+});
+test('Never modify leverage with position or active BTC orders on Binance',async t=>{
+ const dir=tmp(t),fx=fake({leverage:150}),svc=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await svc.connect(creds);
+ fx.position.qty=.005;
+ await assert.rejects(svc.applyExchangeLeverage({requestedLeverage:5,confirmation:'SYNC_BTCUSDT_LEVERAGE'}),/còn vị thế/);
+ fx.position.qty=0;fx.normal.push({symbol:'BTCUSDT'});
+ await assert.rejects(svc.applyExchangeLeverage({requestedLeverage:5,confirmation:'SYNC_BTCUSDT_LEVERAGE'}),/còn vị thế\/lệnh/);
+ assert.equal(fx.calls.filter(x=>x.method==='POST').length,0);
+});
+test('Unknown or mismatched exchange leverage ACK is not treated as success and is not retried',async t=>{
+ const dir=tmp(t),fx=fake({leverage:150,leverageAckMismatch:true});
+ const svc=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await svc.connect(creds);
+ await assert.rejects(svc.applyExchangeLeverage({requestedLeverage:5,confirmation:'SYNC_BTCUSDT_LEVERAGE'}),/chưa xác nhận/);
+ assert.equal(svc.snapshot().account.leverage,150);
+ assert.equal(fx.calls.filter(x=>x.method==='POST').length,1);
 });

@@ -12,7 +12,7 @@ test('Real Binance single-screen UI shows account balance and position without p
  const html=read('BINANCE_UI_PREVIEW.html');
  for(const id of ['enabled','apiKey','apiSecret','rememberApi','credentialEditor','wallet','available','equity',
     'unrealized','btcPosition','marginUSDT','leverage','side','sl','mode','tp1','tp2','tp3','q1','q2','q3','save',
-    'realNet','realHistory','realCurve','apiConnect','apiForget','apiDisconnect','apiReconcile'])
+    'realNet','realHistory','realCurve','apiConnect','apiForget','apiDisconnect','apiReconcile','applyLeverage','leverageMismatch'])
   assert.ok(html.includes('id="'+id+'"'),'Missing '+id);
  assert.doesNotMatch(html,/id="preview"|id="notional"|id="sizingFormula"|id="entry"/);
  assert.match(html,/height:100dvh/);
@@ -33,4 +33,13 @@ test('Portable Windows includes credential vault and consolidated dashboard',()=
  const build=read('BUILD_PORTABLE.ps1');
  assert.match(build,/'BINANCE_UI_PREVIEW\.html'/);
  assert.match(build,/'futures-credential-vault\.mjs'/);
+});
+
+test('Actual leverage differs from bot config until explicit exchange-sync action',()=>{
+ const html=read('BINANCE_UI_PREVIEW.html');
+ assert.match(html,/Đòn bẩy Binance/);
+ assert.match(html,/Bot '\+desiredLeverage\+'x · Chưa đồng bộ/);
+ assert.match(html,/request\('leverage',\{requestedLeverage,confirmation:'SYNC_BTCUSDT_LEVERAGE'\}\)/);
+ assert.match(html,/leverageMismatch/);
+ assert.match(html,/ÁP DỤNG/);
 });

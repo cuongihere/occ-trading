@@ -29,3 +29,23 @@ test('conditional stop cannot contain closePosition and quantity simultaneously'
   algoType:'CONDITIONAL',closePosition:'true',quantity:'0.001'}),/cannot combine/);
  t.close();
 });
+
+test('BTCUSDT leverage update is signed, strict and never sent to other markets',async()=>{
+ const calls=[];
+ const t=new FuturesTransport({apiKey:'test-key',apiSecret:'test-secret',environment:'production',
+  productionConsent:'I_ACCEPT_LIVE_BTCUSDT',clock:()=>10000,
+  fetchFn:async(url,opts)=>{calls.push({url,opts});return {ok:true,status:200,json:async()=>({symbol:'BTCUSDT',leverage:5})};}});
+ const result=await t.post('/fapi/v1/leverage',{symbol:'BTCUSDT',leverage:5});
+ assert.equal(result.leverage,5);
+ assert.equal(calls.length,1);
+ assert.equal(calls[0].opts.method,'POST');
+ assert.equal(new URL(calls[0].url).pathname,'/fapi/v1/leverage');
+ const params=new URLSearchParams(calls[0].opts.body);
+ const sig=params.get('signature');params.delete('signature');
+ assert.equal(sig,createHmac('sha256','test-secret').update(params.toString()).digest('hex'));
+ await assert.rejects(t.post('/fapi/v1/leverage',{symbol:'ETHUSDT',leverage:5}),/Only BTCUSDT/);
+ await assert.rejects(t.post('/fapi/v1/leverage',{symbol:'BTCUSDT',leverage:150}),/integer between 1x and 20x/);
+ await assert.rejects(t.post('/fapi/v1/leverage',{symbol:'BTCUSDT',leverage:5,positionSide:'LONG'}),/integer between 1x and 20x/);
+ assert.equal(calls.length,1);
+ t.close();
+});

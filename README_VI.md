@@ -83,3 +83,11 @@ Dashboard chỉ bind 127.0.0.1, không cung cấp dịch vụ công khai. Không
 - Số dư, Equity, P&L chưa thực hiện và thông tin vị thế lấy trực tiếp từ REST Binance; tự đồng bộ định kỳ. Báo cáo lệnh **do bot OCC đã đối soát** lưu SQLite riêng `data/binance-live-stats.sqlite`, không cộng lệnh thủ công hoặc Paper. **Lưu ý**: thống kê bot có thể chưa đầy đủ vì tích hợp lệnh Algo kích hoạt/funding chưa hoàn tất; không diễn giải 0 là tài khoản không có giao dịch.
 - Sau khi Entry khớp, bot cố đặt SL close-all trước TP1/TP2/TP3. Nhưng chưa có xác nhận end-to-end bằng tiền thật với Binance Production. **Đừng bật Auto tiền thật khi chưa kiểm tra kỹ cơ chế lệnh bảo vệ trên tài khoản**. Không có đảm bảo SL khớp đúng giá, có nguy cơ lỗ hoặc thanh lý.
 
+
+## Đồng bộ đòn bẩy trên Binance
+
+Ô **Đòn bẩy (x)** trong OCC là **cấu hình bot**, không tự đổi thông số của tài khoản Futures trên Binance khi chỉ bấm **Lưu cấu hình**. Ví dụ chọn 5x trong bot nhưng Binance đang 150x: trang hiển thị **Bot 5x / Binance 150x · Chưa đồng bộ** và bot không cho bật Auto.
+
+Khi đã kết nối API BTCUSDT và đã tắt Auto, không có vị thế BTCUSDT, không còn lệnh thường/SL/TP BTCUSDT, bấm **Đặt 5x trên Binance**. App sẽ yêu cầu xác nhận, gọi `POST /fapi/v1/leverage` (chỉ BTCUSDT), kiểm tra mã xác nhận từ sàn và gọi lại `GET /fapi/v1/symbolConfig` để bảo đảm thực sự là 5x. Không lặp lại lệnh POST nếu kết quả kết nối không rõ. Nếu API không có quyền Futures Trading hoặc Binance từ chối, trạng thái đòn bẩy sàn vẫn được hiển thị theo API và Auto tiếp tục bị khóa khi chưa trùng cấu hình.
+
+Không thay đổi đòn bẩy BTCUSDT từ app khi đang có vị thế/lệnh mở; không đổi Cross/Isolated hay One-way ngầm.

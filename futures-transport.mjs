@@ -4,7 +4,7 @@ const HOSTS=Object.freeze({demo:'https://demo-fapi.binance.com',production:'http
 const GETS=new Set(['/fapi/v1/time','/fapi/v1/exchangeInfo','/fapi/v1/ticker/price','/fapi/v2/account',
  '/fapi/v3/positionRisk','/fapi/v1/positionSide/dual','/fapi/v1/symbolConfig',
  '/fapi/v1/openOrders','/fapi/v1/openAlgoOrders','/fapi/v1/order','/fapi/v1/algoOrder','/fapi/v1/userTrades']);
-const POSTS=new Set(['/fapi/v1/order','/fapi/v1/algoOrder']);
+const POSTS=new Set(['/fapi/v1/order','/fapi/v1/algoOrder','/fapi/v1/leverage']);
 const DELETES=new Set(['/fapi/v1/algoOrder']);
 export class FuturesTransport{
  constructor({apiKey,apiSecret,fetchFn=fetch,clock=Date.now,environment='demo',productionConsent=null}){
@@ -18,6 +18,12 @@ export class FuturesTransport{
  async request(method,path,params={}){
   if(!(method==='GET'?GETS:method==='POST'?POSTS:DELETES).has(path))throw Error('Endpoint not allowed');
   if(params.symbol&&params.symbol!=='BTCUSDT')throw Error('Only BTCUSDT permitted');
+  if(method==='POST'&&path==='/fapi/v1/leverage'){
+   const value=Number(params.leverage);
+   if(params.symbol!=='BTCUSDT'||!Number.isInteger(value)||value<1||value>20||
+      Object.keys(params).some(k=>!['symbol','leverage'].includes(k)))
+    throw Error('BTCUSDT leverage must be an integer between 1x and 20x');
+  }
   if(method==='POST'&&path==='/fapi/v1/order'&&params.type!=='MARKET')throw Error('Only MARKET orders permitted');
   if(method==='POST'&&path==='/fapi/v1/algoOrder'){
    if(!['STOP_MARKET','TAKE_PROFIT_MARKET'].includes(params.type)||params.algoType!=='CONDITIONAL')
