@@ -23,3 +23,12 @@ The prototype is **not packaged as an executable live worker**. Keep the LIVE sw
 **Sizing example:** At BTC = 77,000, 20 USDT margin with 5x represents about 100 USDT nominal and generally cannot be divided into 3 independently valid TP legs of 0.001 BTC each. The prototype refuses the plan rather than silently changing exit percentages.
 
 See Binance USD-M API documentation for current supported endpoints. Price/quantity rules depend on live exchangeInfo filters.
+
+### Prototype lifecycle safeguards (latest)
+
+- New `futures-lifecycle.mjs`: pure fail-closed order state machine, rejecting repeated entry signals, requiring confirmed STOP before TP, and refusing automatic arming after restart.
+- New `futures-lifecycle.test.mjs`: tests unknown exchange outcomes, stop-before-target ordering, three TP acknowledgements and FLAT verification.
+- `futures-transport.mjs` now uses Binance USD-M **Demo** REST by default. Production requires explicit constructor opt-in; no live runner currently invokes it.
+- This is source-level scaffolding only. Neither `START_WINDOWS.bat` nor the `/binance` dashboard submits real orders; LIVE stays OFF.
+
+Note: Binance Demo API credentials are distinct from production credentials. Exchange and order formats may differ; no real demo network execution has been verified from this environment.

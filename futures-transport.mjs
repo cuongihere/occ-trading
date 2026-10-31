@@ -1,29 +1,38 @@
 // Binance USD-M BTCUSDT signed transport. No retries of mutations.
 import {createHmac} from 'node:crypto';
-const ROOT='https://fapi.binance.com';
+const HOSTS=Object.freeze({demo:'https://demo-fapi.binance.com',production:'https://fapi.binance.com'});
 const GETS=new Set(['/fapi/v1/time','/fapi/v1/exchangeInfo','/fapi/v1/ticker/price','/fapi/v2/account',
  '/fapi/v3/positionRisk','/fapi/v1/positionSide/dual','/fapi/v1/symbolConfig',
  '/fapi/v1/openOrders','/fapi/v1/openAlgoOrders','/fapi/v1/order','/fapi/v1/algoOrder','/fapi/v1/userTrades']);
 const POSTS=new Set(['/fapi/v1/order','/fapi/v1/algoOrder']);
 const DELETES=new Set(['/fapi/v1/algoOrder']);
 export class FuturesTransport{
- constructor({apiKey,apiSecret,fetchFn=fetch,clock=Date.now}){
+ constructor({apiKey,apiSecret,fetchFn=fetch,clock=Date.now,environment='demo',productionConsent=null}){
   if(!apiKey||!apiSecret)throw Error('Missing API credentials');
+  if(!Object.hasOwn(HOSTS,environment))throw Error('Unsupported Binance Futures environment');
+  if(environment==='production'&&productionConsent!=='I_ACCEPT_LIVE_BTCUSDT')
+   throw Error('Explicit real-money constructor consent required');
+  this.baseUrl=HOSTS[environment];this.environment=environment;
   this.key=apiKey;this.secret=apiSecret;this.fetchFn=fetchFn;this.clock=clock;this.offset=0;
  }
  async request(method,path,params={}){
   if(!(method==='GET'?GETS:method==='POST'?POSTS:DELETES).has(path))throw Error('Endpoint not allowed');
   if(params.symbol&&params.symbol!=='BTCUSDT')throw Error('Only BTCUSDT permitted');
   if(method==='POST'&&path==='/fapi/v1/order'&&params.type!=='MARKET')throw Error('Only MARKET orders permitted');
-  if(method==='POST'&&path==='/fapi/v1/algoOrder'&&!['STOP_MARKET','TAKE_PROFIT_MARKET'].includes(params.type))
-   throw Error('Only stop-market or take-profit-market algorithms permitted');
+  if(method==='POST'&&path==='/fapi/v1/algoOrder'){
+   if(!['STOP_MARKET','TAKE_PROFIT_MARKET'].includes(params.type)||params.algoType!=='CONDITIONAL')
+    throw Error('Only conditional stop-market or take-profit-market algorithms permitted');
+   if(params.closePosition===true||params.closePosition==='true'){
+    if(params.quantity!==undefined||params.reduceOnly!==undefined)throw Error('closePosition cannot combine with quantity or reduceOnly');
+   }
+  }
   const qs=new URLSearchParams(Object.entries(params).map(([k,v])=>[k,String(v)]));
   const isPublic=path==='/fapi/v1/time'||path==='/fapi/v1/ticker/price'||path==='/fapi/v1/exchangeInfo';
   if(!isPublic){
    qs.append('recvWindow','5000');qs.append('timestamp',String(Math.floor(this.clock()+this.offset)));
    qs.append('signature',createHmac('sha256',this.secret).update(qs.toString()).digest('hex'));
   }
-  const url=ROOT+path+(method==='GET'?'?'+qs:'');
+  const url=this.baseUrl+path+(method==='GET'?'?'+qs:'');
   const opts={method,headers:{'X-MBX-APIKEY':this.key},signal:AbortSignal.timeout(9000)};
   if(method!=='GET'){opts.headers['Content-Type']='application/x-www-form-urlencoded';opts.body=qs.toString();}
   let response;
