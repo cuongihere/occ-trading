@@ -25,7 +25,7 @@ test('Binance preview cannot submit actual trades or enable LIVE',()=>{
  assert.match(html,/id="apiKey" type="password"/);
  assert.match(html,/id="apiSecret" type="password"/);
  assert.match(html,/id="apiEnvironment"/);
- assert.match(html,/requestLive\('on'\)/);
+ assert.match(html,/requestLive\('on',\{acceptance\}\)/);
  assert.match(html,/requestLive\('off'\)/);
  assert.doesNotMatch(html,/\/fapi\/v1\/order|\/fapi\/v1\/algoOrder/);
  assert.match(html,/fetch\('\/api\/binance\/live-report'/);
