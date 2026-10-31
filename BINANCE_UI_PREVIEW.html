@@ -1,0 +1,78 @@
+<!doctype html><html lang="vi"><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OCC — Binance BTCUSDT Futures</title>
+<style>
+:root{font-family:system-ui,"Segoe UI",sans-serif;color:#eaf2fb;background:#0d1420}
+*{box-sizing:border-box}body{margin:0;padding:24px}main{max-width:1100px;margin:auto}
+header{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:25px}
+h1{font-size:25px;margin:0 0 5px}h2{font-size:17px;margin:0 0 18px}
+small,.muted{color:#a0b3c6}.note{padding:15px;border:1px solid #72522d;border-radius:12px;background:#322619;color:#ffdda9;margin:17px 0}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.card{padding:24px;background:#182437;border:1px solid #34465a;border-radius:15px;margin-bottom:17px}
+.switch{display:flex;align-items:center;gap:15px;padding:16px;background:#2a2126;border-radius:11px}
+.pill{display:inline-block;padding:6px 12px;background:#4b2833;border-radius:20px;color:#ffc1c8}
+.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}
+label{font-size:13px;color:#b6c7d8;display:flex;flex-direction:column;gap:7px}
+input,select{width:100%;background:#0f1b2c;border:1px solid #4b647e;border-radius:9px;color:#fff;font-size:15px;padding:10px 12px}
+input[disabled]{opacity:.56}button,.link{display:inline-block;padding:12px 18px;border-radius:10px;text-decoration:none;background:#253a50;border:1px solid #526d87;color:#fff;font-weight:600;cursor:pointer}
+button.primary{background:#b1eabf;color:#0e2318;border:0}button:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;align-items:center;gap:13px;flex-wrap:wrap}
+#preview{white-space:pre-line;line-height:2;color:#cfe3f5;font-variant-numeric:tabular-nums}
+@media(max-width:800px){.grid,.fields{grid-template-columns:1fr}body{padding:12px}}
+</style>
+<main>
+<header><div><h1>Binance Futures · BTCUSDT</h1><div class="muted">Màn hình cấu hình riêng · USDⓈ-M Perpetual</div></div>
+<a class="link" href="/">Về Paper Trading</a></header>
+<div class="note"><b>Chưa kích hoạt đặt lệnh thật.</b> Đây là màn hình chuẩn bị cấu hình. Công tắc LIVE được khóa cho đến khi backend thực thi lệnh và quản lý SL/TP được kiểm thử. Các giá trị ở đây chỉ dùng để xem trước, không truyền đến Binance.</div>
+<div class="grid">
+<section class="card"><h2>1. Kết nối & công tắc giao dịch</h2>
+<div class="switch"><input type="checkbox" id="enabled" disabled style="width:22px"><div><strong>Giao dịch thật <span class="pill">OFF · ĐÃ KHÓA</span></strong><div class="muted">Không gửi lệnh khi chưa có xác minh an toàn.</div></div></div>
+<div style="margin-top:20px"><h2>Trạng thái API</h2><p id="connection" class="muted">Chỉ đọc: sử dụng CHECK_BINANCE_WINDOWS.bat để kiểm tra khóa API trên máy.</p>
+<p class="muted">Chế độ tài khoản dự kiến: One-way · ISOLATED · 1x. API Key không nhập vào trang này.</p></div></section>
+<section class="card"><h2>2. Thiết lập lệnh BTCUSDT</h2>
+<div class="fields">
+<label>Chiều giao dịch<select id="side"><option value="BOTH">LONG & SHORT</option><option value="LONG">Chỉ LONG</option><option value="SHORT">Chỉ SHORT</option></select></label>
+<label>Kiểu lệnh mở<select disabled><option>MARKET</option></select></label>
+<label>Quy mô theo Equity (%)<input id="eq" type="number" min="0.01" max="10" step=".1" value="10"></label>
+<label>Giới hạn giá trị mỗi lệnh (USDT)<input id="limit" type="number" min="100" max="10000" step="10" value="300"></label>
+<label>Margin<select disabled><option>ISOLATED</option></select></label>
+<label>Đòn bẩy<select disabled><option>1x</option></select></label>
+</div></section>
+<section class="card"><h2>3. Multi TP v5 · SL & chốt lời từng phần</h2>
+<div class="fields"><label>Stop Loss (% giá Entry)<input id="sl" type="number" min=".1" max="10" step=".1" value="1"></label>
+<label>TP Mode<select id="mode"><option value="Percent">Percent (%)</option><option value="Points">Points (USD)</option></select></label>
+<label>TP1<input id="tp1" type="number" min=".01" step=".1" value="1"></label>
+<label>TP2<input id="tp2" type="number" min=".01" step=".1" value="2"></label>
+<label>TP3<input id="tp3" type="number" min=".01" step=".1" value="3"></label>
+<label>Giá Entry giả định (USDT)<input id="entry" type="number" min="1" value="77000"></label>
+<label>TP1 · Chốt (%)<input id="q1" type="number" min="0" max="100" step="1" value="33"></label>
+<label>TP2 · Chốt (%)<input id="q2" type="number" min="0" max="100" step="1" value="33"></label>
+<label>TP3 · Chốt phần còn lại (%)<input id="q3" disabled value="34"></label>
+</div><p id="error" style="color:#ffb7b8"></p></section>
+<section class="card"><h2>4. Xem trước mức giá</h2>
+<div id="preview"></div><div class="row" style="margin-top:24px"><button class="primary" id="save">Lưu bản nháp trên trình duyệt</button><button id="reset">Khôi phục mặc định</button></div>
+<p class="muted">Bản nháp chỉ lưu trong trình duyệt hiện tại. Chưa kết nối với bộ thực thi đặt lệnh.</p></section>
+</div></main>
+<script>
+const $=id=>document.getElementById(id);
+const ids=['side','eq','limit','sl','mode','tp1','tp2','tp3','entry','q1','q2'];
+const fmt=n=>Number.isFinite(n)?n.toLocaleString('en-US',{maximumFractionDigits:5}):'—';
+function calc(){
+ const val=id=>Number($(id).value),entry=val('entry'),sl=val('sl'),tps=[val('tp1'),val('tp2'),val('tp3')],q1=val('q1'),q2=val('q2');
+ const bad=[entry,sl,q1,q2,...tps].some(x=>!Number.isFinite(x))||entry<=0||sl<=0||sl>10||tps.some(x=>x<=0)||q1<0||q2<0||q1+q2>=100;
+ $('error').textContent=bad?'Giá trị không hợp lệ. TP1% + TP2% phải nhỏ hơn 100%.':'';
+ $('q3').value=bad?'—':fmt(100-q1-q2);
+ if(bad){$('preview').textContent='Vui lòng nhập giá trị hợp lệ.';return;}
+ const mode=$('mode').value;
+ const levels=direction=>{
+  const d=direction==='LONG'?1:-1,stop=entry*(1-d*sl/100),tp=v=>mode==='Percent'?entry*(1+d*v/100):entry+d*v;
+  return direction+'  |  SL '+fmt(stop)+'  |  TP1 '+fmt(tp(tps[0]))+'  |  TP2 '+fmt(tp(tps[1]))+'  |  TP3 '+fmt(tp(tps[2]));
+ };
+ $('preview').textContent=levels('LONG')+'\n'+levels('SHORT')+
+   '\nTỷ lệ chốt: '+fmt(q1)+'% / '+fmt(q2)+'% / '+fmt(100-q1-q2)+'%'+
+   '\nQuy mô tối đa: '+fmt(val('eq'))+'% equity, không vượt '+fmt(val('limit'))+' USDT.';
+}
+for(const id of ids)$(id).addEventListener('input',calc);
+$('save').onclick=()=>{const obj=Object.fromEntries(ids.map(id=>[id,$(id).value]));localStorage.setItem('occ-binance-draft',JSON.stringify(obj));alert('Đã lưu bản nháp cấu hình trên trình duyệt; CHƯA bật lệnh thật.');};
+$('reset').onclick=()=>{localStorage.removeItem('occ-binance-draft');location.reload();};
+try{const d=JSON.parse(localStorage.getItem('occ-binance-draft')||'{}');for(const [k,v]of Object.entries(d))if(ids.includes(k))$(k).value=v;}catch{}
+calc();
+</script></html>

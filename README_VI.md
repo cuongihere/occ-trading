@@ -73,3 +73,7 @@ Dashboard chỉ bind 127.0.0.1, không cung cấp dịch vụ công khai. Không
 ## Kiểm tra API Binance Futures (chỉ đọc)
 
 Bản portable có CHECK_BINANCE_WINDOWS.bat để kiểm tra API key và BTCUSDT USD-M Futures trên máy. Chương trình KHÔNG có khả năng đặt lệnh thật; paper trading và dữ liệu SQLite giữ riêng. Xem [BINANCE_API_SETUP.md](BINANCE_API_SETUP.md). Tuyệt đối không gửi API key/secret vào chat hoặc commit vào GitHub.
+
+## Màn hình Binance Futures riêng
+
+Trong dashboard Paper, bấm **Binance Futures · Cài đặt riêng** (địa chỉ localhost:8080/binance). Màn hình này có giao diện SL/TP Multi v5, LONG/SHORT, kích thước lệnh, giới hạn notional và xem trước mức giá. Công tắc thực thi tiền thật hiển thị **OFF / KHÓA**, bởi phần thực thi lệnh thật chưa được kiểm tra đủ điều kiện; không có lệnh nào được gửi lên Binance từ màn hình này. Nút Lưu chỉ lưu bản nháp bằng localStorage của trình duyệt, không phải cấu hình live backend. Kiểm tra kết nối tài khoản read-only bằng CHECK_BINANCE_WINDOWS.bat.
