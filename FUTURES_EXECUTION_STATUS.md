@@ -32,3 +32,5 @@ See Binance USD-M API documentation for current supported endpoints. Price/quant
 - This is source-level scaffolding only. Neither `START_WINDOWS.bat` nor the `/binance` dashboard submits real orders; LIVE stays OFF.
 
 Note: Binance Demo API credentials are distinct from production credentials. Exchange and order formats may differ; no real demo network execution has been verified from this environment.
+
+- `futures-protection-plan.mjs`: produces post-fill STOP close-all and three reduce-only TP descriptions for review and offline tests; it does not send these requests.
