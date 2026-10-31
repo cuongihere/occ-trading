@@ -12,14 +12,32 @@
 .controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .status{border-radius:24px;padding:7px 12px;background:#263244;color:#b9c9dd;font-weight:700;font-size:12px;white-space:nowrap}
 .status.ok{background:#164c3a;color:#9cf2c1}.status.bad{background:#55272f;color:#ffb8bf}
-.marketTicker{min-width:195px;text-align:right;border:1px solid #31465f;background:#142439;border-radius:11px;padding:5px 11px;font-variant-numeric:tabular-nums}
-.marketTicker .quoteHeading{font-size:10px;color:#95b6db;letter-spacing:.3px}
-.marketTicker .quoteValue{font-size:24px;font-weight:820;letter-spacing:-.4px;line-height:1.15;color:#eaf5ff}
-.marketTicker .quoteMeta{font-size:10px;color:#a6bdd1;white-space:nowrap}
-.marketTicker .quoteState{color:#9aefbe;font-weight:700}
-.marketTicker.stale .quoteValue{color:#8796a9}
+/* Market ticker is a prominent price monitor inside the empty API panel, not the header. */
+.apiPanel{display:flex;flex-direction:column}
+.marketTicker{
+ display:flex;flex:1;min-height:155px;width:100%;margin-top:14px;
+ flex-direction:column;align-items:center;justify-content:center;gap:6px;
+ text-align:center;font-variant-numeric:tabular-nums;
+ background:linear-gradient(145deg,#10273a,#0b1d2c 80%);
+ border:1px solid #a08b48;border-radius:12px;padding:16px 12px;
+}
+.marketTicker .quoteHeading{font-size:12px;font-weight:750;color:#9fc4e4;letter-spacing:1.1px}
+.marketTicker .quoteValue{
+ font-size:clamp(35px,3.5vw,58px);font-weight:850;letter-spacing:-1.2px;
+ line-height:1.1;color:#ffd66b;text-shadow:0 0 22px #ffc74b23;
+}
+.marketTicker .quoteMeta{font-size:12px;color:#b8cee1;white-space:normal}
+.marketTicker .quoteState{color:#92efbc;font-weight:800}
+#btcMarketMark{font-weight:800;color:#68dafa}
+.marketTicker.stale{border-color:#405166;background:#101d2e}
+.marketTicker.stale .quoteValue{color:#8b9bb0;text-shadow:none}
 .marketTicker.stale .quoteState{color:#f1bc88}
-@media(max-width:650px){.marketTicker{min-width:170px;text-align:left}.marketTicker .quoteValue{font-size:21px}}
+@media(max-height:780px) and (min-width:1101px){
+ .marketTicker{min-height:104px;margin-top:9px;padding:8px 10px;gap:2px}
+ .marketTicker .quoteValue{font-size:clamp(32px,3vw,43px)}
+ .marketTicker .quoteMeta{font-size:11px}
+}
+@media(max-width:650px){.marketTicker{min-height:140px}.marketTicker .quoteValue{font-size:40px}}
 .auto{display:flex;align-items:center;gap:9px;border:1px solid #526176;padding:7px 13px;border-radius:11px;background:#222536;font-weight:750;white-space:nowrap}
 .auto input{width:17px;height:17px;accent-color:#a1f0b6}.auto.on{background:#173f2e;border-color:#3b9365}
 .link{display:block;text-decoration:none;padding:9px 14px;border:1px solid #415a72;border-radius:9px;white-space:nowrap}
@@ -80,12 +98,6 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
 <header class="topbar">
  <div><div class="brand">OCC <span style="color:#b0ecbd">/</span> BTCUSDT Futures</div><div class="small">Binance thật · USDⓈ-M Perpetual</div></div>
  <div class="controls">
- <div class="marketTicker stale" id="btcMarketTicker" aria-live="off" title="Giá khớp gần nhất BTCUSDT Perpetual từ Binance Futures, không phải giá Paper">
-  <div class="quoteHeading">BTCUSDT FUTURES · LAST</div>
-  <div id="btcLastPrice" class="quoteValue">—</div>
-  <div class="quoteMeta"><span id="btcLastState" class="quoteState">ĐANG KẾT NỐI</span> · Mark <span id="btcMarketMark">—</span></div>
-  <div class="quoteMeta" id="btcPriceTime">Chưa nhận được giao dịch trực tiếp</div>
- </div>
  <span id="connection" class="status">CHƯA KẾT NỐI</span>
  <label class="auto" id="autoWrap" style="flex-direction:row;color:#eff6ff;font-size:12px"><input id="enabled" type="checkbox" disabled><span id="autoLabel">AUTO OFF</span></label>
  <a href="/" class="link">Paper Trading</a></div>
@@ -99,7 +111,7 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
  <div class="kpi"><div class="label">Net bot đã ghi nhận</div><div id="realNet" class="value">—</div><div class="detail">USDT · chưa gồm funding</div></div>
 </section>
 <section class="topgrid">
- <div class="panel">
+ <div class="panel apiPanel">
   <h2>API Binance</h2>
   <div class="row"><span id="apiStatusText">Chưa kết nối</span><span class="small" id="savedInfo"></span></div>
   <details id="credentialEditor" class="credentials">
@@ -113,6 +125,12 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
   <button id="apiReconcile" class="minor">Đối soát vị thế</button></div>
   <div id="apiError" class="message" role="status"></div>
   <div class="small" id="lastSync">Dữ liệu tài khoản sẽ tự cập nhật.</div>
+ <div class="marketTicker stale" id="btcMarketTicker" aria-live="off" title="Giá khớp gần nhất BTCUSDT Perpetual từ Binance Futures, không phải giá Paper">
+  <div class="quoteHeading">BTCUSDT FUTURES · LAST</div>
+  <div id="btcLastPrice" class="quoteValue">—</div>
+  <div class="quoteMeta"><span id="btcLastState" class="quoteState">ĐANG KẾT NỐI</span> · Mark <span id="btcMarketMark">—</span></div>
+  <div class="quoteMeta" id="btcPriceTime">Chưa nhận được giao dịch trực tiếp</div>
+ </div>
  </div>
  <div class="panel">
   <h2>Cấu hình Auto · Multi TP v5</h2>

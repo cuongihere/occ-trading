@@ -96,3 +96,5 @@ Không thay đổi đòn bẩy BTCUSDT từ app khi đang có vị thế/lệnh 
 ## Giá BTCUSDT Futures thực trên dashboard
 
 Trong màn hình `/binance`, cạnh công tắc Auto có ô **BTCUSDT FUTURES · LAST** cập nhật giá giao dịch gần nhất từ luồng công khai Binance USDⓈ-M `btcusdt@aggTrade`, cùng **Mark Price** từ `btcusdt@markPrice@1s` và giờ nhận giá tại máy (giờ Việt Nam). Không dùng số dư Paper hay giá Entry để hiển thị giá thị trường. Tự làm mới mỗi giây, không cần API Key; khi feed ngắt hoặc giá quá 10 giây thì hiển thị dấu gạch ngang và cảnh báo **MẤT LUỒNG GIÁ** để tránh nhầm giá cũ là giá hiện tại. Số liệu trong vị thế cũng dùng Mark Price của luồng công khai khi còn kết nối.
+
+Giá BTCUSDT LAST/Mark được chuyển xuống ô trống trong khung **API Binance**, hiển thị chính giữa với giá LAST màu vàng sáng kích thước lớn và Mark màu xanh cyan. Thanh trên cùng chỉ còn trạng thái kết nối, công tắc Auto và điều hướng; cơ chế đọc giá thật và báo giá cũ không thay đổi.

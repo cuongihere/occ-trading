@@ -59,3 +59,17 @@ test('Binance Futures real BTC price is shown in header and refreshed independen
 test('Portable package contains BTC price market quote module',()=>{
  assert.match(read('BUILD_PORTABLE.ps1'),/'btc-market-quote\.mjs'/);
 });
+
+test('Live BTCUSDT quote occupies API panel space, not the top header',()=>{
+ const html=read('BINANCE_UI_PREVIEW.html');
+ const header=html.slice(html.indexOf('<header class="topbar">'),html.indexOf('</header>'));
+ const account=html.slice(html.indexOf('<div class="panel apiPanel">'),html.indexOf('<h2>Cấu hình Auto'));
+ assert.doesNotMatch(header,/btcMarketTicker|btcLastPrice/);
+ assert.match(account,/id="btcMarketTicker"/);
+ assert.match(account,/id="btcLastPrice"/);
+ assert.match(account,/id="btcMarketMark"/);
+ assert.match(html,/\.apiPanel\{display:flex;flex-direction:column\}/);
+ assert.match(html,/font-size:clamp\(35px,3\.5vw,58px\)/);
+ assert.match(html,/color:#ffd66b/);
+ assert.match(html,/#btcMarketMark\{font-weight:800;color:#68dafa\}/);
+});
