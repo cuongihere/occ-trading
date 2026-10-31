@@ -7,6 +7,7 @@ import {Store} from './store.mjs';
 import {summarize} from './stats.mjs';
 import {BinanceFeed} from './server-feed.mjs';
 import {readLiveReport} from './binance-live-stats.mjs';
+import {BrowserFutures} from './futures-browser-service.mjs';
 const args=new Set(process.argv.slice(2));
 if(args.has('--help')){console.log('node server.mjs [--simulate]\nDefault: data collection only. --simulate explicitly enables paper simulation after synchronization. Dashboard localhost:8080. DATA_DIR and PORT optional. No keys/accounts/orders.');process.exit(0);}
 if([...args].some(x=>x!=='--simulate'))throw Error('Unknown argument; use --help');
@@ -16,6 +17,7 @@ const lock=new DatabaseSync(resolve(dir,'runner-lock.sqlite'));
 try{lock.exec('PRAGMA busy_timeout=0; BEGIN EXCLUSIVE; CREATE TABLE IF NOT EXISTS lock_owner(id INTEGER);');}
 catch{console.error('Another collector owns this data directory. Refusing concurrent simulation.');process.exit(1);}
 const store=new Store(resolve(dir,'occ.sqlite'));
+const browserFutures=new BrowserFutures({dataDir:dir});
 const saved=store.load(),previousEvent=store.lastEvent();
 let engine=saved?OCCEngine.restore(saved):new OCCEngine();
 let simulate=Boolean(args.has('--simulate')||saved?.tradingEnabled||(!Object.hasOwn(saved||{},'tradingEnabled')&&saved?.running));
@@ -47,6 +49,7 @@ function commit(type,payload,exchangeAt=null,receivedAt=Date.now(),mutate=()=>{}
 }
 function statusEvent(s){
  status=s;if(closing)return;
+ if(s.state!=='live'&&browserFutures.armed)browserFutures.disarm();
  commit('status',s,null,Date.now(),()=>{
   engine.setHealthy(s.state==='live');
   if(s.state!=='live')engine.setRunning(false);
@@ -57,7 +60,10 @@ function statusEvent(s){
 const feed=new BinanceFeed({
  onStatus:statusEvent,
  onReady(p){commit('warmup',p,p.now,Date.now(),()=>{for(const [k,v]of Object.entries({qtyStep:p.stepSize,minQty:p.minQty,minNotional:p.minNotional,tickSize:p.tickSize}))if(Number.isFinite(v)&&v>0)engine.config[k]=v;engine.warmup(p.h4,p.m15,p.now);engine.setRunning(false);engine.setHealthy(false);});},
- onCandle(bar,opts){commit('candle',{bar,opts},opts.exchangeAt??opts.observedAt,opts.receivedAt??Date.now(),()=>engine.onCandle(bar,opts));},
+ onCandle(bar,opts){let signal=null;commit('candle',{bar,opts},opts.exchangeAt??opts.observedAt,opts.receivedAt??Date.now(),()=>{signal=engine.onCandle(bar,opts);});
+  if(signal&&opts.live&&feed.healthy()&&browserFutures.armed)
+   browserFutures.signal(signal,true).catch(e=>console.error('Demo auto status:',e.message));
+ },
  onTrade(t){lastObserved=t.receivedAt??Date.now();const due=engine.pending||engine.exitTrigger(t.price)||Date.now()-lastPriceCommit>=1000;
   if(!due)return;lastPriceCommit=Date.now();const healthy=feed.healthy();commit(engine.pending||engine.exitTrigger(t.price)?'execution_candidate':'price_sample',{trade:t,healthy},t.time,lastObserved,()=>engine.onTrade(t,healthy));
  },
@@ -82,7 +88,19 @@ const server=createServer(async(req,res)=>{
   res.setHeader('Content-Type','application/json');
   if(req.headers.origin!==`http://${host}`||req.headers['x-occ-local']!=='1'){res.writeHead(403);return res.end(JSON.stringify({error:'Local origin required'}));}
   try{let body='';for await(const chunk of req){body+=chunk;if(body.length>4096)throw Error('Request too large');}const p=JSON.parse(body||'{}');
-   if(req.url==='/control/start'){if(engine.config.exitMode!=='Multi TP v5')throw Error('Phiên cũ không dùng Multi TP v5. Hãy tạo phiên mới để chuyển chế độ.');if(!feed.healthy()||!engine.ready)throw Error('Chưa có dữ liệu Binance liên tục. Kết nối lại trước.');commit('user_start',{},null,Date.now(),()=>{engine.setHealthy(true);engine.setRunning(true);engine.tradingEnabled=true;});simulate=true;}
+   if(req.url==='/control/live/connect'){
+    // Credentials are not logged, journaled, cached or stored in the browser.
+    await browserFutures.connect({apiKey:p.apiKey,apiSecret:p.apiSecret,environment:p.environment});
+   }
+   else if(req.url==='/control/live/config'){browserFutures.saveConfig(p);}
+   else if(req.url==='/control/live/on'){
+    if(!feed.healthy()||!engine.ready)throw Error('Cần dữ liệu nến và stream Binance liên tục trước khi bật Auto');
+    await browserFutures.arm();
+   }
+   else if(req.url==='/control/live/off'){browserFutures.disarm();}
+   else if(req.url==='/control/live/reconcile'){await browserFutures.reconcileFlat();}
+   else if(req.url==='/control/live/disconnect'){browserFutures.close();}
+   else if(req.url==='/control/start'){if(engine.config.exitMode!=='Multi TP v5')throw Error('Phiên cũ không dùng Multi TP v5. Hãy tạo phiên mới để chuyển chế độ.');if(!feed.healthy()||!engine.ready)throw Error('Chưa có dữ liệu Binance liên tục. Kết nối lại trước.');commit('user_start',{},null,Date.now(),()=>{engine.setHealthy(true);engine.setRunning(true);engine.tradingEnabled=true;});simulate=true;}
    else if(req.url==='/control/pause'){simulate=false;commit('user_pause',{},null,Date.now(),()=>{engine.setRunning(false);engine.tradingEnabled=false;});}
    else if(req.url==='/control/connect'){commit('feed_reconnect',{},null,Date.now(),()=>engine.setRunning(false));feed.connect();}
    else if(req.url==='/control/configure'){
@@ -100,6 +118,7 @@ const server=createServer(async(req,res)=>{
  res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');
  if(req.url==='/'){res.setHeader('Content-Type','text/html;charset=utf-8');return res.end(html);}
  if(req.url==='/binance'){res.setHeader('Content-Type','text/html;charset=utf-8');res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'");return res.end(binancePreviewHtml);}
+ if(req.url==='/api/binance/live-status'){res.setHeader('Content-Type','application/json;charset=utf-8');return res.end(JSON.stringify(browserFutures.snapshot()));}
  if(req.url==='/api/binance/live-report'){res.setHeader('Content-Type','application/json;charset=utf-8');return res.end(JSON.stringify(readLiveReport(resolve(dir,'binance-live-stats.sqlite'))));}
  if(req.url==='/api/state'){const s=engine.snapshot();res.setHeader('Content-Type','application/json');return res.end(JSON.stringify({mode:simulate?'paper_enabled':'collect_only',status,lastObservedUTC:lastObserved?new Date(lastObserved).toISOString():null,lastTrade:s.lastPrice,markPrice:lastMark?.price??null,balance:s.balance,equity:s.equity,unrealized:s.unrealized,fees:s.fees,funding:'EXCLUDED',position:s.position,levels:s.levels,capital:s.config.capital,config:s.config,trades:s.trades,signals:s.signals,signalCount:s.signals.length,fillCount:s.trades.length,running:s.running,tradingEnabled:engine.tradingEnabled,healthy:feed.healthy(),ready:s.ready,session:s.sessionId}));}
  const url=new URL(req.url,'http://localhost');
@@ -123,12 +142,15 @@ const server=createServer(async(req,res)=>{
 });
 server.on('error',error=>{console.error(error.message);shutdown(1);});
 const port=Number(process.env.PORT||8080);if(!Number.isInteger(port)||port<1||port>65535)throw Error('Invalid PORT');
+const demoMonitor=setInterval(()=>browserFutures.monitor().catch(e=>console.error('Demo position monitor:',e.message)),15000);demoMonitor.unref();
 server.listen(port,'127.0.0.1',()=>{console.log(`Local dashboard http://127.0.0.1:${port}; ${simulate?'paper simulation explicitly enabled':'collection only'}`);feed.connect();});
 function shutdown(code=0){
  if(closing)return;closing=true;
+ clearInterval(demoMonitor);
  // Commit an explicit shutdown checkpoint. No pending orders are replayed later.
  if(code===0){try{commit('process_stop',{tradingEnabled:engine.tradingEnabled},null,Date.now(),()=>engine.setRunning(false));}
  catch(e){console.error('Failed to persist shutdown:',e.message);code=1;}}
+ try{browserFutures.close();}catch{}
  try{feed.disconnect();}catch{}
  try{store.close();}catch{}
  try{lock.close();}catch{}

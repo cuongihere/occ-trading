@@ -40,3 +40,14 @@ Note: Binance Demo API credentials are distinct from production credentials. Exc
 Source helpers `futures-protection-orchestrator.mjs` and `futures-protection-checkpoint.mjs` now implement a testable sequence for a confirmed filled BTCUSDT entry: verify exchange position, persist a request marker, send `STOP_MARKET` close-all, verify it via exchange open algo orders, then send and verify TP1, TP2 and TP3 with `reduceOnly` and separate quantities. All uncertain requests halt; restart requires manual reconciliation, never duplicate submission. Unit tests use an exchange mock, not real funds.
 
 **Not yet integrated with the dashboard LIVE switch or a running execution worker.** Real trading remains OFF. Missing end-to-end Demo testing, fill/conditional-order reconciliation, protection after partial fills, cancellation of stale TP/SL when the position becomes flat, and contingency handling for unprotected entries. Binance-side orders, once verified, operate at the exchange without keeping the app open; execution is not guaranteed at a particular trigger price.
+
+## Browser API + Auto Demo integration
+
+- Browser form at `/binance` now accepts Binance Demo/Production credentials using password fields. POST origin is restricted to local app; key/secret are in RAM and discarded on disconnect/shutdown; they are never persisted in SQLite, settings, browser draft or source.
+- Local `/api/binance/live-status` reports connection, available margin, position, demo mode, Auto ON/OFF and fail-closed errors without exposing credentials.
+- `/control/live/on` activates the **Demo-only** bot after account check (BTCUSDT, One-way, Isolated, leverage match, flat, no other orders). `/control/live/off` prevents new orders; exchange-side protective orders remain.
+- New M15 OCC signals are forwarded to a separate Demo worker, which records entry intent before MARKET submission, verifies Entry fill, then uses the stop-first TP coordinator.
+- A 15-second position reconciliation monitor confirms stop existence, cleans up OCC-owned conditional orders when flat and blocks fresh entries until cleared. Uncertain errors HALT; on restart Auto defaults OFF, with manual FLAT and no-order confirmation.
+- Production transport is restricted at service level to read-only GET. No mainnet POST/DELETE can run through the browser service. **Do not use this as a real-money bot** until authentic Binance Demo API execution, restart recovery, partial-fill and conditional-order lifecycle have been independently verified.
+
+This is not a guarantee of exchange order fill, instant stop execution, or the absence of slippage. No bypass of Binance regional restrictions.

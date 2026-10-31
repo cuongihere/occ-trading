@@ -89,3 +89,16 @@ Mở **/binance** trong dashboard OCC để xem mục **Thống kê giao dịch 
 - Phải đăng ký **orderId, groupId, clientId bắt đầu bằng OCCBTC- và role (ENTRY/TP1/TP2/TP3/SL/CLOSE/REVERSE)** trong ledger khi có bộ thực thi live tương lai. Mỗi lần kiểm tra chỉ đọc sẽ truy vấn `GET /fapi/v1/userTrades` cho các orderId đã đăng ký. Chưa có ID được đăng ký → bảng trống, không được tự gán lệnh Binance của người dùng là lệnh OCC.
 - Funding chưa được phân bổ theo từng vị thế; các phí không phải USDT cũng chưa được quy đổi. Vì vậy không thể coi **netExFundingUSDT** là P&L ròng đầy đủ. Giao diện sẽ đánh dấu vị thế phí khác USDT là chưa xác minh P&L ròng.
 - Binance có giới hạn truy vấn lịch sử; cần đồng bộ thường xuyên để giữ được các fill trong dữ liệu cục bộ.
+
+## Cài đặt Binance API ngay trên trình duyệt (Demo Auto)
+
+1. Mở `http://127.0.0.1:8080/binance` từ **START_WINDOWS.bat** và chọn **Binance Demo · tiền thử**.
+2. Nhập **API Key + API Secret** vào hai ô mật khẩu và nhấn **Kết nối & kiểm tra API**. Key chỉ được giữ trong RAM của tiến trình Node đang chạy, không lưu trên ổ đĩa và không lưu localStorage.
+3. Chọn số ký quỹ USDT/lệnh, đòn bẩy, chiều LONG/SHORT, SL và TP1/2/3; nhấn **Lưu cấu hình** (chỉ lưu tham số, không lưu key).
+4. Cài trên Binance Demo: **One-way, Isolated BTCUSDT, đòn bẩy trùng cấu hình, không có lệnh/vị thế BTCUSDT khác**. Khi luồng giá đã khỏe, bật **Auto Trade** trên trang để thử.
+5. Bot chỉ dùng **tín hiệu OCC M15 mới**, không hồi diễn lệnh lịch sử. Trước lệnh kiểm tra lượng USDT ký quỹ đủ và từng TP đạt quy tắc `stepSize/minQty`; 20 USDT × 5x thường không thể tách 3 TP trên BTCUSDT.
+6. Sau khi gửi lệnh Entry trên Demo, bot xác nhận thực tế `FILLED`, rồi gửi SL đóng toàn bộ và TP1–TP3 từng phần; xác minh lại các lệnh trên sàn. Khi không chắc chắn, bot sẽ khóa Auto và không gửi lại mù quáng.
+7. Nút **OFF** chặn mở lệnh mới, không hủy SL/TP đã được Binance nhận. Nếu app khởi động lại với lệnh chưa đối soát, Auto vẫn OFF và cần kiểm tra trên Binance Demo. Nút **Kiểm tra đã sạch lệnh** chỉ mở khóa khi Binance xác nhận BTCUSDT không còn vị thế hoặc lệnh.
+8. Nếu chọn **Binance thật · chỉ đọc**, app chỉ xác minh tài khoản/số dư; công tắc Auto bị khóa. **Chưa thể dùng tiền thật trong bản này.** API Futures phải đúng quyền và Binance phải hỗ trợ tại khu vực của bạn.
+
+Lưu ý: Tín hiệu Demo hiện lấy từ dữ liệu công khai BTCUSDT thực (Binance Futures) còn khớp lệnh diễn ra trên Demo. Kết quả thử có thể khác thực tế. App chưa có worker User Data Stream để xác minh toàn bộ khớp, funding và tính P&L Demo chi tiết; báo cáo giao dịch thật trong app tách riêng và **không tính Demo là lãi/lỗ tiền thật**.

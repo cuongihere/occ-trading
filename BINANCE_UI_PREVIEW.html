@@ -21,12 +21,23 @@ button.primary{background:#b1eabf;color:#0e2318;border:0}button:disabled{opacity
 <main>
 <header><div><h1>Binance Futures · BTCUSDT</h1><div class="muted">Màn hình cấu hình riêng · USDⓈ-M Perpetual</div></div>
 <a class="link" href="/">Về Paper Trading</a></header>
-<div class="note"><b>Chưa kích hoạt đặt lệnh thật.</b> Đây là màn hình chuẩn bị cấu hình. Công tắc LIVE được khóa cho đến khi backend thực thi lệnh và quản lý SL/TP được kiểm thử. Các giá trị ở đây chỉ dùng để xem trước, không truyền đến Binance.</div>
+<div class="note"><b>Binance Futures: thử Auto trên Demo trước.</b> API và công tắc nằm ngay bên dưới. Tài khoản thật hiện chỉ kết nối đọc, chưa cho phép gửi lệnh tiền thật. Khi OFF, bot không mở lệnh mới; SL/TP đã đặt trên Demo vẫn tồn tại trên sàn.</div>
 <div class="grid">
 <section class="card"><h2>1. Kết nối & công tắc giao dịch</h2>
-<div class="switch"><input type="checkbox" id="enabled" disabled style="width:22px"><div><strong>Giao dịch thật <span class="pill">OFF · ĐÃ KHÓA</span></strong><div class="muted">Không gửi lệnh khi chưa có xác minh an toàn.</div></div></div>
-<div style="margin-top:20px"><h2>Trạng thái API</h2><p id="connection" class="muted">Chỉ đọc: sử dụng CHECK_BINANCE_WINDOWS.bat để kiểm tra khóa API trên máy.</p>
-<p class="muted">Chế độ dự kiến: One-way · ISOLATED. Đòn bẩy trong bản nháp cần được xác minh lại trên Binance khi kết nối thực. API Key không nhập vào trang này.</p></div></section>
+<div class="fields" style="margin-bottom:15px">
+<label>Môi trường Binance<select id="apiEnvironment"><option value="demo" selected>Binance Demo · tiền thử</option><option value="production">Binance thật · chỉ đọc</option></select></label>
+<label>Trạng thái API<strong id="connection" style="padding:11px 2px;color:#c2d6ea">Chưa kết nối</strong></label>
+<label>API Key<input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="Nhập key trên máy của bạn"></label>
+<label>API Secret<input id="apiSecret" type="password" autocomplete="off" spellcheck="false" placeholder="Nhập secret (không lưu)"></label>
+</div>
+<div class="row" style="margin-bottom:18px"><button id="apiConnect" class="primary">Kết nối & kiểm tra API</button><button id="apiDisconnect">Ngắt API</button><button id="apiReconcile" title="Chỉ khi tài khoản Demo đã đóng tất cả vị thế và không còn lệnh BTCUSDT">Kiểm tra đã sạch lệnh</button></div>
+<div class="switch"><input type="checkbox" id="enabled" style="width:22px;accent-color:#b1eabf"><div>
+<strong>Auto Trade BTCUSDT <span class="pill" id="autoLabel">OFF</span></strong>
+<div class="muted" id="autoHint">Chỉ bật được trên Binance Demo, sau khi API và tài khoản đã được xác minh. Khi OFF không mở lệnh mới.</div>
+</div></div>
+<div class="muted" id="liveAccount" style="margin-top:14px">Số dư / vị thế: chưa kết nối.</div>
+<p id="apiError" style="color:#ffadad;white-space:pre-line"></p>
+<p class="muted">Khóa API chỉ giữ trong RAM của app, không lưu vào file, không lưu trong trình duyệt hay GitHub. Khởi động lại phải nhập lại. Hãy giới hạn quyền API và tắt quyền rút tiền.</p></section>
 <section class="card"><h2>2. Thiết lập lệnh BTCUSDT</h2>
 <p class="muted" style="margin-top:-5px">Chỉ cần chọn số USDT ký quỹ thực muốn dùng cho <strong>mỗi lệnh</strong> và mức đòn bẩy.</p>
 <div class="fields">
@@ -55,7 +66,7 @@ button.primary{background:#b1eabf;color:#0e2318;border:0}button:disabled{opacity
 </div><p id="error" style="color:#ffb7b8"></p></section>
 <section class="card"><h2>4. Xem trước mức giá</h2>
 <div id="preview"></div><div class="row" style="margin-top:24px"><button class="primary" id="save">Lưu bản nháp trên trình duyệt</button><button id="reset">Khôi phục mặc định</button></div>
-<p class="muted">Bản nháp chỉ lưu trong trình duyệt hiện tại. Chưa kết nối với bộ thực thi đặt lệnh.</p></section>
+<p class="muted">Lưu cấu hình vào máy không bao gồm API Key/Secret. Đối với lệnh Demo, Binance phải cho phép Isolated, One-way và đòn bẩy đã chọn. Nếu ba TP không đạt khối lượng tối thiểu, bot sẽ bỏ qua tín hiệu.</p></section>
 </div>
 
 <section class="card" id="realStats" style="margin-top:20px">
@@ -79,7 +90,7 @@ button.primary{background:#b1eabf;color:#0e2318;border:0}button:disabled{opacity
  <tbody id="realHistory"><tr><td colspan="9">Chưa có giao dịch thật do OCC đăng ký và xác minh.</td></tr></tbody>
  </table></div>
  <p class="muted" id="realOpen" style="margin-top:12px"></p>
- <p class="muted">Để cập nhật dữ liệu đã ghi nhận: chạy <strong>CHECK_BINANCE_WINDOWS.bat</strong> và nhập API Key cục bộ. Bản app này chưa có bộ thực thi lệnh thật; không gộp lệnh thủ công hoặc lịch sử Paper Trading.</p>
+ <p class="muted">Báo cáo phía trên dành cho lệnh thật đã được xác minh bằng ID OCC; Demo và Paper Trading không cộng chung. Công tắc Auto Demo không phải công tắc tiền thật.</p>
 </section>
 <style>#realStats th,#realStats td{padding:10px 8px;border-bottom:1px solid #33485b;text-align:left}
 #realStats th{position:sticky;top:0;background:#182437;color:#bfd1e3}#realStats strong{font-variant-numeric:tabular-nums}</style>
@@ -87,6 +98,75 @@ button.primary{background:#b1eabf;color:#0e2318;border:0}button:disabled{opacity
 <script>
 const $=id=>document.getElementById(id);
 const ids=['side','marginUSDT','leverage','sl','mode','tp1','tp2','tp3','entry','q1','q2'];
+
+function liveConfig(){
+ const n=id=>$(id).value.trim()===''?NaN:Number($(id).value);
+ return {side:$('side').value,marginUSDT:n('marginUSDT'),leverage:n('leverage'),
+  slPercent:n('sl'),tpMode:$('mode').value,tp1Val:n('tp1'),tp2Val:n('tp2'),
+  tp3Val:n('tp3'),tp1Qty:n('q1'),tp2Qty:n('q2')};
+}
+let autoBusy=false;
+async function requestLive(name,data={}){
+ const r=await fetch('/control/live/'+name,{method:'POST',
+  headers:{'Content-Type':'application/json','X-OCC-Local':'1'},body:JSON.stringify(data)});
+ const content=await r.json();if(!r.ok)throw Error(content.error||'Thao tác không thành công');return content;
+}
+async function refreshLive(){
+ try{
+  const r=await fetch('/api/binance/live-status',{cache:'no-store'});if(!r.ok)throw Error('API status HTTP '+r.status);
+  const s=await r.json();
+  $('connection').textContent=s.connected?'Đã kết nối '+(s.environment==='demo'?'Demo':'Binance thật'):'Chưa kết nối';
+  $('connection').style.color=s.connected?'#b1eabf':'#ffadad';
+  $('liveAccount').textContent=s.account?
+   'Ví: '+fmt(s.account.walletUSDT)+' USDT · Khả dụng: '+fmt(s.account.availableUSDT)+
+   ' USDT · Vị thế BTC: '+fmt(s.account.positionBTC)+' · '+s.account.marginType+
+   ' · '+s.account.leverage+'x':'Số dư / vị thế: chưa kết nối';
+  if(!autoBusy)$('enabled').checked=Boolean(s.armed);
+  $('enabled').disabled=!s.connected||s.halted||s.environment!=='demo'||autoBusy;
+  $('autoLabel').textContent=s.armed?'ON · DEMO':s.halted?'HALTED':'OFF';
+  $('autoLabel').style.background=s.armed?'#1f664d':'#4b2833';
+  $('autoHint').textContent=s.halted?'Cần kiểm tra tình trạng vị thế/lệnh trên Binance Demo trước khi cho Auto chạy tiếp.':
+   s.environment==='production'?'API tài khoản thật chỉ đọc. Tính năng đặt lệnh thật chưa được xác minh.':
+   'Binance Demo: chỉ mở lệnh mới khi ON. Có thể OFF bất kỳ lúc nào.';
+  if(s.error&&s.halted)$('apiError').textContent='ĐÃ KHÓA: '+s.error;
+  $('apiReconcile').disabled=!s.connected||s.environment!=='demo'||s.armed;
+ }catch(e){$('connection').textContent='Không đọc được trạng thái app';$('apiError').textContent=e.message;}
+}
+$('apiConnect').onclick=async()=>{
+ const button=$('apiConnect');button.disabled=true;
+ const apiKey=$('apiKey').value.trim(),apiSecret=$('apiSecret').value.trim();
+ try{
+  await requestLive('connect',{apiKey,apiSecret,environment:$('apiEnvironment').value});
+  $('apiError').textContent='Kết nối API thành công. Key và Secret đang nằm trong RAM của app.';
+ }catch(e){$('apiError').textContent=e.message;}
+ finally{$('apiKey').value='';$('apiSecret').value='';button.disabled=false;await refreshLive();}
+};
+$('apiReconcile').onclick=async()=>{
+ if(!confirm('Chỉ tiếp tục nếu đã kiểm tra Binance Demo không có vị thế/lệnh BTCUSDT. App sẽ xác minh trực tiếp trước khi mở khóa.'))return;
+ try{await requestLive('reconcile');$('apiError').textContent='Đã xác nhận Binance Demo không còn vị thế/lệnh BTCUSDT.';}
+ catch(e){$('apiError').textContent=e.message;}
+ await refreshLive();
+};
+$('apiDisconnect').onclick=async()=>{
+ try{await requestLive('disconnect');$('apiError').textContent='Đã ngắt API, Auto OFF.';}
+ catch(e){$('apiError').textContent=e.message;}
+ await refreshLive();
+};
+$('enabled').onchange=async()=>{
+ if(autoBusy)return;autoBusy=true;
+ const requested=$('enabled').checked;$('enabled').disabled=true;
+ try{
+  if(requested){
+   if(!confirm('BẬT AUTO TRADING TRÊN BINANCE DEMO (TIỀN THỬ)?\nBot có thể mở lệnh BTCUSDT khi có tín hiệu OCC.'))throw Error('Đã hủy bật Auto');
+   await requestLive('config',liveConfig());await requestLive('on');
+   $('apiError').textContent='Đã bật Auto Demo, chờ tín hiệu OCC mới.';
+  }else{
+   await requestLive('off');$('apiError').textContent='Auto OFF. Lệnh SL/TP đã đặt trên Binance Demo vẫn còn.';
+  }
+ }catch(e){$('apiError').textContent=e.message;}
+ finally{autoBusy=false;await refreshLive();}
+};
+refreshLive();setInterval(refreshLive,5000);
 const fmt=n=>Number.isFinite(n)?n.toLocaleString('en-US',{maximumFractionDigits:5}):'—';
 function calc(){
  const val=id=>$(id).value.trim()===''?NaN:Number($(id).value);
@@ -121,7 +201,12 @@ function calc(){
   '\nChưa bao gồm phí, funding và quy tắc làm tròn khối lượng Binance.';
 }
 for(const id of ids)$(id).addEventListener('input',calc);
-$('save').onclick=()=>{const obj=Object.fromEntries(ids.map(id=>[id,$(id).value]));localStorage.setItem('occ-binance-draft',JSON.stringify(obj));alert('Đã lưu bản nháp cấu hình trên trình duyệt; CHƯA bật lệnh thật.');};
+$('save').onclick=async()=>{try{
+ const config=liveConfig();await requestLive('config',config);
+ localStorage.setItem('occ-binance-draft',JSON.stringify(Object.fromEntries(ids.map(id=>[id,$(id).value]))));
+ $('apiError').textContent='Đã lưu cấu hình vào app; API Key/Secret không được lưu.';
+ }catch(e){$('apiError').textContent=e.message;}
+};
 $('reset').onclick=()=>{localStorage.removeItem('occ-binance-draft');location.reload();};
 try{const d=JSON.parse(localStorage.getItem('occ-binance-draft')||'{}');for(const [k,v]of Object.entries(d))if(ids.includes(k))$(k).value=v;}catch{}
 calc();
