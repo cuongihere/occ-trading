@@ -142,6 +142,13 @@ export class BrowserFutures{
   if(amt===0){this.log('EMERGENCY_FLAT','Vị thế BTCUSDT đã đóng');return;}
   const intent=existsSync(this.intentPath)?JSON.parse(readFileSync(this.intentPath,'utf8')):null;
   if(!intent?.clientId)throw Error('Missing recorded entry client ID');
+  const ownEntry=await this.api.get('/fapi/v1/order',{symbol:'BTCUSDT',origClientOrderId:intent.clientId});
+  if(ownEntry?.symbol!=='BTCUSDT'||ownEntry.clientOrderId!==intent.clientId||
+     !['FILLED','PARTIALLY_FILLED'].includes(ownEntry.status)||
+     ownEntry.side!==(amt>0?'BUY':'SELL')||!(Number(ownEntry.executedQty)>0)||
+     Math.abs(amt)>Number(ownEntry.executedQty)+1e-9)
+   throw Error('Cannot prove this BTC position belongs to OCC entry; manual review required');
+
   const orders=await this.api.get('/fapi/v1/openAlgoOrders',{symbol:'BTCUSDT'});
   if(!Array.isArray(orders))throw Error('Cannot verify exchange stop');
   if(orders.some(o=>o.clientAlgoId===intent.clientId+'-SL'&&
