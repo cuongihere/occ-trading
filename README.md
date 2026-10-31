@@ -1,35 +1,33 @@
-# OCC Trading — Paper Portable
+# OCC Trading — Windows Portable Paper Trader
 
-**[Hướng dẫn tiếng Việt](README_VI.md)** · Windows x64 · Chỉ mô phỏng, không lệnh thật.
+**[Hướng dẫn tiếng Việt](README_VI.md)** · Windows x64 · BTCUSDT Binance USD-M Futures · chỉ mô phỏng.
 
-Ứng dụng OCC dùng dữ liệu công khai Binance USD-M BTCUSDT perpetual, lưu lịch sử và thống kê thắng/thua bằng SQLite cục bộ.
+## Tải gói portable chạy ngay
 
-- Cố định M15 / H4, SMMA 8, delay 0, BOTH, Classic SL/TP 0; giá trị mỗi vị thế khoảng 10% equity. Không đòn bẩy, không stop loss.
-- Phí/trượt giá là giả định mô phỏng; chưa tính funding. Không API key, không kết nối tài khoản sàn.
-- Dashboard chỉ bind 127.0.0.1:8080. Máy cần bật, có mạng và không ngủ; khởi động lại luôn ở trạng thái tạm dừng.
-- Mã nguồn không chứa runtime nhị phân hay dữ liệu cá nhân. **Download ZIP từ GitHub chưa có runtime**: làm theo README_VI để thêm runtime chính thức, không cần cài Node.js hệ thống.
-- Không có hosting hay triển khai đám mây trong kho này.
+1. Mở [GitHub Actions – Windows portable](https://github.com/cuongihere/occ-trading/actions/workflows/windows-portable.yml).
+2. Chọn lần chạy mới nhất **thành công** (dấu ✓), tải artifact **OCC_Portable_Windows_x64** trong mục Artifacts.
+3. Giải nén ZIP của GitHub, rồi giải nén file **OCC_Portable_Windows_x64.zip** bên trong.
+4. Vào thư mục **OCC_Portable** và bấm **START_WINDOWS.bat**. Dashboard mở tại http://127.0.0.1:8080.
 
-## Chạy và kiểm thử
+Gói đã build có sẵn runtime/node.exe chính thức được xác minh SHA256, **không cần cài Node.js, npm hay thư viện nào**. Chạy app vẫn cần Internet để lấy dữ liệu Binance.
 
-Node.js 24+; không có dependency ngoài, không cần npm install.
+Nếu chỉ tải bằng Code → Download ZIP, đó là mã nguồn chưa có runtime. START_WINDOWS.bat sẽ tự tải Node.js chính thức **một lần vào chính thư mục runtime/** rồi xác minh SHA256; cần mạng ở lần đầu.
 
-```sh
-node server.mjs
+## Ứng dụng
+
+- OCC R5.1: SMMA8, M15/H4, delay 0, BOTH; H4 đang hình thành có thể đổi tín hiệu.
+- Paper position ~10% equity, không đòn bẩy, không stop loss, chưa tính funding.
+- Binance BTCUSDT perpetual public data; không API key, tài khoản hay lệnh thật.
+- Dashboard mới, biểu đồ P&L đã đóng, lịch sử phiên, thắng/thua, CSV/JSON.
+- SQLite và lịch sử trong data/ cùng thư mục. Khởi động luôn tạm dừng, chờ bấm Bắt đầu.
+
+## Phát triển / kiểm thử
+
+Yêu cầu Node.js 24+ cho dev; không có npm dependencies:
+
+~~~sh
 node --test
-```
+node server.mjs
+~~~
 
-Windows portable dùng `runtime\node.exe`; bấm `START_WINDOWS.bat`. Dữ liệu được tạo trong `data/`; dừng chương trình trước khi sao lưu toàn bộ thư mục.
-
-31 kiểm thử tự động đã chạy thành công trên Linux / Node.js 24: engine, feed fixtures, SQLite, restart/replay và thống kê vị thế. **Chưa kiểm thử trực tiếp trên Windows**. Kết nối Binance thực tế từ môi trường kiểm thử bị HTTP 451; chưa xác minh chu kỳ M15 trực tiếp hoặc parity TradingView. Không fallback sang giá giả hoặc chuyển vùng.
-
-## Thành phần
-
-- `engine.mjs`: logic tín hiệu / paper fills.
-- `server-feed.mjs`: dữ liệu công khai Binance và đồng bộ lại.
-- `store.mjs`, `stats.mjs`: nhật ký SQLite và thống kê vị thế đã đóng.
-- `server.mjs`: HTTP localhost và giao diện.
-- `*.test.mjs`, `test/`: kiểm thử.
-- `PORTABLE_BUILD.md`, `RUNTIME_SOURCE.txt`: nguồn runtime, checksum và cách đóng gói.
-
-Node.js và các thành phần của nó giữ giấy phép upstream riêng. Xem `LICENSE` trong ZIP Node.js chính thức; luôn giữ file này trong gói portable phân phối. Kho này không tự cấp thêm giấy phép cho mã ứng dụng.
+Kết quả mô phỏng chưa được xác minh parity TradingView hoặc khả năng khớp lệnh thật. Nếu nguồn Binance trả 451/403 theo vùng, app không bypass. Dùng Windows artifact chỉ khi workflow báo thành công. Xem README_VI.md để biết chi tiết.

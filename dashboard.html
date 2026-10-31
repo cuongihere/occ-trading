@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>OCC Trading · Paper Dashboard</title>
+<style>
+:root{--bg:#0b1018;--panel:#141e2b;--panel2:#101925;--line:#293748;--text:#ecf3fa;--muted:#93a7b9;--lime:#a8e9b0;--blue:#87c6ff;--amber:#f6cd7e;--red:#ff9a9b}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 85% 0,#1b3040 0,transparent 36%),var(--bg);color:var(--text);font:14px/1.5 system-ui,"Segoe UI",sans-serif}
+.wrap{max-width:1220px;margin:auto;padding:28px 24px 70px}
+header{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:22px}
+.brand{display:flex;gap:15px;align-items:center}.logo{background:linear-gradient(145deg,#b6efbe,#6dacd8);border-radius:15px;color:#122433;font-weight:900;font-size:24px;padding:11px 17px;letter-spacing:-1px}
+h1,h2,p{margin:0}h1{font-size:26px;letter-spacing:-.8px}h2{font-size:16px;font-weight:700;margin-bottom:12px}.tiny{font-size:12px;color:var(--muted)}.sub{color:var(--muted);margin-top:2px}
+.state{display:flex;gap:10px;align-items:center;padding:10px 14px;background:var(--panel);border:1px solid var(--line);border-radius:12px}
+.dot{width:10px;height:10px;background:var(--amber);border-radius:50%;box-shadow:0 0 14px #f6cd7e66}.dot.live{background:var(--lime);box-shadow:0 0 14px #a8e9b077}.dot.blocked{background:var(--red);box-shadow:0 0 14px #ff9a9b88}
+.notice{display:flex;gap:12px;align-items:center;border:1px solid #6f5537;background:#33271c;border-radius:12px;padding:12px 16px;color:#ffe0a4;margin-bottom:20px}
+.toolbar{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:20px}
+.actions{display:flex;flex-wrap:wrap;gap:9px}button{border:1px solid #4d6a73;color:var(--text);background:#253545;padding:11px 19px;border-radius:10px;font:600 13px system-ui;cursor:pointer}
+button.primary{background:var(--lime);border-color:var(--lime);color:#102619}button:hover:not(:disabled){filter:brightness(1.14)}button:disabled{opacity:.35;cursor:not-allowed}
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:18px}
+.card{background:linear-gradient(175deg,#172232,#111a27);border:1px solid var(--line);border-radius:14px;padding:19px;min-width:0}
+.card .label{font-size:12px;color:var(--muted);letter-spacing:.35px}.big{font-size:clamp(21px,2.6vw,34px);font-weight:750;letter-spacing:-1px;margin:9px 0 4px;overflow-wrap:anywhere}.detail{font-size:12px;color:var(--muted)}
+.positive{color:var(--lime)}.negative{color:var(--red)}.columns{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;margin-bottom:18px}
+.charthead{display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap}.chartbox{height:240px;position:relative;margin-top:12px}
+canvas{display:block;width:100%;height:100%}.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.stat{background:var(--panel2);border:1px solid var(--line);padding:12px;border-radius:10px}
+.stat strong{display:block;font-size:22px;line-height:1.6}.stat span{font-size:12px;color:var(--muted)}.stat:nth-child(2) strong{color:var(--lime)}
+select,input{font:inherit;background:#101925;color:var(--text);border:1px solid #4b6173;border-radius:9px;padding:9px 10px}
+.links{display:flex;gap:12px;flex-wrap:wrap;margin:10px 0;color:var(--muted)}a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
+.scroll{overflow:auto;max-height:440px}table{border-collapse:collapse;width:100%;font-size:12px;min-width:700px}th,td{text-align:left;border-bottom:1px solid var(--line);padding:11px 10px;vertical-align:top}th{color:var(--muted);font-weight:600;position:sticky;top:0;background:#141e2b}
+.flag{display:inline-block;padding:3px 9px;border-radius:30px;background:#223b39;color:var(--lime);font-size:11px;font-weight:700}.flag.short{background:#472e34;color:#ffb6b7}
+.settings{margin-top:18px}.fields{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin:12px 0}.fields label{display:flex;gap:5px;flex-direction:column;font-size:12px;color:var(--muted)}
+pre{white-space:pre-wrap;overflow:auto;max-height:260px;background:#0b131e;border-radius:9px;padding:14px;font-size:12px}.muted{color:var(--muted)}
+footer{color:var(--muted);font-size:12px;margin-top:22px;line-height:1.8}.danger{color:var(--red)}
+@media(max-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.columns{grid-template-columns:1fr}}
+@media(max-width:570px){.wrap{padding:18px 12px 40px}.grid{grid-template-columns:1fr 1fr;gap:9px}.card{padding:14px}.big{font-size:22px}.stats{grid-template-columns:1fr 1fr}.notice{align-items:start}.chartbox{height:190px}}
+</style>
+</head>
+<body><div class="wrap">
+<header>
+ <div class="brand"><div class="logo">OCC</div><div><h1>Trading Dashboard</h1><p class="sub">BTCUSDT Perpetual · M15 / H4 · SMMA 8 · delay 0</p></div></div>
+ <div class="state"><span class="dot" id="dot"></span><div><strong id="state">Đang kết nối...</strong><div class="tiny" id="source">Binance USD-M Futures · dữ liệu công khai</div></div></div>
+</header>
+<div class="notice"><strong>SIMULATION ONLY</strong><span>Tiền ảo, không đặt lệnh thật. Không stop loss, không đòn bẩy; chưa tính funding. H4 đang hình thành có thể thay đổi tín hiệu.</span></div>
+<div class="toolbar"><div class="actions"><button class="primary" id="start" disabled>Bắt đầu mô phỏng</button><button id="pause" disabled>Tạm dừng</button><button id="connect">Kết nối lại Binance</button></div><div class="tiny" id="received">Chưa có dữ liệu giá</div></div>
+<section class="grid">
+ <div class="card"><div class="label">GIÁ GIAO DỊCH BTC</div><div class="big" id="price">—</div><div class="detail">Mark price: <span id="mark">—</span></div></div>
+ <div class="card"><div class="label">TÀI SẢN ẢO (USDT)</div><div class="big" id="equity">—</div><div class="detail">Vốn ban đầu: <span id="capitalValue">—</span></div></div>
+ <div class="card"><div class="label">P&L TỔNG PHIÊN</div><div class="big" id="pnl">—</div><div class="detail">Bao gồm P&L chưa thực hiện, chưa tính funding</div></div>
+ <div class="card"><div class="label">VỊ THẾ HIỆN TẠI</div><div class="big" id="position">—</div><div class="detail" id="positionDetail">Quy mô khoảng 10% equity mỗi lần mở</div></div>
+</section>
+<div class="columns">
+ <section class="card"><div class="charthead"><h2>Đường lợi nhuận vị thế đã đóng</h2><span class="tiny">P&L cộng dồn · USDT</span></div><div class="chartbox"><canvas id="curve" aria-label="Biểu đồ P&L tích lũy"></canvas></div><div class="tiny">Chỉ dùng lệnh đã đóng. Các vị thế đang mở không được tính vào đường này.</div></section>
+ <section class="card"><div class="charthead"><h2>Thống kê giao dịch</h2><select id="session" aria-label="Phạm vi phiên"><option value="current">Phiên hiện tại</option><option value="all">Tất cả phiên</option></select></div>
+ <div class="stats">
+ <div class="stat"><strong id="closed">0</strong><span>Vị thế đã đóng</span></div>
+ <div class="stat"><strong id="winrate">0%</strong><span>Win rate</span></div>
+ <div class="stat"><strong id="streak">0</strong><span>Chuỗi thua tối đa</span></div>
+ <div class="stat"><strong id="wins">0</strong><span>Thắng</span></div>
+ <div class="stat"><strong id="losses">0</strong><span>Thua</span></div>
+ <div class="stat"><strong id="breakeven">0</strong><span>Hòa</span></div></div>
+ <p style="margin-top:18px">P&L đã đóng: <strong id="realized">0</strong> USDT</p>
+ <p class="tiny" style="margin-top:5px">Phí vị thế đã đóng: <span id="closedFees">0</span> · Tổng phí các lần khớp: <span id="allFees">0</span></p>
+ <p class="tiny" id="openPositions" style="margin-top:10px"></p></section>
+</div>
+<section class="card"><div class="charthead"><h2>Lịch sử vị thế đã đóng</h2><span class="tiny">Giờ Việt Nam UTC+7</span></div>
+ <div class="links"><a id="positionsCsv" href="/positions.csv">Tải CSV vị thế</a><a id="fillsCsv" href="/trades.csv">Tải CSV khớp lệnh</a><a id="signalsJson" href="/signals.json">Tải nhật ký tín hiệu</a></div>
+ <div class="scroll"><table><thead><tr><th>Thời gian vào / ra</th><th>Chiều</th><th>Khối lượng BTC</th><th>Giá vào / ra</th><th>Phí</th><th>P&L sau phí</th><th>Kết quả</th></tr></thead><tbody id="trades"><tr><td colspan="7">Chưa có giao dịch đã đóng</td></tr></tbody></table></div>
+</section>
+<details class="card settings"><summary><strong>Thiết lập mô phỏng & nhật ký tín hiệu</strong></summary>
+ <div class="fields"><label>Vốn ban đầu (USDT)<input id="capital" type="number" min="1" value="10000"></label><label>Phí mỗi phía (%)<input id="fee" type="number" min="0" max="5" step=".01" value=".05"></label><label>Slippage (bps)<input id="slip" type="number" min="0" max="1000" step=".5" value="1"></label><button id="reset">Tạo phiên mới</button></div>
+ <p class="tiny">Tạo phiên mới sẽ xóa vị thế mô phỏng của phiên hiện tại (nhưng vẫn lưu nhật ký phiên cũ). Xuất CSV nếu cần sao lưu. Vị thế chưa đóng không tính thắng/thua.</p>
+ <h2 style="margin-top:20px">20 tín hiệu gần nhất của phiên hiện tại</h2><pre id="signals">[]</pre>
+</details>
+<footer><strong>OCC Paper Portable</strong> · Chỉ chạy cục bộ tại 127.0.0.1 · Không cần API key hoặc tài khoản Binance · Đóng tab không dừng server, nhấn Ctrl+C tại cửa sổ chương trình để thoát.<br>Máy phải bật, không ngủ và có mạng để tiếp tục nhận dữ liệu. Mất kết nối sẽ tạm dừng quyết định giao dịch mới. Kết quả mô phỏng không đồng nghĩa khả năng khớp lệnh thực tế.</footer>
+</div>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const num=v=>v===null||v===undefined||!Number.isFinite(Number(v))?'—':Number(v).toLocaleString('en-US',{maximumFractionDigits:4});
+const when=t=>new Date(t).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',hour12:false});
+let current=null,reportData=null,initial=false,refreshing=false;
+function color(el,value){el.classList.remove('positive','negative');if(value>0)el.classList.add('positive');if(value<0)el.classList.add('negative');}
+async function getJSON(path){const r=await fetch(path,{cache:'no-store'});const v=await r.json();if(!r.ok)throw Error(v.error||'Request failed');return v;}
+async function control(name,payload={}){
+ try{
+  const response=await fetch('/control/'+name,{method:'POST',headers:{'Content-Type':'application/json','X-OCC-Local':'1'},body:JSON.stringify(payload)});
+  const result=await response.json();if(!response.ok)throw Error(result.error||'Không thực hiện được thao tác');
+  await refresh();
+ }catch(e){alert(e.message);}
+}
+function renderState(s){
+ $('state').textContent=s.running?'ĐANG MÔ PHỎNG':s.status.state==='live'?'SẴN SÀNG · TẠM DỪNG':'TẠM DỪNG';
+ $('source').textContent=s.status.message||'Đang đồng bộ Binance';
+ $('dot').className='dot'+(s.status.state==='live'?' live':s.status.state==='blocked'?' blocked':'');
+ $('start').disabled=!s.healthy||!s.ready||s.running;$('pause').disabled=!s.running;
+ $('received').textContent=s.lastObservedUTC?'Giá nhận lúc '+when(s.lastObservedUTC)+' (UTC+7)':'Chưa có dữ liệu giá gần đây';
+ $('price').textContent=num(s.lastTrade);$('mark').textContent=num(s.markPrice);
+ $('equity').textContent=num(s.equity);$('capitalValue').textContent=num(s.capital);
+ const pnl=s.equity-s.capital; $('pnl').textContent=(pnl>0?'+':'')+num(pnl);color($('pnl'),pnl);
+ $('position').textContent=s.position?s.position.side:'Đang trống';
+ $('position').className='big'+(s.position?(s.position.side==='LONG'?' positive':' negative'):'');
+ $('positionDetail').textContent=s.position?num(s.position.qty)+' BTC @ '+num(s.position.entryPrice):'Quy mô khoảng 10% equity mỗi lần mở';
+ $('signals').textContent=JSON.stringify(s.signals.slice(-20),null,2);
+ if(!initial){$('capital').value=s.config.capital;$('fee').value=s.config.feeBps/100;$('slip').value=s.config.slippageBps;initial=true;}
+}
+function setReport(r,s,selected){
+ const st=r.summary;
+ for(const [id,value] of Object.entries({closed:st.closed,winrate:num(st.winRate)+'%',streak:st.maxLosingStreak,wins:st.wins,losses:st.losses,breakeven:st.breakeven,realized:num(st.realizedNet),closedFees:num(st.fees),allFees:num(st.allFees)}))$(id).textContent=value;
+ color($('realized'),st.realizedNet);
+ $('openPositions').textContent=r.openPositions.length?r.openPositions.length+' vị thế chưa đóng (không tính thắng/thua)':'Không có vị thế chưa đóng trong phạm vi chọn.';
+ for(const [id,url] of Object.entries({positionsCsv:'/positions.csv',fillsCsv:'/trades.csv',signalsJson:'/signals.json'}))$(id).href=url+'?session='+encodeURIComponent(selected);
+ const body=$('trades');body.replaceChildren();
+ const positions=r.positions.slice().reverse();
+ if(!positions.length){const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=7;td.textContent='Chưa có vị thế đã đóng';tr.append(td);body.append(tr);}
+ for(const t of positions.slice(0,100)){const tr=document.createElement('tr');const items=[when(t.entryTime)+' / '+when(t.exitTime),t.side,num(t.qty),num(t.entryPrice)+' / '+num(t.exitPrice),num(t.fees),num(t.netPnl),({WIN:'Thắng',LOSS:'Thua',BREAKEVEN:'Hòa'})[t.outcome]||t.outcome];
+  for(let i=0;i<items.length;i++){const td=document.createElement('td');td.textContent=items[i];if(i===5)color(td,t.netPnl);tr.append(td);}body.append(tr);}
+ drawCurve(r.positions);
+}
+function drawCurve(positions){
+ const canvas=$('curve'),rect=canvas.getBoundingClientRect();if(!rect.width||!rect.height)return;
+ const scale=window.devicePixelRatio||1;canvas.width=Math.round(rect.width*scale);canvas.height=Math.round(rect.height*scale);
+ const ctx=canvas.getContext('2d');ctx.scale(scale,scale);const w=rect.width,h=rect.height,pad=34,plotW=w-pad*2,plotH=h-pad*2;
+ const vals=[0];let cum=0;for(const p of positions){cum+=Number(p.netPnl);vals.push(cum);}
+ let low=Math.min(...vals),high=Math.max(...vals);if(high-low<.00001){high+=1;low-=1;}const margin=(high-low)*.15;low-=margin;high+=margin;
+ const y=v=>pad+(high-v)/(high-low)*plotH,x=i=>pad+(vals.length===1?0:i/(vals.length-1)*plotW);
+ ctx.strokeStyle='#354859';ctx.lineWidth=1;ctx.font='11px system-ui';ctx.fillStyle='#a7b7c8';
+ for(let k=0;k<4;k++){const v=low+(high-low)*k/3,yy=y(v);ctx.beginPath();ctx.moveTo(pad,yy);ctx.lineTo(w-pad,yy);ctx.stroke();ctx.fillText(v.toFixed(1),2,yy+3);}
+ ctx.strokeStyle='#a8e9b0';ctx.lineWidth=2.5;ctx.beginPath();vals.forEach((v,i)=>i?ctx.lineTo(x(i),y(v)):ctx.moveTo(x(i),y(v)));ctx.stroke();
+ ctx.fillStyle='#a8e9b0';ctx.beginPath();ctx.arc(x(vals.length-1),y(vals[vals.length-1]),4,0,2*Math.PI);ctx.fill();
+ if(positions.length===0){ctx.fillStyle='#93a7b9';ctx.textAlign='center';ctx.fillText('Chưa có vị thế đã đóng',w/2,h/2);ctx.textAlign='left';}
+}
+async function refresh(){
+ if(refreshing)return;refreshing=true;
+ try{
+  const s=await getJSON('/api/state');current=s;renderState(s);
+  const sessions=await getJSON('/api/sessions');const select=$('session');const known=new Set(Array.from(select.options,o=>o.value));
+  for(const session of sessions){if(!known.has(session.id)){const opt=document.createElement('option');opt.value=session.id;opt.textContent=when(session.startedAt)+' · '+num(session.config.capital)+' USDT';select.append(opt);known.add(session.id);}}
+  const key=select.value==='current'?s.session:select.value;
+  const r=await getJSON('/api/report?session='+encodeURIComponent(key));reportData=r;setReport(r,s,key);
+ }catch(e){$('state').textContent='KHÔNG KẾT NỐI';$('source').textContent=e.message;$('dot').className='dot blocked';$('start').disabled=true;$('pause').disabled=true;}
+ finally{refreshing=false;}
+}
+$('start').onclick=()=>control('start');$('pause').onclick=()=>control('pause');$('connect').onclick=()=>control('connect');
+$('reset').onclick=()=>{if(confirm('Tạo phiên mới và bỏ vị thế ảo hiện tại? Lịch sử phiên cũ vẫn lưu trong SQLite.'))control('reset',{capital:Number($('capital').value),feeBps:Number($('fee').value)*100,slippageBps:Number($('slip').value)});};
+$('session').onchange=refresh;window.addEventListener('resize',()=>reportData&&drawCurve(reportData.positions));
+refresh();setInterval(refresh,2500);
+</script>
+</body></html>

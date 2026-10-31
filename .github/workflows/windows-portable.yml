@@ -1,0 +1,33 @@
+name: Build and test Windows portable
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows-portable:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Run unit and integration tests
+        run: node --test
+      - name: Build verified standalone Windows ZIP
+        shell: powershell
+        run: |
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\BUILD_PORTABLE.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Build failed" }
+          & .\dist\OCC_Portable\runtime\node.exe --version
+          if ($LASTEXITCODE -ne 0) { throw "Bundled runtime not executable" }
+          if (-not (Test-Path .\dist\OCC_Portable_Windows_x64.zip)) { throw "Missing release ZIP" }
+      - name: Publish ready-to-run portable ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: OCC_Portable_Windows_x64
+          path: dist/OCC_Portable_Windows_x64.zip
+          if-no-files-found: error
+          retention-days: 30

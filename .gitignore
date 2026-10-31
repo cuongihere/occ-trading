@@ -15,3 +15,5 @@ dist/
 credentials*
 secrets*
 .DS_Store
+
+.runtime-setup/
