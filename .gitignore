@@ -1,0 +1,17 @@
+data/
+node_modules/
+runtime/
+dist/
+*.zip
+*.exe
+*.dll
+*.sqlite*
+*.db
+*.db-*
+*.log
+.env
+.env.*
+!.env.example
+credentials*
+secrets*
+.DS_Store

@@ -1,0 +1,10 @@
+Official Node.js bundled runtime
+Version: v24.22.2 LTS Krypton
+Target: Windows x64 (PE AMD64 machine 0x8664)
+Archive URL: https://nodejs.org/dist/v24.22.2/node-v24.22.2-win-x64.zip
+Official checksum URL: https://nodejs.org/dist/v24.22.2/SHASUMS256.txt
+Archive SHA256 verified exactly: ca1bff5d8ead13c9f2ea404a176db46bd430704d5b5113734049fa365e7799e2
+Extracted runtime/node.exe SHA256: 1c331340fa6cac5e4294725959070a143fa0507195a78ad77eed7943f719aac9
+Archive CRC integrity passed. Runtime unmodified; node.exe was NOT executed in Linux.
+Included upstream LICENSE, README.md, CHANGELOG.md. npm/tools not needed or bundled.
+No installer, no PATH changes, no system service, no auto-updater.

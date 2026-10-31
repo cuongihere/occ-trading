@@ -1,0 +1,15 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtempSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {summarize} from './stats.mjs';
+import {Store} from './store.mjs';
+const op=(s='s',n=1,side='LONG',fee=1)=>({id:`${s}:${n}:OPEN`,signalId:`${s}:${n}`,action:'OPEN',side,qty:1,price:100,fee,time:n*100,pnl:0});
+const cl=(s='s',n=2,pnl=10,fee=1)=>({id:`${s}:${n}:CLOSE`,signalId:`${s}:${n}`,action:'CLOSE',side:'SHORT',qty:1,price:100+pnl,fee,time:n*100,pnl});
+test('empty returns zero summary; open positions excluded',()=>{assert.deepEqual(summarize([]).summary,{closed:0,wins:0,losses:0,breakeven:0,winRate:0,realizedNet:0,grossPnl:0,fees:0,losingStreak:0,maxLosingStreak:0});const r=summarize([op()]);assert.equal(r.summary.closed,0);assert.equal(r.summary.fees,0);assert.equal(r.openPositions.length,1);});
+test('entry+exit fees can turn gross winner into loss; epsilon breakeven',()=>{const r=summarize([op(),cl('s',2,1)]);assert.equal(r.positions[0].side,'LONG');assert.equal(r.positions[0].netPnl,-1);assert.equal(r.summary.losses,1);assert.equal(r.summary.winRate,0);assert.equal(summarize([op(),cl('s',2,2+1e-9)]).summary.breakeven,1);});
+test('reversal closes old side then opens opposite; streaks count closed net results',()=>{const fills=[op(),cl('s',2,-1),op('s',2,'SHORT'),cl('s',3,-2),op('s',3),cl('s',4,5),op('s',4,'SHORT')];const r=summarize(fills);assert.deepEqual(r.positions.map(x=>x.side),['LONG','SHORT','LONG']);assert.equal(r.summary.closed,3);assert.equal(r.summary.losses,2);assert.equal(r.summary.wins,1);assert.equal(r.summary.maxLosingStreak,2);assert.equal(r.summary.losingStreak,0);assert.equal(r.openPositions.length,1);assert.equal(r.summary.realizedNet,-4);});
+test('sessions remain separate and may be filtered',()=>{const fills=[op('old'),op('new'),cl('new',2,5)];const all=summarize(fills);assert.equal(all.openPositions[0].sessionId,'old');assert.equal(all.positions[0].sessionId,'new');assert.equal(summarize(fills,['old']).summary.closed,0);assert.equal(summarize(fills,['new']).summary.wins,1);});
+test('partial and unmatched closes rejected; duplicate stable fill ignored',()=>{assert.throws(()=>summarize([op(),{...cl(),qty:.5}]),/quantity/);assert.throws(()=>summarize([cl()]),/without matching/);assert.equal(summarize([op(),op(),cl(),cl()]).summary.closed,1);});
+test('persisted full journal yields same stats after store restart',t=>{const dir=mkdtempSync(join(tmpdir(),'occ-stats-fixture-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));const path=join(dir,'test.sqlite');let s=new Store(path);const fills=[op(),cl('s',2,-3),op('s',2,'SHORT')];s.commit({type:'test-only-fixture',exchangeAt:null,receivedAt:1,payload:{}},{signals:[],trades:fills});const before=summarize(s.snapshotRecords().fills);s.close();s=new Store(path);assert.deepEqual(summarize(s.snapshotRecords().fills),before);assert.equal(before.summary.closed,1);assert.equal(before.openPositions.length,1);s.close();});
