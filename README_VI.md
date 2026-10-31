@@ -77,3 +77,15 @@ Bản portable có CHECK_BINANCE_WINDOWS.bat để kiểm tra API key và BTCUSD
 ## Màn hình Binance Futures riêng
 
 Trong dashboard Paper, bấm **Binance Futures · Cài đặt riêng** (địa chỉ localhost:8080/binance). Màn hình này cho nhập trực tiếp **USDT ký quỹ mỗi lệnh** và **đòn bẩy** (ví dụ 20 USDT × 5x = 100 USDT giá trị vị thế dự kiến), chọn LONG/SHORT, tùy chỉnh Multi TP v5 và xem trước giá. Đã bỏ hai ô % Equity và giới hạn USDT. Đây là phép tính minh họa, chưa kiểm tra số dư và quy tắc giao dịch Binance; ký quỹ không đồng nghĩa mức lỗ tối đa. Công tắc thực thi tiền thật hiển thị **OFF / KHÓA**, bởi phần thực thi lệnh thật chưa được kiểm tra đủ điều kiện; không có lệnh nào được gửi lên Binance từ màn hình này. Nút Lưu chỉ lưu bản nháp bằng localStorage của trình duyệt, không phải cấu hình live backend. Kiểm tra kết nối tài khoản read-only bằng CHECK_BINANCE_WINDOWS.bat.
+
+## Báo cáo hiệu suất Binance Futures thực (tách biệt với Paper)
+
+Mở **/binance** trong dashboard OCC để xem mục **Thống kê giao dịch thật do OCC thực hiện**:
+- Tổng vị thế đã đóng, Thắng/Thua/Hòa, Win rate, P&L thực hiện (realizedPnl), phí tính bằng USDT và **P&L sau phí USDT, chưa tính funding**.
+- Biểu đồ P&L tích lũy của các vị thế đã đóng; lịch sử BTCUSDT có giờ vào/ra, LONG/SHORT, entry/exit, khối lượng, TP/SL, phí và kết quả.
+- TP1/TP2/TP3 là các lần khớp từng phần; chỉ khi đóng hết vị thế mới tính thành 1 giao dịch.
+- Chỉ lấy **fill thật do Binance xác minh**, đã gắn với **orderId thuộc OCC** trong SQLite `data/binance-live-stats.sqlite`. Không lấy lệnh thủ công Binance, không trộn dữ liệu paper.
+- Khi chạy **CHECK_BINANCE_WINDOWS.bat**, tiện ích cũng tìm và đồng bộ khớp lệnh đã được đăng ký của bot (nếu có). Cần chạy lại để cập nhật sau lần đặt lệnh mới; hiện chưa có worker live đặt lệnh thật.
+- Phải đăng ký **orderId, groupId, clientId bắt đầu bằng OCCBTC- và role (ENTRY/TP1/TP2/TP3/SL/CLOSE/REVERSE)** trong ledger khi có bộ thực thi live tương lai. Mỗi lần kiểm tra chỉ đọc sẽ truy vấn `GET /fapi/v1/userTrades` cho các orderId đã đăng ký. Chưa có ID được đăng ký → bảng trống, không được tự gán lệnh Binance của người dùng là lệnh OCC.
+- Funding chưa được phân bổ theo từng vị thế; các phí không phải USDT cũng chưa được quy đổi. Vì vậy không thể coi **netExFundingUSDT** là P&L ròng đầy đủ. Giao diện sẽ đánh dấu vị thế phí khác USDT là chưa xác minh P&L ròng.
+- Binance có giới hạn truy vấn lịch sử; cần đồng bộ thường xuyên để giữ được các fill trong dữ liệu cục bộ.

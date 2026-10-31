@@ -56,7 +56,34 @@ button.primary{background:#b1eabf;color:#0e2318;border:0}button:disabled{opacity
 <section class="card"><h2>4. Xem trước mức giá</h2>
 <div id="preview"></div><div class="row" style="margin-top:24px"><button class="primary" id="save">Lưu bản nháp trên trình duyệt</button><button id="reset">Khôi phục mặc định</button></div>
 <p class="muted">Bản nháp chỉ lưu trong trình duyệt hiện tại. Chưa kết nối với bộ thực thi đặt lệnh.</p></section>
-</div></main>
+</div>
+
+<section class="card" id="realStats" style="margin-top:20px">
+ <div class="row" style="justify-content:space-between;margin-bottom:8px"><h2 style="margin:0">5. Thống kê giao dịch thật do OCC thực hiện</h2>
+ <div class="row"><button id="statsRefresh" type="button">Làm mới báo cáo</button><button id="statsCsv" type="button">Xuất CSV</button></div></div>
+ <p class="muted" id="statsStatus">Đang đọc nhật ký lệnh thật đã xác minh từ Binance...</p>
+ <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:12px;margin:15px 0">
+  <div class="card" style="margin:0;padding:15px;background:#0e1a2a">Vị thế đã đóng<strong id="realClosed" style="display:block;font-size:24px">0</strong></div>
+  <div class="card" style="margin:0;padding:15px;background:#0e1a2a">Thắng / Thua / Hòa<strong id="realWl" style="display:block;font-size:22px">0 / 0 / 0</strong></div>
+  <div class="card" style="margin:0;padding:15px;background:#0e1a2a">Win rate<strong id="realWin" style="display:block;font-size:24px">—</strong></div>
+  <div class="card" style="margin:0;padding:15px;background:#0e1a2a">Gross realized (USDT)<strong id="realGross" style="display:block;font-size:24px">0</strong></div>
+  <div class="card" style="margin:0;padding:15px;background:#0e1a2a">Phí USDT<strong id="realFees" style="display:block;font-size:24px">0</strong></div>
+  <div class="card" style="margin:0;padding:15px;background:#0e1a2a">P&L sau phí USDT<strong id="realNet" style="display:block;font-size:24px">0</strong></div>
+ </div>
+ <p class="muted">P&L này chỉ lấy các khớp lệnh thật thuộc bot OCC, chưa tính funding và phí bằng tài sản khác; không phải lợi nhuận ròng đầy đủ của tài khoản Binance.</p>
+ <h2 style="margin-top:24px">Biểu đồ P&L đã đóng (USDT)</h2>
+ <canvas id="realCurve" width="980" height="200" style="width:100%;height:200px;max-width:100%;background:#0e1a2a;border-radius:10px"></canvas>
+ <h2 style="margin-top:24px">Lịch sử vị thế bot · BTCUSDT</h2>
+ <div style="overflow:auto;max-height:440px"><table style="border-collapse:collapse;width:100%;min-width:880px;font-size:13px">
+ <thead><tr><th>Thời điểm vào / ra (VN)</th><th>Chiều</th><th>BTC</th><th>Entry / Exit</th><th>TP/SL</th><th>Gross P&L</th><th>Phí USDT</th><th>Net</th><th>Kết quả</th></tr></thead>
+ <tbody id="realHistory"><tr><td colspan="9">Chưa có giao dịch thật do OCC đăng ký và xác minh.</td></tr></tbody>
+ </table></div>
+ <p class="muted" id="realOpen" style="margin-top:12px"></p>
+ <p class="muted">Để cập nhật dữ liệu đã ghi nhận: chạy <strong>CHECK_BINANCE_WINDOWS.bat</strong> và nhập API Key cục bộ. Bản app này chưa có bộ thực thi lệnh thật; không gộp lệnh thủ công hoặc lịch sử Paper Trading.</p>
+</section>
+<style>#realStats th,#realStats td{padding:10px 8px;border-bottom:1px solid #33485b;text-align:left}
+#realStats th{position:sticky;top:0;background:#182437;color:#bfd1e3}#realStats strong{font-variant-numeric:tabular-nums}</style>
+</main>
 <script>
 const $=id=>document.getElementById(id);
 const ids=['side','marginUSDT','leverage','sl','mode','tp1','tp2','tp3','entry','q1','q2'];
@@ -98,4 +125,68 @@ $('save').onclick=()=>{const obj=Object.fromEntries(ids.map(id=>[id,$(id).value]
 $('reset').onclick=()=>{localStorage.removeItem('occ-binance-draft');location.reload();};
 try{const d=JSON.parse(localStorage.getItem('occ-binance-draft')||'{}');for(const [k,v]of Object.entries(d))if(ids.includes(k))$(k).value=v;}catch{}
 calc();
+
+let liveReport=null;
+const fmtReal=n=>n==null?'—':Number(n).toLocaleString('en-US',{maximumFractionDigits:4});
+const vntime=t=>t==null?'—':new Date(t).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',hour12:false});
+function plotRealCurve(points){
+ const cv=$('realCurve'),ctx=cv.getContext('2d'),w=cv.width,h=cv.height,p=32;
+ ctx.clearRect(0,0,w,h);ctx.strokeStyle='#31455b';ctx.fillStyle='#9bb2c9';ctx.font='12px system-ui';
+ const vals=[0,...points.map(x=>Number(x.cumulative))],lo=Math.min(...vals),hi=Math.max(...vals);
+ const delta=Math.max(1,hi-lo),min=lo-delta*.15,max=hi+delta*.15;
+ const y=v=>p+(max-v)/(max-min)*(h-2*p),x=i=>p+i/Math.max(1,vals.length-1)*(w-2*p);
+ for(let z=0;z<=4;z++){const level=min+(max-min)*z/4,yy=y(level);
+  ctx.beginPath();ctx.moveTo(p,yy);ctx.lineTo(w-p,yy);ctx.stroke();
+  ctx.fillText(fmtReal(level),2,yy-4);}
+ ctx.strokeStyle='#a6f0c1';ctx.lineWidth=2;ctx.beginPath();
+ vals.forEach((v,i)=>i?ctx.lineTo(x(i),y(v)):ctx.moveTo(x(i),y(v)));ctx.stroke();
+ if(!points.length){ctx.fillStyle='#acbdce';ctx.textAlign='center';ctx.fillText('Chưa có vị thế thực đã đóng',w/2,h/2);ctx.textAlign='start';}
+}
+function renderRealStats(data){
+ liveReport=data;const s=data.summary;
+ $('realClosed').textContent=s.closed;$('realWl').textContent=s.wins+' / '+s.losses+' / '+s.breakeven;
+ $('realWin').textContent=s.winRate==null?'—':fmtReal(s.winRate)+'%';
+ $('realGross').textContent=fmtReal(s.grossRealizedUSDT);
+ $('realFees').textContent=fmtReal(s.usdtFees);
+ $('realNet').textContent=fmtReal(s.netExFundingUSDT);
+ $('realNet').style.color=s.netExFundingUSDT>0?'#a8eebb':s.netExFundingUSDT<0?'#ff999b':'#eef5ff';
+ $('statsStatus').textContent='Đã đăng ký '+data.registeredOrders+' ID lệnh OCC · '+s.closed+
+  ' vị thế hoàn tất · '+s.open+' vị thế chưa đóng'+
+  (s.incomplete?' · '+s.incomplete+' vị thế chưa xác minh đầy đủ phí':'')+
+  (data.registeredOrders===0?' · Chưa có lệnh thực từ bộ thực thi OCC.':'');
+ const tbody=$('realHistory');tbody.replaceChildren();
+ if(!data.positions.length){const tr=document.createElement('tr'),td=document.createElement('td');
+  td.colSpan=9;td.textContent='Chưa có giao dịch thật do OCC xác minh. Bảng Paper Trading không được cộng vào đây.';
+  tr.append(td);tbody.append(tr);}
+ for(const t of [...data.positions].reverse().slice(0,100)){
+  const tr=document.createElement('tr'),items=[
+   vntime(t.entryAt)+' / '+vntime(t.exitAt),t.side,fmtReal(t.qty),
+   fmtReal(t.entryPrice)+' / '+fmtReal(t.exitPrice),t.exitReasons.join(', '),
+   fmtReal(t.grossRealizedUSDT),fmtReal(t.usdtFees),fmtReal(t.netExFundingUSDT),t.result
+  ];
+  for(const item of items){const td=document.createElement('td');td.textContent=item;tr.append(td);}tbody.append(tr);
+ }
+ $('realOpen').textContent=s.open?'Vị thế chưa đóng do bot đã xác minh: '+s.open+' (chưa tính thắng/thua).':
+  'Không có vị thế OCC chưa đóng trong các fill đã ghi nhận.';
+ plotRealCurve(data.curve||[]);
+}
+async function refreshRealStats(){
+ try{
+  const resp=await fetch('/api/binance/live-report',{cache:'no-store'});
+  if(!resp.ok)throw Error('HTTP '+resp.status);
+  renderRealStats(await resp.json());
+ }catch(e){$('statsStatus').textContent='Không đọc được báo cáo giao dịch thật: '+e.message;}
+}
+$('statsRefresh').onclick=refreshRealStats;
+$('statsCsv').onclick=()=>{
+ if(!liveReport||!liveReport.positions.length){alert('Chưa có vị thế thật đã đóng để xuất CSV.');return;}
+ const cols=['id','side','qty','entryAt','exitAt','entryPrice','exitPrice','exitReasons',
+   'grossRealizedUSDT','usdtFees','netExFundingUSDT','result'];
+ const csv=[cols.join(','),...liveReport.positions.map(t=>cols.map(k=>
+  '"'+String(Array.isArray(t[k])?t[k].join(';'):t[k]??'').replaceAll('"','""')+'"').join(','))].join('\r\n');
+ const a=document.createElement('a'),url=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}));
+ a.href=url;a.download='occ-binance-real-btcusdt.csv';a.click();URL.revokeObjectURL(url);
+};
+refreshRealStats();setInterval(refreshRealStats,15000);
+
 </script></html>

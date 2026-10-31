@@ -22,7 +22,8 @@ test('BTC Futures shows margin USDT and leverage inputs, not equity percent or c
 test('Binance preview cannot submit actual trades or enable LIVE',()=>{
  const html=read('BINANCE_UI_PREVIEW.html');
  assert.match(html,/id="enabled" disabled/);
- assert.doesNotMatch(html,/\/fapi\/v1\/order|\/fapi\/v1\/algoOrder|fetch\s*\(/);
+ assert.doesNotMatch(html,/\/fapi\/v1\/order|\/fapi\/v1\/algoOrder/);
+ assert.match(html,/fetch\('\/api\/binance\/live-report'/);
  assert.match(html,/Bản nháp|bản nháp/);
 });
 test('Frontend script parses without syntax errors',()=>{

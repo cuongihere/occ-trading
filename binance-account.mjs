@@ -2,7 +2,8 @@
 import {createHmac} from 'node:crypto';
 const HOST='https://fapi.binance.com';
 const ALLOWED=new Set(['/fapi/v1/time','/fapi/v2/account','/fapi/v1/positionSide/dual',
- '/fapi/v1/symbolConfig','/fapi/v3/positionRisk','/fapi/v1/openOrders','/fapi/v1/openAlgoOrders']);
+ '/fapi/v1/symbolConfig','/fapi/v3/positionRisk','/fapi/v1/openOrders','/fapi/v1/openAlgoOrders',
+ '/fapi/v1/userTrades']);
 export class BinanceAccountReader {
  constructor({apiKey,apiSecret,fetchFn=fetch,clock=()=>Date.now()}={}){
   if(typeof apiKey!=='string'||!apiKey||typeof apiSecret!=='string'||!apiSecret)

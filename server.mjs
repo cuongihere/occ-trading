@@ -6,6 +6,7 @@ import {OCCEngine} from './engine.mjs';
 import {Store} from './store.mjs';
 import {summarize} from './stats.mjs';
 import {BinanceFeed} from './server-feed.mjs';
+import {readLiveReport} from './binance-live-stats.mjs';
 const args=new Set(process.argv.slice(2));
 if(args.has('--help')){console.log('node server.mjs [--simulate]\nDefault: data collection only. --simulate explicitly enables paper simulation after synchronization. Dashboard localhost:8080. DATA_DIR and PORT optional. No keys/accounts/orders.');process.exit(0);}
 if([...args].some(x=>x!=='--simulate'))throw Error('Unknown argument; use --help');
@@ -98,7 +99,8 @@ const server=createServer(async(req,res)=>{
  if(req.headers.origin&&!/^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(req.headers.origin)){res.writeHead(403);return res.end('Local read-only access only');}
  res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');
  if(req.url==='/'){res.setHeader('Content-Type','text/html;charset=utf-8');return res.end(html);}
- if(req.url==='/binance'){res.setHeader('Content-Type','text/html;charset=utf-8');res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'");return res.end(binancePreviewHtml);}
+ if(req.url==='/binance'){res.setHeader('Content-Type','text/html;charset=utf-8');res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'");return res.end(binancePreviewHtml);}
+ if(req.url==='/api/binance/live-report'){res.setHeader('Content-Type','application/json;charset=utf-8');return res.end(JSON.stringify(readLiveReport(resolve(dir,'binance-live-stats.sqlite'))));}
  if(req.url==='/api/state'){const s=engine.snapshot();res.setHeader('Content-Type','application/json');return res.end(JSON.stringify({mode:simulate?'paper_enabled':'collect_only',status,lastObservedUTC:lastObserved?new Date(lastObserved).toISOString():null,lastTrade:s.lastPrice,markPrice:lastMark?.price??null,balance:s.balance,equity:s.equity,unrealized:s.unrealized,fees:s.fees,funding:'EXCLUDED',position:s.position,levels:s.levels,capital:s.config.capital,config:s.config,trades:s.trades,signals:s.signals,signalCount:s.signals.length,fillCount:s.trades.length,running:s.running,tradingEnabled:engine.tradingEnabled,healthy:feed.healthy(),ready:s.ready,session:s.sessionId}));}
  const url=new URL(req.url,'http://localhost');
  if(url.pathname==='/api/activity'){res.setHeader('Content-Type','application/json');return res.end(JSON.stringify(store.activity()));}
