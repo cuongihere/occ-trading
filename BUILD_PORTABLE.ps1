@@ -10,6 +10,7 @@ if (Test-Path -LiteralPath $archive) { Remove-Item -LiteralPath $archive -Force 
 New-Item -ItemType Directory -Path $stage -Force | Out-Null
 $files = @(
     'START_WINDOWS.bat','BOOTSTRAP_RUNTIME.ps1',
+    'CHECK_BINANCE_WINDOWS.bat','CHECK_BINANCE.ps1','CHECK_BINANCE.mjs','binance-account.mjs','BINANCE_API_SETUP.md',
     'server.mjs','server-feed.mjs','engine.mjs','store.mjs','stats.mjs',
     'dashboard.html','package.json','README.md','README_VI.md',
     'RUNTIME_SOURCE.txt','PORTABLE_BUILD.md'

@@ -69,3 +69,7 @@ Dashboard chỉ bind 127.0.0.1, không cung cấp dịch vụ công khai. Không
 - **Nhật ký ngừng giao dịch**: bảng trên dashboard ghi khoảng tạm dừng, mất kết nối, tắt app và lúc chạy lại, theo giờ Việt Nam. Ghi rõ mốc ước tính khi tắt đột ngột. Các ngắt quãng mới chỉ được ghi từ phiên bản hỗ trợ tính năng này; không thể dựng lại chính xác những khoảng cũ chưa lưu.
 - **Tổng thống kê**: mặc định xem tổng vị thế đóng, win rate, phí và P&L của toàn bộ lịch sử. Các đợt cũ do nhấn Tạo phiên mới trước đây vẫn được giữ dưới mục xem riêng. Không cộng vốn đầu kỳ của nhiều đợt cũ thành một equity duy nhất, vì đó là các phép thử có vốn riêng; equity ở ô trên chỉ là tài khoản hiện tại.
 - **Giới hạn**: Dữ liệu/khớp lệnh chỉ mô phỏng, không tương đương hoàn toàn Pine TradingView, không tính funding. Muốn sao lưu, dừng chương trình rồi copy toàn bộ data/; không copy SQLite đang mở.
+
+## Kiểm tra API Binance Futures (chỉ đọc)
+
+Bản portable có CHECK_BINANCE_WINDOWS.bat để kiểm tra API key và BTCUSDT USD-M Futures trên máy. Chương trình KHÔNG có khả năng đặt lệnh thật; paper trading và dữ liệu SQLite giữ riêng. Xem [BINANCE_API_SETUP.md](BINANCE_API_SETUP.md). Tuyệt đối không gửi API key/secret vào chat hoặc commit vào GitHub.
