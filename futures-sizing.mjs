@@ -39,3 +39,47 @@ export function sizeBTC({entry,availableUSDT,step,minQty,minNotional},settings){
  if([a,b,d].some(x=>x<minQty))throw Error('Each of TP1/TP2/TP3 must meet Binance minimum BTC quantity. Increase margin or leverage.');
  return {notional,qty,legs:[a,b,d]};
 }
+
+/**
+ * Read-only preflight for the three BTCUSDT TP legs. Identical lot rounding and
+ * min-qty checks to the live entry path. Price/filters must be fresh exchange data.
+ * A quote-based estimate cannot guarantee Binance acceptance at future prices.
+ */
+export function previewLiveSizing(settings,filters,price,availableUSDT){
+ let config;
+ try{config=validateLiveConfig(settings);}
+ catch(e){return {status:'invalid',message:'Cấu hình không hợp lệ: '+e.message};}
+ if(!(Number(price)>0)||!Number.isFinite(Number(price))||
+    !(Number(filters?.stepSize)>0)||!(Number(filters?.minQty)>0)||
+    !Number.isFinite(Number(filters?.minNotional))){
+  return {status:'unavailable',message:'Chưa thể kiểm tra khối lượng: cần giá BTCUSDT trực tiếp và quy tắc khối lượng Binance.'};
+ }
+ const p=Number(price),step=Number(filters.stepSize),minQty=Number(filters.minQty),
+  minNotional=Number(filters.minNotional);
+ const attempt=m=>{
+  try{return sizeBTC({entry:p,availableUSDT:1000,step,minQty,minNotional},
+   {...config,marginUSDT:m});}
+  catch{return null;}
+ };
+ // Search exact cent values in the configurable 0.01–1000 USDT margin range.
+ const highPlan=attempt(1000);
+ if(!highPlan)return {status:'invalid',price:p,minQty,step,
+  message:'Không thể chia đủ 3 TP hợp lệ ngay cả với ký quỹ 1.000 USDT ở đòn bẩy hiện tại. Cần xem lại tỷ lệ TP.'};
+ let low=1,high=100000;
+ while(low<high){
+  const mid=Math.floor((low+high)/2);
+  if(attempt(mid/100))high=mid;else low=mid+1;
+ }
+ const minimumMarginUSDT=low/100,plan=attempt(config.marginUSDT);
+ const fmt=v=>v.toLocaleString('vi-VN',{maximumFractionDigits:2});
+ if(!plan)return {status:'invalid',price:p,minQty,step,
+  minimumMarginUSDT,quantityBTC:0,legsBTC:[],
+  message:'Ký quỹ '+fmt(config.marginUSDT)+' USDT quá nhỏ để chia đủ TP1/TP2/TP3 (mỗi TP tối thiểu '+minQty+' BTC). Với giá BTC hiện tại và đòn bẩy '+config.leverage+'x, cần ký quỹ tối thiểu khoảng '+fmt(minimumMarginUSDT)+' USDT; mức này có thể thay đổi theo giá.'};
+ if(Number.isFinite(Number(availableUSDT))&&Number(availableUSDT)<config.marginUSDT)
+  return {status:'invalid',price:p,minQty,step,minimumMarginUSDT,
+   quantityBTC:plan.qty,legsBTC:plan.legs,
+   message:'Số dư khả dụng '+fmt(Number(availableUSDT))+' USDT nhỏ hơn ký quỹ/lệnh '+fmt(config.marginUSDT)+' USDT.'};
+ return {status:'valid',price:p,minQty,step,minimumMarginUSDT,
+  quantityBTC:plan.qty,legsBTC:plan.legs,
+  message:'Đủ khối lượng dự kiến: '+plan.qty+' BTC (TP1 '+plan.legs[0]+', TP2 '+plan.legs[1]+', TP3 '+plan.legs[2]+'). Kiểm tra lại tại thời điểm đặt lệnh.'};
+}
