@@ -39,7 +39,7 @@
 }
 @media(max-width:650px){.marketTicker{min-height:140px}.marketTicker .quoteValue{font-size:40px}}
 .auto{display:flex;align-items:center;gap:9px;border:1px solid #526176;padding:7px 13px;border-radius:11px;background:#222536;font-weight:750;white-space:nowrap}
-.auto input{width:17px;height:17px;accent-color:#a1f0b6}.auto.on{background:#173f2e;border-color:#3b9365}
+.auto input{width:17px;height:17px;accent-color:#a1f0b6}.auto.on{background:#173f2e;border-color:#3b9365}.auto.halted{background:#583925;border-color:#e3a560}
 .link{display:block;text-decoration:none;padding:9px 14px;border:1px solid #415a72;border-radius:9px;white-space:nowrap}
 .kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;min-height:0}
 .kpi,.panel{background:#172538;border:1px solid #31465f;border-radius:13px}
@@ -311,7 +311,7 @@ async function refreshLive(){
 $('enabled').disabled=autoBusy||(!s.armed&&(!s.connected||s.halted||leverageMismatch));
 $('autoLabel').textContent=s.halted?(s.armed?'AUTO ON · KHÓA AN TOÀN':'HALTED'):
  s.armed?(s.marketHealthy?'AUTO ON · THẬT':'AUTO ON · CHỜ GIÁ'):'AUTO OFF';
-  $('autoWrap').className='auto'+(s.armed?' on':'');
+  $('autoWrap').className='auto'+(s.armed?' on':'')+(s.halted?' halted':'');
   const labels={wallet:'walletUSDT',available:'availableUSDT',equity:'equityUSDT',unrealized:'unrealizedUSDT',btcPosition:'positionBTC'};
   for(const [id,key] of Object.entries(labels)){const el=$(id);el.textContent=a?fmt(a[key],id==='btcPosition'?6:2):'—';}
   color($('unrealized'),a?.unrealizedUSDT);color($('btcPosition'),a?.positionBTC);
