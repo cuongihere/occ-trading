@@ -78,6 +78,7 @@ test('Production Auto requires explicit confirmation and rejects missing consent
  const service=new BrowserFutures({dataDir:tmp(t),transportFactory:()=>fake().api,credentialVault:makeVault(tmp(t))});
  await service.connect({...creds,environment:'production'});
  await assert.rejects(service.arm(),/Chưa xác nhận giao dịch tiền thật/);
+ service.saveConfig({marginUSDT:100,leverage:5});
  await service.arm('CHAP NHAN BTC FUTURES',77000);assert.equal(service.snapshot().armed,true);
 });
 test('Production Auto mock sends MARKET then confirmed STOP and three TP, never opens duplicate',async t=>{
@@ -194,6 +195,7 @@ test('5x saved in bot and 150x on Binance blocks Auto until explicit readback-ve
  assert.equal(updates.length,1);
  assert.equal(updates[0].path,'/fapi/v1/leverage');
  assert.deepEqual(updates[0].p,{symbol:'BTCUSDT',leverage:5});
+ service.saveConfig({marginUSDT:100,leverage:5});
  await service.arm('CHAP NHAN BTC FUTURES',77000);assert.equal(service.snapshot().armed,true);
  await assert.rejects(service.applyExchangeLeverage({requestedLeverage:5,confirmation:'SYNC_BTCUSDT_LEVERAGE'}),/Tắt Auto/);
  assert.equal(fx.calls.filter(x=>x.method==='POST').length,1);
