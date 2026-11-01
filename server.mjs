@@ -103,12 +103,22 @@ const server=createServer(async(req,res)=>{
     // Credentials are not logged, journaled, cached or stored in the browser.
     await browserFutures.connect({apiKey:p.apiKey,apiSecret:p.apiSecret,environment:'production',remember:p.remember!==false});
    }
-   else if(req.url==='/control/live/config'){browserFutures.saveConfig(p);}
+   else if(req.url==='/control/live/validate'){
+    const quote=btcMarketQuote.snapshot({healthy:feed.healthy(),state:feed.state});
+    return res.end(JSON.stringify(browserFutures.sizingPreview(p,quote.lastPrice)));
+   }
+   else if(req.url==='/control/live/config'){
+    const quote=btcMarketQuote.snapshot({healthy:feed.healthy(),state:feed.state});
+    const preview=browserFutures.sizingPreview(p,quote.lastPrice);
+    if(preview.status==='invalid')throw Error(preview.message);
+    browserFutures.saveConfig(p);
+   }
    else if(req.url==='/control/live/leverage'){await browserFutures.applyExchangeLeverage(p);}
    else if(req.url==='/control/live/on'){
     if(!feed.healthy()||!liveSignalEngine.ready||!liveSignalEngine.healthy)
      throw Error('Cần dữ liệu Binance liên tục và nến OCC đã đồng bộ trước khi bật Auto');
-    await browserFutures.arm(p.acceptance);
+    const quote=btcMarketQuote.snapshot({healthy:feed.healthy(),state:feed.state});
+    await browserFutures.arm(p.acceptance,quote.lastPrice);
    }
    else if(req.url==='/control/live/off'){browserFutures.disarm();}
    else if(req.url==='/control/live/reconcile'){await browserFutures.reconcileFlat();}

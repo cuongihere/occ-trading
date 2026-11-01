@@ -4,7 +4,7 @@ import {randomBytes} from 'node:crypto';
 import {existsSync,readFileSync,writeFileSync,mkdirSync,renameSync} from 'node:fs';
 import {resolve,dirname} from 'node:path';
 import {FuturesTransport} from './futures-transport.mjs';
-import {validateLiveConfig,floorStep} from './futures-sizing.mjs';
+import {validateLiveConfig,floorStep,previewLiveSizing} from './futures-sizing.mjs';
 import {draftProtectedOrder} from './futures-order-plan.mjs';
 import {ProtectionCoordinator} from './futures-protection-orchestrator.mjs';
 import {ProtectionCheckpoint} from './futures-protection-checkpoint.mjs';
@@ -31,6 +31,10 @@ export class BrowserFutures{
   }
  }
  log(type,message){this.events.push({at:Date.now(),type,message:String(message).slice(0,400)});this.events=this.events.slice(-50);}
+ sizingPreview(input,price){
+  if(!this.api||!this.filters)return {status:'unavailable',message:'Kết nối Binance API để xác nhận bước khối lượng BTCUSDT.'};
+  return previewLiveSizing(input,this.filters,price,this.account?.availableUSDT);
+ }
  saveConfig(input){
   if(this.armed||this.busy||this.activeProtection)throw Error('Tắt Auto và đóng hết vị thế Futures thật đang quản lý trước khi sửa cấu hình');
   this.config=validateLiveConfig(input);
@@ -211,7 +215,7 @@ export class BrowserFutures{
    throw e;
   }finally{this.busy=false;}
  }
- async arm(acceptance){
+ async arm(acceptance,marketPrice){
   if(!this.api)throw Error('Kết nối API trên trang Binance trước');
   if(this.environment!=='production')throw Error('Chỉ sử dụng Binance Futures thật');
   if(acceptance!=='CHAP NHAN BTC FUTURES')throw Error('Chưa xác nhận giao dịch tiền thật');
@@ -220,6 +224,9 @@ export class BrowserFutures{
   if(!a.canTrade||a.hasOtherPositions||a.dualSidePosition!==false||a.marginType!=='ISOLATED'||
    a.leverage!==this.config.leverage||a.hasUnknownOrders||a.positionBTC!==0)
    throw Error('Yêu cầu BTCUSDT One-way, ISOLATED, đúng đòn bẩy, không có vị thế/lệnh cũ');
+  // Enforce on the server even if browser-side validation was bypassed.
+  const sizing=this.sizingPreview(this.config,marketPrice);
+  if(sizing.status!=='valid')throw Error('Chưa thể bật AUTO: '+sizing.message);
   this.armed=true;this.log('AUTO_ON','BẬT AUTO TIỀN THẬT, chờ tín hiệu BTCUSDT');return this.snapshot();
  }
  disarm(){this.armed=false;this.log('AUTO_OFF','Không mở lệnh mới; giữ lệnh SL/TP đã đặt trên Futures thật');return this.snapshot();}

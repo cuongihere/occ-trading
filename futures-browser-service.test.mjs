@@ -67,7 +67,7 @@ test('UI backend accepts credentials in memory, stores only harmless configurati
  service.saveConfig({marginUSDT:500,leverage:5});
  const content=readFileSync(join(dir,'futures-browser-settings.json'),'utf8');
  assert.doesNotMatch(content,/dummy-api-key|dummy-secret/);
- await service.arm('CHAP NHAN BTC FUTURES');assert.equal(service.snapshot().armed,true);
+ await service.arm('CHAP NHAN BTC FUTURES',77000);assert.equal(service.snapshot().armed,true);
  service.disarm();assert.equal(service.snapshot().armed,false);
  const again=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
  assert.equal(again.snapshot().armed,false);
@@ -78,12 +78,13 @@ test('Production Auto requires explicit confirmation and rejects missing consent
  const service=new BrowserFutures({dataDir:tmp(t),transportFactory:()=>fake().api,credentialVault:makeVault(tmp(t))});
  await service.connect({...creds,environment:'production'});
  await assert.rejects(service.arm(),/Chưa xác nhận giao dịch tiền thật/);
- await service.arm('CHAP NHAN BTC FUTURES');assert.equal(service.snapshot().armed,true);
+ service.saveConfig({marginUSDT:100,leverage:5});
+ await service.arm('CHAP NHAN BTC FUTURES',77000);assert.equal(service.snapshot().armed,true);
 });
 test('Production Auto mock sends MARKET then confirmed STOP and three TP, never opens duplicate',async t=>{
  const dir=tmp(t),fx=fake(),service=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
  await service.connect(creds);service.saveConfig({marginUSDT:500,leverage:5});
- await service.arm('CHAP NHAN BTC FUTURES');
+ await service.arm('CHAP NHAN BTC FUTURES',77000);
  await service.signal({side:'LONG',barTime:900000},true);
  const posts=fx.calls.filter(x=>x.method==='POST');
  assert.deepEqual(posts.map(x=>x.path),['/fapi/v1/order','/fapi/v1/algoOrder',
@@ -102,15 +103,15 @@ test('Production Auto mock sends MARKET then confirmed STOP and three TP, never 
 });
 test('Live unfinished intent after restart blocks arming until exchange confirmed FLAT',async t=>{
  const dir=tmp(t),fx=fake(),service=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
- await service.connect(creds);service.saveConfig({marginUSDT:500,leverage:5});await service.arm('CHAP NHAN BTC FUTURES');
+ await service.connect(creds);service.saveConfig({marginUSDT:500,leverage:5});await service.arm('CHAP NHAN BTC FUTURES',77000);
  await service.signal({side:'LONG',barTime:900000},true);
  const again=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
  assert.equal(again.snapshot().armed,false);assert.equal(again.snapshot().halted,true);
  await again.connect(creds);
- await assert.rejects(again.arm('CHAP NHAN BTC FUTURES'),/chưa đối soát/);
+ await assert.rejects(again.arm('CHAP NHAN BTC FUTURES',77000),/chưa đối soát/);
  await assert.rejects(again.reconcileFlat(),/còn vị thế/);
  fx.position.qty=0;fx.algo.splice(0);
- await again.reconcileFlat();await again.arm('CHAP NHAN BTC FUTURES');
+ await again.reconcileFlat();await again.arm('CHAP NHAN BTC FUTURES',77000);
  assert.equal(again.snapshot().armed,true);
 });
 
@@ -140,7 +141,7 @@ test('Demo connections are rejected by production-only application',async t=>{
 test('Real BTCUSDT entry failure to establish STOP triggers one reduce-only emergency close and HALT',async t=>{
  const fx=fake({failStop:true}),service=new BrowserFutures({dataDir:tmp(t),transportFactory:()=>fx.api,credentialVault:makeVault(tmp(t))});
  await service.connect(creds);service.saveConfig({marginUSDT:500,leverage:5});
- await service.arm('CHAP NHAN BTC FUTURES');
+ await service.arm('CHAP NHAN BTC FUTURES',77000);
  await service.signal({side:'LONG',barTime:900000},true);
  assert.equal(service.snapshot().halted,true);
  assert.equal(service.snapshot().armed,true); // ON intent remains; HALTED blocks all entry orders.
@@ -184,7 +185,7 @@ test('5x saved in bot and 150x on Binance blocks Auto until explicit readback-ve
  await service.connect(creds);
  assert.equal(service.snapshot().config.leverage,5);
  assert.equal(service.snapshot().account.leverage,150);
- await assert.rejects(service.arm('CHAP NHAN BTC FUTURES'),/đúng đòn bẩy/);
+ await assert.rejects(service.arm('CHAP NHAN BTC FUTURES',77000),/đúng đòn bẩy/);
  assert.equal(fx.calls.filter(x=>x.method==='POST').length,0);
  await assert.rejects(service.applyExchangeLeverage({requestedLeverage:5}),/xác nhận/);
  await service.applyExchangeLeverage({requestedLeverage:5,confirmation:'SYNC_BTCUSDT_LEVERAGE'});
@@ -194,7 +195,8 @@ test('5x saved in bot and 150x on Binance blocks Auto until explicit readback-ve
  assert.equal(updates.length,1);
  assert.equal(updates[0].path,'/fapi/v1/leverage');
  assert.deepEqual(updates[0].p,{symbol:'BTCUSDT',leverage:5});
- await service.arm('CHAP NHAN BTC FUTURES');assert.equal(service.snapshot().armed,true);
+ service.saveConfig({marginUSDT:100,leverage:5});
+ await service.arm('CHAP NHAN BTC FUTURES',77000);assert.equal(service.snapshot().armed,true);
  await assert.rejects(service.applyExchangeLeverage({requestedLeverage:5,confirmation:'SYNC_BTCUSDT_LEVERAGE'}),/Tắt Auto/);
  assert.equal(fx.calls.filter(x=>x.method==='POST').length,1);
 });
@@ -225,7 +227,7 @@ test('Preflight Binance read error skips only that signal and keeps Auto ON for 
   return original(path,p);
  };
  await service.connect(creds);service.saveConfig({marginUSDT:500,leverage:5});
- await service.arm('CHAP NHAN BTC FUTURES');
+ await service.arm('CHAP NHAN BTC FUTURES',77000);
  await service.signal({side:'LONG',barTime:900000},true);
  assert.equal(service.snapshot().armed,true);
  assert.equal(service.snapshot().halted,false);
@@ -241,7 +243,7 @@ test('Preflight Binance read error skips only that signal and keeps Auto ON for 
 test('A missing exchange STOP keeps Auto ON but safety-halts all future entry attempts',async t=>{
  const dir=tmp(t),fx=fake(),service=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
  await service.connect(creds);service.saveConfig({marginUSDT:500,leverage:5});
- await service.arm('CHAP NHAN BTC FUTURES');
+ await service.arm('CHAP NHAN BTC FUTURES',77000);
  await service.signal({side:'LONG',barTime:900000},true);
  fx.algo.splice(fx.algo.findIndex(o=>o.orderType==='STOP_MARKET'),1);
  await service.monitor();
@@ -252,4 +254,20 @@ test('A missing exchange STOP keeps Auto ON but safety-halts all future entry at
  assert.equal(fx.calls.filter(x=>x.method==='POST').length,postsBefore);
  service.disarm();
  assert.equal(service.snapshot().armed,false);
+});
+
+test('AUTO cannot be enabled with three undersized Binance TP legs; warning includes minimum USDT margin',async t=>{
+ const dir=tmp(t),fx=fake(),service=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await service.connect(creds);
+ service.saveConfig({marginUSDT:20,leverage:5});
+ const invalid=service.sizingPreview(service.config,77000);
+ assert.equal(invalid.status,'invalid');
+ assert.ok(invalid.minimumMarginUSDT>20);
+ assert.match(invalid.message,/TP1\/TP2\/TP3/);
+ await assert.rejects(service.arm('CHAP NHAN BTC FUTURES',77000),/Chưa thể bật AUTO/);
+ assert.equal(service.snapshot().armed,false);
+ service.saveConfig({marginUSDT:Math.ceil(invalid.minimumMarginUSDT+2),leverage:5});
+ assert.equal(service.sizingPreview(service.config,77000).status,'valid');
+ await service.arm('CHAP NHAN BTC FUTURES',77000);
+ assert.equal(service.snapshot().armed,true);
 });

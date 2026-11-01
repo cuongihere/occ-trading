@@ -12,7 +12,7 @@ test('Real Binance single-screen UI shows account balance and position without p
  const html=read('BINANCE_UI_PREVIEW.html');
  for(const id of ['enabled','apiKey','apiSecret','rememberApi','credentialEditor','wallet','available','equity',
     'unrealized','btcPosition','marginUSDT','leverage','side','sl','mode','tp1','tp2','tp3','q1','q2','q3','save',
-    'realNet','realHistory','realCurve','apiConnect','apiForget','apiDisconnect','apiReconcile','applyLeverage','leverageMismatch'])
+    'realNet','realHistory','realCurve','apiConnect','apiForget','apiDisconnect','apiReconcile','applyLeverage','leverageMismatch','sizingAlert'])
   assert.ok(html.includes('id="'+id+'"'),'Missing '+id);
  assert.doesNotMatch(html,/id="preview"|id="notional"|id="sizingFormula"|id="entry"/);
  assert.match(html,/height:100dvh/);
@@ -82,5 +82,18 @@ test('Auto remains selected through Binance feed interruption and only OFF or ex
  assert.match(server,/\/control\/live\/off'\)\{browserFutures\.disarm\(\)/);
  assert.match(html,/AUTO ON · CHỜ GIÁ/);
  assert.match(html,/AUTO ON · KHÓA AN TOÀN/);
- assert.match(html,/\(!s\.armed&&\(!s\.connected\|\|s\.halted\|\|leverageMismatch\)\)/);
+ assert.match(html,/sizingStatus!=='valid'/);
+});
+
+test('live margin/TP editing validates immediately and server checks before save and Auto ON',()=>{
+ const html=read('BINANCE_UI_PREVIEW.html'),server=read('server.mjs');
+ assert.match(html,/scheduleSizingValidation\(\)/);
+ assert.match(html,/request\('validate',settings\)/);
+ assert.match(html,/const check=await validateSizing\(\)/);
+ assert.match(html,/check.status!=='valid'/);
+ assert.match(server,/control\/live\/validate/);
+ assert.match(server,/preview.status==='invalid'/);
+ assert.match(server,/arm\(p.acceptance,quote.lastPrice\)/);
+ const js=html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
+ assert.ok(js);assert.doesNotThrow(()=>new Function(js));
 });
