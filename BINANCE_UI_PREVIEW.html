@@ -69,6 +69,10 @@ button:disabled{opacity:.42;cursor:not-allowed}
 .apiActions button{font-size:11px;padding:7px 10px}
 .message{font-size:11px;line-height:1.35;max-height:48px;overflow:auto;margin:8px 0;color:#ffd0a8}
 .formSection{margin-bottom:9px}.formSection:last-child{margin-bottom:0}
+.sizingAlert{font-size:11px;line-height:1.35;padding:6px 9px;margin:6px 0;border-radius:7px;border:1px solid #536176;background:#16293a;color:#b8c9df}
+.sizingAlert.invalid{border-color:#e7a04e;background:#423025;color:#ffd2a3}
+.sizingAlert.valid{border-color:#3a835d;background:#15392c;color:#a7edc1}
+.sizingAlert.unavailable{border-color:#526077;color:#cad2df}
 .settingActions{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:9px}
 .settingActions .small{text-align:right}
 .positionGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px}
@@ -147,6 +151,7 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
   <div class="fields3"><label>Chốt TP1 (%)<input id="q1" type="number" step="any" min="0" max="100"></label>
   <label>Chốt TP2 (%)<input id="q2" type="number" step="any" min="0" max="100"></label>
   <label>TP3 còn lại (%)<input id="q3" type="text" disabled></label></div>
+  <div id="sizingAlert" class="sizingAlert unavailable" role="status" aria-live="polite">Đang kiểm tra khối lượng TP1/TP2/TP3 theo Binance…</div>
   <div class="settingActions"><div class="row"><button id="save" class="primary">Lưu cấu hình</button>
 <button id="applyLeverage" class="minor" disabled>Áp dụng đòn bẩy lên Binance</button></div>
 <span id="settingStatus" class="small">Tự lưu · Auto OFF khi sửa</span></div>
@@ -200,6 +205,7 @@ const vn=t=>t==null?'—':new Date(t).toLocaleString('vi-VN',{timeZone:'Asia/Ho_
 const numbers=['marginUSDT','leverage','sl','tp1','tp2','tp3','q1','q2'];
 let setupLoaded=false,autoBusy=false,editingUntil=0,saveTimer=null,liveReport=null;
 let marketSnapshot=null,marketRefreshing=false;
+let sizingStatus='unavailable',sizingSequence=0,sizingTimer=null;
 const val=id=>$(id).value.trim()===''?NaN:Number($(id).value);
 function config(){return {side:$('side').value,marginUSDT:val('marginUSDT'),leverage:val('leverage'),
  slPercent:val('sl'),tpMode:$('mode').value,tp1Val:val('tp1'),tp2Val:val('tp2'),
@@ -220,6 +226,36 @@ async function request(name,data={}){
  const result=await response.json();if(!response.ok)throw Error(result.error||'Thao tác thất bại');
  return result;
 }
+async function validateSizing(){
+ const id=++sizingSequence;
+ const settings=config();
+ if(![settings.marginUSDT,settings.leverage,settings.slPercent,settings.tp1Val,
+      settings.tp2Val,settings.tp3Val,settings.tp1Qty,settings.tp2Qty].every(Number.isFinite)){
+  sizingStatus='invalid';$('sizingAlert').className='sizingAlert invalid';
+  $('sizingAlert').textContent='Nhập đầy đủ ký quỹ, đòn bẩy và thông số TP hợp lệ.';
+  return {status:'invalid',message:$('sizingAlert').textContent};
+ }
+ try{
+  const result=await request('validate',settings);
+  if(id!==sizingSequence)return {status:'unavailable',message:'Cấu hình vừa thay đổi, cần kiểm tra lại.'};
+  sizingStatus=result.status;
+  $('sizingAlert').className='sizingAlert '+result.status;
+  $('sizingAlert').textContent=result.status==='invalid'?'⚠ '+result.message:result.message;
+  return result;
+ }catch(e){
+  if(id===sizingSequence){
+   sizingStatus='unavailable';$('sizingAlert').className='sizingAlert unavailable';
+   $('sizingAlert').textContent='Không kiểm tra được khối lượng Binance: '+e.message;
+  }
+  return {status:'unavailable',message:e.message};
+ }
+}
+function scheduleSizingValidation(){
+ clearTimeout(sizingTimer);++sizingSequence;sizingStatus='unavailable';
+ $('sizingAlert').className='sizingAlert unavailable';
+ $('sizingAlert').textContent='Đang kiểm tra khối lượng TP1/TP2/TP3…';
+ sizingTimer=setTimeout(validateSizing,250);
+}
 async function saveConfig(force=false){
  if(autoBusy&&!force)return false;
  try{await request('config',config());$('settingStatus').textContent='Đã lưu vào máy ✓';return true;}
@@ -227,7 +263,7 @@ async function saveConfig(force=false){
 }
 for(const id of [...numbers,'side','mode']){
  $(id).addEventListener('input',()=>{
-  editingUntil=Date.now()+1500;quantities();
+  editingUntil=Date.now()+1500;quantities();scheduleSizingValidation();
   $('settingStatus').textContent='Đang sửa…';
   clearTimeout(saveTimer);saveTimer=setTimeout(saveConfig,900);
  });
@@ -283,7 +319,10 @@ $('enabled').onchange=async()=>{
  const wantsOn=$('enabled').checked;autoBusy=true;$('enabled').disabled=true;
  try{
   if(wantsOn){
-   clearTimeout(saveTimer);if(!await saveConfig(true))throw Error('Cấu hình chưa hợp lệ hoặc chưa lưu được');
+   clearTimeout(saveTimer);clearTimeout(sizingTimer);
+   const check=await validateSizing();
+   if(check.status!=='valid')throw Error('Không thể bật AUTO: '+check.message);
+   if(!await saveConfig(true))throw Error('Cấu hình chưa hợp lệ hoặc chưa lưu được');
    if(!confirm('BẬT BOT BTCUSDT FUTURES BẰNG TIỀN THẬT? Có thể thua lỗ hoặc thanh lý.'))throw Error('Đã hủy bật Auto');
    const acceptance=prompt('Nhập CHAP NHAN BTC FUTURES để bật Auto tiền thật:');
    if(acceptance!=='CHAP NHAN BTC FUTURES')throw Error('Chưa xác nhận');
@@ -297,7 +336,7 @@ async function refreshLive(){
   const r=await fetch('/api/binance/live-status',{cache:'no-store'});
   if(!r.ok)throw Error('HTTP '+r.status);
   const s=await r.json(),a=s.account||null;
-  if(!setupLoaded&&s.config){applyConfig(s.config);setupLoaded=true;if(s.connected)$('credentialEditor').open=false;}
+  if(!setupLoaded&&s.config){applyConfig(s.config);setupLoaded=true;scheduleSizingValidation();if(s.connected)$('credentialEditor').open=false;}
   $('connection').textContent=s.connected?'BINANCE KẾT NỐI':s.credentialSaved?'ĐANG KẾT NỐI':'CHƯA KẾT NỐI';
   $('connection').className='status'+(s.connected?' ok':s.error?' bad':'');
   $('apiStatusText').textContent=s.connected?'Đã kết nối':s.credentialSaved?'Đã lưu API · đang thử kết nối':'Chưa có API';
@@ -308,7 +347,7 @@ async function refreshLive(){
   const desiredLeverage=Number(s.config?.leverage);
   const leverageMismatch=!!a&&Number.isInteger(desiredLeverage)&&Number(a.leverage)!==desiredLeverage;
 // OFF remains available even when the exchange is disconnected or safety-halted.
-$('enabled').disabled=autoBusy||(!s.armed&&(!s.connected||s.halted||leverageMismatch));
+$('enabled').disabled=autoBusy||(!s.armed&&(!s.connected||s.halted||leverageMismatch||sizingStatus!=='valid'));
 $('autoLabel').textContent=s.halted?(s.armed?'AUTO ON · KHÓA AN TOÀN':'HALTED'):
  s.armed?(s.marketHealthy?'AUTO ON · THẬT':'AUTO ON · CHỜ GIÁ'):'AUTO OFF';
   $('autoWrap').className='auto'+(s.armed?' on':'')+(s.halted?' halted':'');
@@ -416,5 +455,6 @@ async function refreshMarketPrice(){
 }
 refreshLive();refreshReport();refreshMarketPrice();
 setInterval(refreshLive,5000);setInterval(refreshReport,15000);setInterval(refreshMarketPrice,1000);
+setInterval(()=>{if(setupLoaded&&!autoBusy)validateSizing();},15000);
 </script>
 </body></html>
