@@ -307,8 +307,10 @@ async function refreshLive(){
   $('enabled').checked=!!s.armed;
   const desiredLeverage=Number(s.config?.leverage);
   const leverageMismatch=!!a&&Number.isInteger(desiredLeverage)&&Number(a.leverage)!==desiredLeverage;
-  $('enabled').disabled=!s.connected||s.halted||autoBusy||(!s.armed&&leverageMismatch);
-  $('autoLabel').textContent=s.armed?'AUTO ON · THẬT':s.halted?'HALTED':'AUTO OFF';
+// OFF remains available even when the exchange is disconnected or safety-halted.
+$('enabled').disabled=autoBusy||(!s.armed&&(!s.connected||s.halted||leverageMismatch));
+$('autoLabel').textContent=s.halted?(s.armed?'AUTO ON · KHÓA AN TOÀN':'HALTED'):
+ s.armed?(s.marketHealthy?'AUTO ON · THẬT':'AUTO ON · CHỜ GIÁ'):'AUTO OFF';
   $('autoWrap').className='auto'+(s.armed?' on':'');
   const labels={wallet:'walletUSDT',available:'availableUSDT',equity:'equityUSDT',unrealized:'unrealizedUSDT',btcPosition:'positionBTC'};
   for(const [id,key] of Object.entries(labels)){const el=$(id);el.textContent=a?fmt(a[key],id==='btcPosition'?6:2):'—';}
@@ -328,9 +330,9 @@ async function refreshLive(){
    !leverageMismatch||a.positionBTC!==0||a.openOrders>0||a.openAlgos>0;
   $('openOrderCount').textContent=a?String(a.openOrders):'—';
   $('openAlgoCount').textContent=a?String(a.openAlgos):'—';
-  $('botState').textContent=s.halted?'HALTED · KIỂM TRA BINANCE':s.armed?'Đang chạy':'Tạm dừng';
-  $('autoHint').textContent=s.halted?'Có lỗi hoặc vị thế chưa được đối soát. Kiểm tra Binance trước khi bật lại.':
-   s.armed?'Bot có thể mở lệnh BTCUSDT theo tín hiệu OCC.':
+$('botState').textContent=s.halted?'KHÓA AN TOÀN · KHÔNG ĐẶT LỆNH':s.armed?(s.marketHealthy?'Đang chạy':'Chờ Binance đồng bộ'):'Tạm dừng';
+$('autoHint').textContent=s.halted?'Auto vẫn ON nhưng đang khóa lệnh để bảo vệ tài khoản. Nhấn OFF, kiểm tra Binance và đối soát trước khi bật lại.':
+ s.armed?(s.marketHealthy?'Bot có thể mở lệnh BTCUSDT theo tín hiệu OCC.':'Auto vẫn ON, tạm ngừng lệnh mới đến khi dữ liệu giá Binance khỏe và nến được đồng bộ lại.'):
    leverageMismatch?'Đòn bẩy sàn '+a.leverage+'x khác cấu hình '+desiredLeverage+'x. Cần áp dụng trước khi bật Auto.':
    'Auto OFF, không mở lệnh mới.';
   $('apiReconcile').disabled=!s.connected||s.armed;
