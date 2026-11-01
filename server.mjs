@@ -52,7 +52,8 @@ function commit(type,payload,exchangeAt=null,receivedAt=Date.now(),mutate=()=>{}
 }
 function statusEvent(s){
  status=s;if(closing)return;
- if(s.state!=='live'&&browserFutures.armed)browserFutures.disarm();
+// Feed loss pauses new entries via feed.healthy(), not the user's Auto ON intent.
+// After Binance resync, the next eligible LIVE signal may trade without re-arming.
  liveSignalEngine.setHealthy(s.state==='live');
  if(s.state!=='live')liveSignalEngine.setRunning(false);
  else if(liveSignalEngine.ready)liveSignalEngine.setRunning(true);
@@ -132,7 +133,7 @@ const server=createServer(async(req,res)=>{
  if(req.url==='/'){res.setHeader('Content-Type','text/html;charset=utf-8');return res.end(html);}
  if(req.url==='/binance'){res.setHeader('Content-Type','text/html;charset=utf-8');res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'");return res.end(binancePreviewHtml);}
  if(req.url==='/api/binance/market'){res.setHeader('Content-Type','application/json;charset=utf-8');return res.end(JSON.stringify(btcMarketQuote.snapshot({healthy:feed.healthy(),state:feed.state})));}
- if(req.url==='/api/binance/live-status'){res.setHeader('Content-Type','application/json;charset=utf-8');return res.end(JSON.stringify(browserFutures.snapshot()));}
+if(req.url==='/api/binance/live-status'){res.setHeader('Content-Type','application/json;charset=utf-8');return res.end(JSON.stringify({...browserFutures.snapshot(),marketHealthy:feed.healthy(),marketState:feed.state}));}
  if(req.url==='/api/binance/live-report'){res.setHeader('Content-Type','application/json;charset=utf-8');return res.end(JSON.stringify(readLiveReport(resolve(dir,'binance-live-stats.sqlite'))));}
  if(req.url==='/api/state'){const s=engine.snapshot();res.setHeader('Content-Type','application/json');return res.end(JSON.stringify({mode:simulate?'paper_enabled':'collect_only',status,lastObservedUTC:lastObserved?new Date(lastObserved).toISOString():null,lastTrade:s.lastPrice,markPrice:lastMark?.price??null,balance:s.balance,equity:s.equity,unrealized:s.unrealized,fees:s.fees,funding:'EXCLUDED',position:s.position,levels:s.levels,capital:s.config.capital,config:s.config,trades:s.trades,signals:s.signals,signalCount:s.signals.length,fillCount:s.trades.length,running:s.running,tradingEnabled:engine.tradingEnabled,healthy:feed.healthy(),ready:s.ready,session:s.sessionId}));}
  const url=new URL(req.url,'http://localhost');

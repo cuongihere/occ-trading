@@ -143,7 +143,7 @@ test('Real BTCUSDT entry failure to establish STOP triggers one reduce-only emer
  await service.arm('CHAP NHAN BTC FUTURES');
  await service.signal({side:'LONG',barTime:900000},true);
  assert.equal(service.snapshot().halted,true);
- assert.equal(service.snapshot().armed,false);
+ assert.equal(service.snapshot().armed,true); // ON intent remains; HALTED blocks all entry orders.
  const posts=fx.calls.filter(x=>x.method==='POST');
  assert.equal(posts.length,3);
  assert.equal(posts[0].path,'/fapi/v1/order');
@@ -214,4 +214,42 @@ test('Unknown or mismatched exchange leverage ACK is not treated as success and 
  await assert.rejects(svc.applyExchangeLeverage({requestedLeverage:5,confirmation:'SYNC_BTCUSDT_LEVERAGE'}),/chưa xác nhận/);
  assert.equal(svc.snapshot().account.leverage,150);
  assert.equal(fx.calls.filter(x=>x.method==='POST').length,1);
+});
+
+test('Preflight Binance read error skips only that signal and keeps Auto ON for the next valid signal',async t=>{
+ const dir=tmp(t),fx=fake(),service=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ const original=fx.api.get.bind(fx.api);
+ let failOnce=true;
+ fx.api.get=async(path,p)=>{
+  if(path==='/fapi/v1/ticker/price'&&failOnce){failOnce=false;throw Error('temporary Binance read timeout');}
+  return original(path,p);
+ };
+ await service.connect(creds);service.saveConfig({marginUSDT:500,leverage:5});
+ await service.arm('CHAP NHAN BTC FUTURES');
+ await service.signal({side:'LONG',barTime:900000},true);
+ assert.equal(service.snapshot().armed,true);
+ assert.equal(service.snapshot().halted,false);
+ assert.equal(fx.calls.filter(x=>x.method==='POST').length,0);
+ assert.ok(service.snapshot().events.some(e=>e.type==='SIGNAL_SKIPPED'));
+ await service.signal({side:'LONG',barTime:1800000},true);
+ assert.equal(service.snapshot().armed,true);
+ assert.equal(service.snapshot().halted,false);
+ assert.ok(service.snapshot().protectedPosition);
+ assert.equal(fx.calls.filter(x=>x.method==='POST').length,5);
+});
+
+test('A missing exchange STOP keeps Auto ON but safety-halts all future entry attempts',async t=>{
+ const dir=tmp(t),fx=fake(),service=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await service.connect(creds);service.saveConfig({marginUSDT:500,leverage:5});
+ await service.arm('CHAP NHAN BTC FUTURES');
+ await service.signal({side:'LONG',barTime:900000},true);
+ fx.algo.splice(fx.algo.findIndex(o=>o.orderType==='STOP_MARKET'),1);
+ await service.monitor();
+ assert.equal(service.snapshot().armed,true);
+ assert.equal(service.snapshot().halted,true);
+ const postsBefore=fx.calls.filter(x=>x.method==='POST').length;
+ await service.signal({side:'SHORT',barTime:1800000},true);
+ assert.equal(fx.calls.filter(x=>x.method==='POST').length,postsBefore);
+ service.disarm();
+ assert.equal(service.snapshot().armed,false);
 });

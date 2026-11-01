@@ -73,3 +73,14 @@ test('Live BTCUSDT quote occupies API panel space, not the top header',()=>{
  assert.match(html,/color:#ffd66b/);
  assert.match(html,/#btcMarketMark\{font-weight:800;color:#68dafa\}/);
 });
+
+test('Auto remains selected through Binance feed interruption and only OFF or exit disarms',()=>{
+ const server=read('server.mjs'),html=read('BINANCE_UI_PREVIEW.html');
+ assert.doesNotMatch(server,/s\.state!=='live'&&browserFutures\.armed\)browserFutures\.disarm\(\)/);
+ assert.match(server,/opts\.live&&feed\.healthy\(\)&&browserFutures\.armed/);
+ assert.match(server,/marketHealthy:feed\.healthy\(\)/);
+ assert.match(server,/\/control\/live\/off'\)\{browserFutures\.disarm\(\)/);
+ assert.match(html,/AUTO ON · CHỜ GIÁ/);
+ assert.match(html,/AUTO ON · KHÓA AN TOÀN/);
+ assert.match(html,/\(!s\.armed&&\(!s\.connected\|\|s\.halted\|\|leverageMismatch\)\)/);
+});
