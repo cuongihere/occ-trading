@@ -264,14 +264,17 @@ export class BrowserFutures{
  }
  async signal(signal,feedHealthy){
   if(!this.armed||this.busy||this.halted||this.activeProtection||this.environment!=='production'||!feedHealthy||!signal?.side)return;
-  this.busy=true;
-  try{
-   const a=await this.inspect();
-   const quote=await this.api.get('/fapi/v1/ticker/price',{symbol:'BTCUSDT'});
+this.busy=true;
+let entrySubmissionPossible=false;
+try{
+ const a=await this.inspect();
+ const quote=await this.api.get('/fapi/v1/ticker/price',{symbol:'BTCUSDT'});
    const plan=draftProtectedOrder({side:signal.side,account:a,filters:this.filters,
     quotePrice:Number(quote.price)},this.config);
-   const clientId='OCCBTC-'+randomBytes(7).toString('hex');
-   this.saveIntent({phase:'ENTRY_SENDING',clientId,side:signal.side,barTime:signal.barTime});
+const clientId='OCCBTC-'+randomBytes(7).toString('hex');
+// From this point an entry might be sent; unknown outcomes require a safety halt.
+entrySubmissionPossible=true;
+this.saveIntent({phase:'ENTRY_SENDING',clientId,side:signal.side,barTime:signal.barTime});
    const response=await this.api.post('/fapi/v1/order',{symbol:'BTCUSDT',
     side:signal.side==='LONG'?'BUY':'SELL',positionSide:'BOTH',type:'MARKET',
     quantity:String(plan.qtyBTC),newClientOrderId:clientId,newOrderRespType:'RESULT'});
@@ -284,13 +287,21 @@ export class BrowserFutures{
     stepSize:this.filters.stepSize,tickSize:this.filters.tickSize,clientPrefix:clientId});
    this.saveIntent({phase:'PROTECTED',clientId,orderId:String(response.orderId)});
    this.activeProtection=result; // No new signal while a position is managed.
-   this.log('PROTECTED','Futures thật entry '+response.orderId+' có SL và '+result.tps.length+' TP trên sàn; chờ vị thế đóng');
-  }catch(e){
-   this.armed=false;this.halted=true;this.error=e.message;
-   this.log('HALTED','Đã khóa Auto tiền thật, kiểm tra Binance: '+e.message);
-   try{await this.emergencyCloseIfUnprotected();}
-   catch(recovery){this.log('CRITICAL','Không thể xác nhận đóng vị thế thiếu SL: '+recovery.message);}
-   this.error+=' — Kiểm tra BTCUSDT và SL/TP trực tiếp trên Binance.';
+this.error=null;
+this.log('PROTECTED','Futures thật entry '+response.orderId+' có SL và '+result.tps.length+' TP trên sàn; chờ vị thế đóng');
+}catch(e){
+ if(!entrySubmissionPossible){
+  // No entry was sent: transient preflight/quote errors must not toggle Auto OFF.
+  this.error='Bỏ qua tín hiệu trước khi đặt lệnh: '+e.message;
+  this.log('SIGNAL_SKIPPED','Auto vẫn ON, chưa đặt lệnh: '+e.message);
+ }else{
+  // Keep the switch ON but fail closed until manual OFF + reconciliation.
+  this.halted=true;this.error=e.message;
+  this.log('HALTED','Auto vẫn ON nhưng khóa giao dịch để kiểm tra Binance: '+e.message);
+  try{await this.emergencyCloseIfUnprotected();}
+  catch(recovery){this.log('CRITICAL','Không thể xác nhận đóng vị thế thiếu SL: '+recovery.message);}
+  this.error+=' — Kiểm tra BTCUSDT và SL/TP trực tiếp trên Binance.';
+ }
   }finally{this.busy=false;}
  } 
  // Monitor only the position and orders that OCC placed; never cancel unknown orders.
@@ -323,8 +334,9 @@ export class BrowserFutures{
      throw Error('Vị thế BTC đổi chiều hoặc lệnh SL đã mất; cần xử lý trên Binance Futures thật ngay');
    }
   }catch(e){
-   this.halted=true;this.armed=false;this.error=e.message;
-   this.log('HALTED','Dừng Auto; cần kiểm tra Binance Futures thật: '+e.message);
+// Preserve explicit Auto ON selection, but block further entries while safety is unknown.
+this.halted=true;this.error=e.message;
+this.log('HALTED','Auto vẫn ON nhưng khóa giao dịch; cần kiểm tra Binance Futures thật: '+e.message);
    try{await this.emergencyCloseIfUnprotected();}
    catch(recovery){this.log('CRITICAL','Không thể xác nhận đã bảo vệ vị thế: '+recovery.message);}
   }finally{this.busy=false;}
