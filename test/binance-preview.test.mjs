@@ -82,7 +82,7 @@ test('Auto remains selected through Binance feed interruption and only OFF or ex
  assert.match(server,/\/control\/live\/off'\)\{browserFutures\.disarm\(\)/);
  assert.match(html,/AUTO ON · CHỜ GIÁ/);
  assert.match(html,/AUTO ON · KHÓA AN TOÀN/);
- assert.match(html,/\(!s\.armed&&\(!s\.connected\|\|s\.halted\|\|leverageMismatch\)\)/);
+ assert.match(html,/sizingStatus!=='valid'/);
 });
 
 test('live margin/TP editing validates immediately and server checks before save and Auto ON',()=>{
