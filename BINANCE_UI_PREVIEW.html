@@ -222,7 +222,7 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
    <button class="primary" id="apiConnect">Kết nối & lưu API</button>
   </details>
   <div class="apiActions"><button id="apiDisconnect">Ngắt kết nối</button><button id="apiForget" class="minor">Xóa API đã lưu</button>
-  <button id="apiReconcile" class="minor">Đối soát vị thế</button></div>
+  <button id="apiReconcile" class="minor">Kiểm tra / mở khóa</button></div>
   <div id="apiError" class="message" role="status"></div>
   <div class="small" id="lastSync">Dữ liệu tài khoản sẽ tự cập nhật.</div>
  <div class="marketTicker stale" id="btcMarketTicker" aria-live="off" title="Giá khớp gần nhất BTCUSDT Perpetual từ Binance Futures, không phải giá Paper">
@@ -430,10 +430,15 @@ $('apiForget').onclick=async()=>{
  await refreshLive();
 };
 $('apiReconcile').onclick=async()=>{
- if(!confirm('Chỉ đối soát nếu Binance không còn vị thế hoặc lệnh BTCUSDT. Tiếp tục?'))return;
- try{await request('reconcile');$('apiError').textContent='BTCUSDT đã xác nhận sạch vị thế/lệnh.';}
- catch(e){$('apiError').textContent=e.message;}
- await refreshLive();
+ const button=$('apiReconcile');button.disabled=true;
+ $('apiError').textContent='Đang kết nối/đọc lại vị thế và SL/TP từ Binance…';
+ try{
+  await request('reconcile');
+  $('apiError').textContent='Binance xác nhận BTCUSDT không còn vị thế/lệnh. Đã mở khóa; bạn có thể bật lại AUTO sau khi đồng bộ.';
+ }catch(e){
+  $('apiError').textContent='Không mở khóa: '+e.message;
+ }
+ finally{await refreshLive();}
 };
 $('enabled').onchange=async()=>{
  const wantsOn=$('enabled').checked;autoBusy=true;$('enabled').disabled=true;
@@ -457,9 +462,9 @@ async function refreshLive(){
   if(!r.ok)throw Error('HTTP '+r.status);
   const s=await r.json(),a=s.account||null;
   if(!setupLoaded&&s.config){applyConfig(s.config);setupLoaded=true;scheduleSizingValidation();if(s.connected)$('credentialEditor').open=false;}
-  $('connection').textContent=s.connected?'BINANCE KẾT NỐI':s.credentialSaved?'ĐANG KẾT NỐI':'CHƯA KẾT NỐI';
+  $('connection').textContent=s.connected?'BINANCE KẾT NỐI':s.error?'API LỖI · THỬ LẠI':s.credentialSaved?'ĐANG KẾT NỐI':'CHƯA KẾT NỐI';
   $('connection').className='status'+(s.connected?' ok':s.error?' bad':'');
-  $('apiStatusText').textContent=s.connected?'Đã kết nối':s.credentialSaved?'Đã lưu API · đang thử kết nối':'Chưa có API';
+  $('apiStatusText').textContent=s.connected?'Đã kết nối':s.error?'Lỗi API · nhấn Kiểm tra / mở khóa để thử lại':s.credentialSaved?'Đã lưu API · đang thử kết nối':'Chưa có API';
   $('savedInfo').textContent=s.credentialSaved?'DPAPI Windows ✓':'Chưa lưu khóa';
   $('rememberApi').checked=s.credentialSaved||$('rememberApi').checked;
   $('apiError').textContent=s.error?('Cần kiểm tra: '+s.error):$('apiError').textContent;
@@ -494,7 +499,15 @@ $('autoHint').textContent=s.halted?'Auto vẫn ON nhưng đang khóa lệnh đ�
  s.armed?(s.marketHealthy?'Bot có thể mở lệnh BTCUSDT theo tín hiệu OCC.':'Auto vẫn ON, tạm ngừng lệnh mới đến khi dữ liệu giá Binance khỏe và nến được đồng bộ lại.'):
    leverageMismatch?'Đòn bẩy sàn '+a.leverage+'x khác cấu hình '+desiredLeverage+'x. Cần áp dụng trước khi bật Auto.':
    'Auto OFF, không mở lệnh mới.';
-  $('apiReconcile').disabled=!s.connected||s.armed;
+  // Allow a manual API reconnect with the Windows DPAPI key even if startup failed.
+  $('apiReconcile').disabled=s.armed||s.busy||(!s.connected&&!s.credentialSaved);
+  if(!s.halted&&s.recoveryStatus==='recovered'&&!s.armed){
+   $('apiReconcile').textContent='Đã đối soát · Kiểm tra lại';
+  }else $('apiReconcile').textContent=s.connected?'Kiểm tra / mở khóa':'Kết nối lại / kiểm tra';
+  if(s.recoveryStatus==='checking')$('apiError').textContent='Đang xác minh vị thế và các lệnh SL/TP thực tế trên Binance…';
+  else if(s.recoveryStatus==='recovered'&&!s.halted){
+   $('apiError').textContent='Đã xác minh BTCUSDT FLAT, không còn lệnh treo. Đã mở khóa; AUTO vẫn OFF.';
+  }
   $('lastSync').textContent=s.lastAccountSync?'Đồng bộ tài khoản: '+vn(s.lastAccountSync):'Chưa có đồng bộ tài khoản.';
   $('lastUpdate').textContent=s.connected?'Binance thật · Cập nhật '+vn(s.lastAccountSync):'Binance thật · Offline';
  }catch(e){$('connection').textContent='MẤT KẾT NỐI APP';$('connection').className='status bad';$('apiError').textContent=e.message;$('enabled').disabled=true;}

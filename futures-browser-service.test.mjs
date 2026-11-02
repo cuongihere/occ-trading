@@ -318,3 +318,82 @@ test('Read-only position breakdown works during HALTED restart and never mutates
  assert.equal(missingStop.slProtected,false);
  assert.equal(fx.calls.filter(x=>x.method==='POST'||x.method==='DELETE').length,mutationCount);
 });
+
+test('Startup automatically clears a previous PROTECTED checkpoint after Binance confirms FLAT and no orders',async t=>{
+ const dir=tmp(t),fx=fake(),vault=makeVault(dir);
+ const one=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:vault});
+ await one.connect(creds);one.saveConfig({marginUSDT:500,leverage:5});
+ await one.arm('CHAP NHAN BTC FUTURES',77000);
+ await one.signal({side:'LONG',barTime:900000},true);
+ assert.equal(one.snapshot().protectedPosition?.entry.side,'LONG');
+ fx.position.qty=0;fx.algo.splice(0); // Binance SL/TP finished during app downtime.
+ const postsBefore=fx.calls.filter(x=>x.method==='POST').length;
+ const two=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ assert.equal(two.snapshot().halted,true);
+ await two.restoreSavedConnection();
+ assert.equal(two.snapshot().connected,true);
+ assert.equal(two.snapshot().halted,false);
+ assert.equal(two.snapshot().armed,false);
+ assert.equal(two.snapshot().recoveryStatus,'recovered');
+ assert.equal(two.snapshot().error,null);
+ assert.ok(two.snapshot().events.some(x=>x.type==='AUTO_RECONCILED'));
+ assert.equal(JSON.parse(readFileSync(join(dir,'futures-live-intent.json'),'utf8')).phase,'CLEARED');
+ assert.equal(JSON.parse(readFileSync(join(dir,'futures-live-protection.json'),'utf8')).phase,'IDLE');
+ assert.equal(fx.calls.filter(x=>x.method==='POST').length,postsBefore); // read-only checks, no new orders
+ await two.arm('CHAP NHAN BTC FUTURES',77000);
+ assert.equal(two.snapshot().armed,true);
+});
+
+test('Auto recovery refuses to clear HALTED if BTC position or any conditional order remains',async t=>{
+ const dir=tmp(t),fx=fake();
+ const one=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await one.connect(creds);one.saveConfig({marginUSDT:500,leverage:5});
+ await one.arm('CHAP NHAN BTC FUTURES',77000);await one.signal({side:'LONG',barTime:900000},true);
+ fx.position.qty=0; // sl/TP still hanging, cannot unlock
+ const two=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await two.restoreSavedConnection();
+ assert.equal(two.snapshot().halted,true);
+ assert.equal(two.snapshot().recoveryStatus,'position_or_orders_open');
+ await assert.rejects(two.checkBinanceAndReconcile(),/còn vị thế hoặc lệnh/);
+ assert.equal(two.snapshot().halted,true);
+ assert.equal(two.snapshot().armed,false);
+ assert.notEqual(JSON.parse(readFileSync(join(dir,'futures-live-intent.json'),'utf8')).phase,'CLEARED');
+ fx.algo.splice(0);fx.position.qty=.032;
+ await assert.rejects(two.checkBinanceAndReconcile(),/còn vị thế hoặc lệnh/);
+ assert.equal(two.snapshot().halted,true);
+ fx.position.qty=0;
+ await two.checkBinanceAndReconcile();
+ assert.equal(two.snapshot().halted,false);
+ assert.equal(two.snapshot().armed,false);
+});
+
+test('Uncertain in-flight checkpoint stays HALTED on reconnect even when Binance appears flat; manual check can clear',async t=>{
+ const dir=tmp(t),fx=fake(),one=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await one.connect(creds);
+ one.saveIntent({phase:'ENTRY_SENDING',clientId:'OCCBTC-unknown',at:Date.now()});
+ const two=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await two.restoreSavedConnection();
+ assert.equal(two.snapshot().halted,true);
+ assert.equal(two.snapshot().recoveryStatus,'manual_required');
+ assert.equal(two.snapshot().armed,false);
+ await two.checkBinanceAndReconcile();
+ assert.equal(two.snapshot().halted,false);
+ assert.equal(two.snapshot().armed,false);
+});
+
+test('Manual check restores encrypted API after failed startup and never auto-arms',async t=>{
+ const dir=tmp(t),fx=fake(),one=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await one.connect(creds);
+ const original=fx.api.syncClock.bind(fx.api);
+ let bad=true;
+ fx.api.syncClock=async()=>{if(bad)throw Error('temporary REST timeout');return original();};
+ const two=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await two.restoreSavedConnection();
+ assert.equal(two.snapshot().connected,false);
+ assert.equal(two.snapshot().credentialSaved,true);
+ bad=false;
+ await two.checkBinanceAndReconcile();
+ assert.equal(two.snapshot().connected,true);
+ assert.equal(two.snapshot().armed,false);
+ assert.equal(two.snapshot().recoveryStatus,'recovered');
+});

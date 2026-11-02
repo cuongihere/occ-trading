@@ -121,7 +121,7 @@ const server=createServer(async(req,res)=>{
     await browserFutures.arm(p.acceptance,quote.lastPrice);
    }
    else if(req.url==='/control/live/off'){browserFutures.disarm();}
-   else if(req.url==='/control/live/reconcile'){await browserFutures.reconcileFlat();}
+   else if(req.url==='/control/live/reconcile'){await browserFutures.checkBinanceAndReconcile();}
    else if(req.url==='/control/live/disconnect'){browserFutures.close();}
    else if(req.url==='/control/live/forget'){browserFutures.forgetSavedCredentials();}
    else if(req.url==='/control/start'){if(engine.config.exitMode!=='Multi TP v5')throw Error('Phiên cũ không dùng Multi TP v5. Hãy tạo phiên mới để chuyển chế độ.');if(!feed.healthy()||!engine.ready)throw Error('Chưa có dữ liệu Binance liên tục. Kết nối lại trước.');commit('user_start',{},null,Date.now(),()=>{engine.setHealthy(true);engine.setRunning(true);engine.tradingEnabled=true;});simulate=true;}
