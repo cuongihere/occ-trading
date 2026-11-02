@@ -80,7 +80,7 @@ button:disabled{opacity:.42;cursor:not-allowed}
 .positionAnalysis{margin-top:12px;padding-top:11px;border-top:1px solid #31465f}
 .riskHeadline{font-size:12px;font-weight:750;color:#c6e2ff;margin-bottom:7px}
 .riskUpdated{font-size:10px;color:#96acc2;margin-bottom:9px}
-.riskSummary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:6px 0 12px}
+.riskSummary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:6px 0 12px}.riskSummary[hidden]{display:none!important}
 .riskMetric{border:1px solid #344b62;border-radius:7px;background:#102031;padding:7px 8px;min-width:0}
 .riskMetric span{display:block;font-size:10px;color:#91abc7}
 .riskMetric strong{display:block;font-size:14px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
@@ -462,6 +462,108 @@ $('statsCsv').onclick=()=>{
  const blob=new Blob(['\ufeff'+[cols.join(','),...rows].join('\r\n')],{type:'text/csv;charset=utf-8'});
  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='OCC_Binance_BTCUSDT_Real.csv';a.click();URL.revokeObjectURL(url);
 };
+// All values below are from GET /api/binance/position-analysis (read-only Binance REST).
+// Use textContent for exchange-sourced strings; never render untrusted order data as HTML.
+const signedUSDT=value=>value==null||!Number.isFinite(Number(value))?'—':(Number(value)>0?'+':'')+fmt(Number(value),3)+' USDT';
+function riskMetric(label,value,tone=''){
+ const el=document.createElement('div');el.className='riskMetric';
+ const name=document.createElement('span');name.textContent=label;
+ const amount=document.createElement('strong');amount.textContent=value;
+ if(tone)amount.className=tone;
+ el.append(name,amount);return el;
+}
+function riskLine(label,value,detail,kind=''){
+ const card=document.createElement('div');card.className='riskLine '+kind;
+ const top=document.createElement('div');top.className='riskLineMain';
+ const heading=document.createElement('span');heading.textContent=label;
+ const result=document.createElement('strong');result.textContent=value;
+ if(value.startsWith('+'))result.className='positive';
+ else if(value.startsWith('-'))result.className='negative';
+ top.append(heading,result);
+ const sub=document.createElement('div');sub.className='riskLineSub';sub.textContent=detail;
+ card.append(top,sub);return card;
+}
+function resetPositionAnalysis(message){
+ $('riskHeadline').textContent=message;
+ $('riskUpdated').textContent='Không có dữ liệu mới được xác minh';
+ $('riskSummary').hidden=true;$('riskSummary').replaceChildren();
+ $('riskLevels').replaceChildren();$('riskLevels').textContent='—';
+ $('riskScenarios').replaceChildren();$('riskScenarios').textContent='—';
+ $('riskAlerts').replaceChildren();
+ $('riskDisclaimer').textContent='Chỉ hiển thị khi lấy được dữ liệu mới trực tiếp từ Binance.';
+}
+function showPositionAnalysis(data){
+ if(!data||!['open','flat'].includes(data.status)){
+  resetPositionAnalysis(data?.message||data?.warnings?.[0]||'Đang chờ Binance đồng bộ vị thế');return;
+ }
+ const p=data.position,positionOpen=data.status==='open';
+ $('riskHeadline').textContent=data.halted?'KHÓA AN TOÀN · Vẫn đọc lệnh trên Binance':
+  positionOpen?'Vị thế BTCUSDT · '+p.side+' · '+fmt(p.quantityBTC,6)+' BTC':'Không có vị thế BTCUSDT';
+ $('riskUpdated').textContent='Đã đọc lệnh Binance lúc '+vn(data.fetchedAt)+' · '+data.algoCount+' lệnh Algo';
+ const metrics=$('riskSummary');metrics.replaceChildren();metrics.hidden=!positionOpen;
+ if(positionOpen){
+  const tone=Number(p.unrealizedUSDT)>0?'positive':Number(p.unrealizedUSDT)<0?'negative':'';
+  metrics.append(
+   riskMetric('Khối lượng còn lại',fmt(p.quantityBTC,6)+' BTC'),
+   riskMetric('Giá vào',fmt(p.entryPrice,2)+' USDT'),
+   riskMetric('Mark Price (sàn)',fmt(p.markPrice,2)),
+   riskMetric('Giá trị danh nghĩa',fmt(p.notionalUSDT,2)+' USDT'),
+   riskMetric('P&L chưa thực hiện',signedUSDT(p.unrealizedUSDT),tone),
+   riskMetric('Ký quỹ vị thế',p.initialMarginUSDT!=null?fmt(p.initialMarginUSDT,2)+' USDT':'—'),
+   riskMetric('ROI ước tính',p.roiPercent!=null?fmt(p.roiPercent,2)+'%':'—',tone),
+   riskMetric('Liq. Price',p.liquidationPrice!=null?fmt(p.liquidationPrice,2):'—')
+  );
+ }
+ const levels=$('riskLevels');levels.replaceChildren();levels.className='';
+ const list=data.levels||[];let tpIndex=0;
+ for(const level of list){
+  const isTp=level.role==='TP',isSl=level.role==='SL';
+  const label=isTp?'TP'+(++tpIndex):isSl?'STOP LOSS':'LỆNH KHÁC';
+  const price=level.price!=null?fmt(level.price,2):'Không có giá hợp lệ';
+  const qty=level.quantityBTC!=null?fmt(level.quantityBTC,6)+' BTC':'Không rõ khối lượng';
+  const part=level.sharePercent!=null?' · '+fmt(level.sharePercent,2)+'% vị thế':'';
+  const move=level.priceMovePercent!=null?' · chênh giá '+fmt(level.priceMovePercent,2)+'%':'';
+  const owner=level.origin==='BOT_ĐANG_QUẢN_LÝ'?'OCC đang quản lý':
+   level.origin==='KHỚP_CHECKPOINT'?'Khớp ID lưu trước đó':'Chưa xác minh sở hữu';
+  const valid=level.confirmed?'Đã kiểm tra thuộc tính lệnh':'Không đủ điều kiện xác minh';
+  const headline=label+' · '+price;
+  const detail=qty+part+move+' · '+level.status+' · '+owner+' · '+valid+
+   (level.workingType?' · kích hoạt '+level.workingType:'');
+  levels.append(riskLine(headline,signedUSDT(level.grossUSDT),detail,level.confirmed?(isSl?'sl':'tp'):'warn'));
+ }
+ if(!list.length)levels.textContent=positionOpen?'Không đọc thấy lệnh SL/TP đang mở trên Binance.':'Không có lệnh Algo đang mở.';
+ const scenarios=$('riskScenarios');scenarios.replaceChildren();scenarios.className='';
+ const scenarioList=data.scenarios||[];
+ for(const scenario of scenarioList){
+  const detail='Đã chốt '+fmt(scenario.closedBTC,6)+' BTC · còn '+
+   fmt(scenario.remainingBTC,6)+' BTC · '+scenario.source;
+  scenarios.append(riskLine(scenario.label,signedUSDT(scenario.grossUSDT),detail,
+   scenario.grossUSDT==null?'warn':''));
+ }
+ if(!scenarioList.length)scenarios.textContent=positionOpen?
+  'Chưa có đủ lệnh SL/TP hợp lệ để tính kịch bản.':'Chưa có vị thế để dự phóng kết quả.';
+ const alerts=$('riskAlerts');alerts.replaceChildren();
+ if(data.halted){
+  const n=document.createElement('div');
+  n.textContent='BOT ĐANG KHÓA AN TOÀN: chỉ xem giá và lệnh. Không có thao tác tự phục hồi/đặt lệnh. Kiểm tra Binance trước khi đối soát.';
+  alerts.append(n);
+ }
+ for(const warning of data.warnings||[]){
+  const n=document.createElement('div');n.textContent=warning;alerts.append(n);
+ }
+ $('riskDisclaimer').textContent=data.disclaimer||'Lãi/lỗ chỉ là ước tính, không đảm bảo giá khớp.';
+}
+async function refreshPositionAnalysis(){
+ if(positionAnalysisRefreshing)return;
+ positionAnalysisRefreshing=true;
+ try{
+  const response=await fetch('/api/binance/position-analysis',{cache:'no-store'});
+  const data=await response.json();
+  if(!response.ok)throw Error(data.message||'HTTP '+response.status);
+  showPositionAnalysis(data);
+ }catch(e){resetPositionAnalysis('Không đọc được vị thế Binance: '+e.message);}
+ finally{positionAnalysisRefreshing=false;}
+}
 async function refreshMarketPrice(){
  if(marketRefreshing)return;
  marketRefreshing=true;
@@ -487,8 +589,8 @@ async function refreshMarketPrice(){
   $('markPrice').textContent='—';
  }finally{marketRefreshing=false;}
 }
-refreshLive();refreshReport();refreshMarketPrice();
-setInterval(refreshLive,5000);setInterval(refreshReport,15000);setInterval(refreshMarketPrice,1000);
+refreshLive();refreshReport();refreshMarketPrice();refreshPositionAnalysis();
+setInterval(refreshLive,5000);setInterval(refreshReport,15000);setInterval(refreshMarketPrice,1000);setInterval(refreshPositionAnalysis,12000);
 setInterval(()=>{if(setupLoaded&&!autoBusy)validateSizing();},15000);
 </script>
 </body></html>
