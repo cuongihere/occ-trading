@@ -107,7 +107,7 @@ test('Position analysis displays actual Binance SL TP steps and scenarios withou
  assert.match(html,/fetch\('\/api\/binance\/position-analysis'/);
  assert.match(html,/setInterval\(refreshPositionAnalysis,12000\)/);
  assert.match(html,/riskRow\(/);
- assert.match(html,/const owner=level\.origin/); // ownership states are explicit
+ assert.match(html,/const origin=level\.origin/); // ownership states are explicit
  assert.doesNotMatch(html,/innerHTML\s*=/);
  assert.match(server,/req\.url==='\/api\/binance\/position-analysis'/);
  assert.match(service,/async positionAnalysis\(\)/);
