@@ -149,3 +149,20 @@ test('status and risk metrics are consolidated in one account panel; SL TP and s
  assert.ok(js);
  assert.doesNotThrow(()=>new Function(js));
 });
+
+test('reconnect recovery keeps manual check clickable with DPAPI key even after saved API reconnect fails',()=>{
+ const html=read('BINANCE_UI_PREVIEW.html'),server=read('server.mjs');
+ const svc=read('futures-browser-service.mjs');
+ assert.match(html,/id="apiReconcile"/);
+ assert.match(html,/Kiểm tra \/ mở khóa/);
+ assert.match(html,/request\('reconcile'\)/);
+ assert.match(html,/s\.armed\|\|s\.busy\|\|\(!s\.connected&&!s\.credentialSaved\)/);
+ assert.match(html,/API LỖI · THỬ LẠI/);
+ assert.match(html,/recoveryStatus==='recovered'/);
+ assert.match(server,/await browserFutures\.checkBinanceAndReconcile\(\)/);
+ assert.match(svc,/async reconcileClosedAfterReconnect\(\)/);
+ assert.match(svc,/async checkBinanceAndReconcile\(\)/);
+ assert.match(svc,/await this\.reconcileFlat\(\)/);
+ const js=html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
+ assert.ok(js);assert.doesNotThrow(()=>new Function(js));
+});
