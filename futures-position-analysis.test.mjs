@@ -75,7 +75,8 @@ test('Unverified external Algo orders show price but are never labeled OCC verif
 test('Flat position still shows orphaned algo protection as warning, never PnL scenario',()=>{
  const x=analyze({riskRows:[],checkpoint:null});
  assert.equal(x.status,'flat');assert.equal(x.position,null);assert.equal(x.scenarios.length,0);
- assert.equal(x.levels.length,0);assert.ok(x.warnings[0].includes('còn lệnh đang mở'));
+ assert.equal(x.levels.length,4);assert.ok(x.levels.every(l=>l.grossUSDT===null));
+ assert.ok(x.warnings[0].includes('còn lệnh đang mở'));
 });
 
 test('Unknown statuses or inconsistent TP sum do not silently promise protection',()=>{
