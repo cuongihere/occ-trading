@@ -599,7 +599,7 @@ function showPositionAnalysis(data){
  if(positionOpen){
   const tone=Number(p.unrealizedUSDT)>0?'positive':Number(p.unrealizedUSDT)<0?'negative':'';
   metrics.append(
-   riskMetric('BTC còn lại',fmt(p.quantityBTC,6)),
+   riskMetric('Ký quỹ (USDT)',p.initialMarginUSDT!=null?fmt(p.initialMarginUSDT,2):'—'),
    riskMetric('Giá trị (USDT)',fmt(p.notionalUSDT,2)),
    riskMetric('ROI ước tính',p.roiPercent!=null?fmt(p.roiPercent,2)+'%':'—',tone)
   );
