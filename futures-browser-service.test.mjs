@@ -284,3 +284,37 @@ test('AUTO cannot be enabled with three undersized Binance TP legs; warning incl
  await service.arm('CHAP NHAN BTC FUTURES',77000);
  assert.equal(service.snapshot().armed,true);
 });
+
+test('Read-only position breakdown works during HALTED restart and never mutates Binance orders',async t=>{
+ const dir=tmp(t),fx=fake();
+ const originalGet=fx.api.get.bind(fx.api);
+ fx.api.get=async(path,p={})=>{
+  const value=await originalGet(path,p);
+  if(path==='/fapi/v3/positionRisk')return value.map(row=>({...row,entryPrice:'77000',
+   markPrice:'78000',liquidationPrice:'62500',positionInitialMargin:'500',
+   unRealizedProfit:String(Number(row.positionAmt)*1000)}));
+  return value;
+ };
+ const one=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await one.connect(creds);one.saveConfig({marginUSDT:500,leverage:5});
+ await one.arm('CHAP NHAN BTC FUTURES',77000);
+ await one.signal({side:'LONG',barTime:900000},true);
+ const first=await one.positionAnalysis();
+ assert.equal(first.status,'open');assert.equal(first.slProtected,true);
+ assert.equal(first.levels.length,4);assert.equal(first.ownershipVerified,true);
+ const mutationCount=fx.calls.filter(x=>x.method==='POST'||x.method==='DELETE').length;
+ one.close();
+ const afterRestart=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ assert.equal(afterRestart.halted,true);
+ await afterRestart.connect(creds);
+ const breakdown=await afterRestart.positionAnalysis();
+ assert.equal(breakdown.status,'open');
+ assert.equal(breakdown.halted,true);
+ assert.equal(breakdown.ownershipVerified,true);
+ assert.ok(breakdown.levels.every(l=>l.origin==='KHỚP_CHECKPOINT'));
+ assert.equal(fx.calls.filter(x=>x.method==='POST'||x.method==='DELETE').length,mutationCount);
+ fx.algo.splice(0,1); // SL disappeared on exchange: just warn, never auto-create it.
+ const missingStop=await afterRestart.positionAnalysis();
+ assert.equal(missingStop.slProtected,false);
+ assert.equal(fx.calls.filter(x=>x.method==='POST'||x.method==='DELETE').length,mutationCount);
+});
