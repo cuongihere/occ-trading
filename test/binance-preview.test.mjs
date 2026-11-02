@@ -106,7 +106,7 @@ test('Position analysis displays actual Binance SL TP steps and scenarios withou
   assert.ok(html.includes('id="'+id+'"'),'missing risk panel: '+id);
  assert.match(html,/fetch\('\/api\/binance\/position-analysis'/);
  assert.match(html,/setInterval\(refreshPositionAnalysis,12000\)/);
- assert.match(html,/riskLine\(/);
+ assert.match(html,/riskRow\(/);
  assert.match(html,/const owner=level\.origin/); // ownership states are explicit
  assert.doesNotMatch(html,/innerHTML\s*=/);
  assert.match(server,/req\.url==='\/api\/binance\/position-analysis'/);
@@ -117,31 +117,35 @@ test('Position analysis displays actual Binance SL TP steps and scenarios withou
  assert.ok(js);assert.doesNotThrow(()=>new Function(js));
 });
 
-test('all current BTC position details are full-width on Binance main page, not inside a scrollable side panel',()=>{
+test('status and risk metrics are consolidated in one account panel; SL TP and scenarios are compact tables',()=>{
  const html=read('BINANCE_UI_PREVIEW.html');
  const top=html.indexOf('<section class="topgrid">');
  const risk=html.indexOf('<section class="riskDashboard" id="positionAnalysis"');
  const history=html.indexOf('<section class="below">');
- assert.ok(top>=0&&risk>top&&history>risk,'Risk must sit between account settings and history');
- const mainRow=html.slice(top,risk);
- assert.match(mainRow,/id="entryPrice"/);
- assert.match(mainRow,/id="botState"/);
- assert.doesNotMatch(mainRow,/id="riskLevels"|id="riskScenarios"|id="riskSummary"/);
- const analysis=html.slice(risk,history);
- for(const id of ['riskHeadline','riskUpdated','riskSummary','riskLevels',
-  'riskScenarios','riskAlerts','riskDisclaimer'])
-  assert.match(analysis,new RegExp('id="'+id+'"'),'Risk detail missing: '+id);
- assert.match(analysis,/class="panel riskOverview"/);
- assert.match(analysis,/class="panel riskLevelsPanel"/);
- assert.match(analysis,/class="panel riskScenariosPanel"/);
- assert.match(html,/\.riskDashboard\{display:grid;grid-template-columns:/);
- assert.match(html,/\.riskDashboard>\.panel\{overflow:visible/);
+ assert.ok(top>=0&&risk>top&&history>risk,'Tables must follow the account status row');
+ const primary=html.slice(top,risk),tables=html.slice(risk,history);
+ for(const id of ['entryPrice','markPrice','liqPrice','btcPnl','marginMode',
+  'accountLeverage','botState','riskHeadline','riskUpdated','riskSummary','riskAlerts'])
+  assert.match(primary,new RegExp('id="'+id+'"'),'Missing consolidated status: '+id);
+ assert.doesNotMatch(tables,/id="riskSummary"|riskOverview|Tổng quan vị thế đang mở/);
+ assert.doesNotMatch(primary,/Tổng quan vị thế đang mở/);
+ assert.match(tables,/id="riskLevels"/);
+ assert.match(tables,/id="riskScenarios"/);
+ assert.equal((html.match(/id="riskSummary"/g)||[]).length,1);
+ assert.equal((html.match(/class="panel riskLevelsPanel"/g)||[]).length,1);
+ assert.equal((html.match(/class="panel riskScenariosPanel"/g)||[]).length,1);
+ assert.match(tables,/class="riskTable" aria-label="Các lệnh SL TP đang mở trên Binance"/);
+ assert.match(tables,/class="riskTable" aria-label="Các kịch bản kết quả của vị thế"/);
+ assert.match(html,/function riskRow\(/);
+ assert.match(html,/\.riskDashboard\{grid-template-columns:minmax\(0,1\.1fr\) minmax\(0,1fr\)/);
  assert.match(html,/\.accountPanel\{overflow:visible\}/);
  assert.doesNotMatch(html,/\.accountPanel\{overflow-y:auto/);
  assert.match(html,/\.app\{max-width:1780px;min-height:100dvh;height:auto/);
- assert.match(html,/@media\(max-width:650px\).*riskDashboard/);
- // Keep the existing read-only refresh logic; no new trading mutations.
+ assert.match(html,/@media\(max-width:750px\)/);
  assert.match(html,/fetch\('\/api\/binance\/position-analysis'/);
  assert.match(html,/setInterval\(refreshPositionAnalysis,12000\)/);
- assert.doesNotMatch(analysis,/id="enabled"|id="apiKey"/);
+ assert.doesNotMatch(html,/innerHTML\s*=/);
+ const js=html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
+ assert.ok(js);
+ assert.doesNotThrow(()=>new Function(js));
 });
