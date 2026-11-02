@@ -10,7 +10,7 @@ Chỉ dùng **Multi TP v5** cho mọi phiên mới. Giao diện không có Class
 - TP2: **2%**, chốt **33%** vị thế ban đầu.
 - TP3: **3%**, chốt **34% còn lại**.
 - Với LONG, SL thấp hơn giá vào và TP cao hơn. Với SHORT, hướng tính ngược lại.
-- Các mức 0 tắt mục tiêu tương ứng. SL áp dụng cho phần vị thế còn lại; tín hiệu OCC đảo chiều đóng phần còn lại trước khi mở vị thế mới.
+- Các mức 0 tắt mục tiêu tương ứng. SL áp dụng cho phần vị thế còn lại. **Không đảo chiều theo tín hiệu OCC**: khi còn vị thế (kể cả sau khi chốt TP1/TP2), bỏ qua tín hiệu mới. Vị thế chỉ đóng hết qua SL hoặc các TP đã cấu hình; khi đã FLAT, bot chờ **giao cắt OCC mới trên nến M15 đóng** để vào lại, không khớp tín hiệu xảy ra lúc đang giữ lệnh. Nếu tắt cả SL và mọi TP thì vị thế sẽ tiếp tục mở cho đến khi có phương án đóng khác; tín hiệu OCC không tự đóng lệnh. Đây là quy tắc OCC đã tùy biến, có thể khác hành vi đảo lệnh trong Pine Script gốc.
 - TP1 Qty + TP2 Qty tối đa bằng 100% trên cơ chế phân bổ của engine; phần nhỏ hơn bước khối lượng Binance được dồn vào mức TP đang được sử dụng cuối cùng.
 
 ## Tương thích phiên cũ
