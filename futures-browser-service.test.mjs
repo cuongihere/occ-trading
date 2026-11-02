@@ -28,9 +28,12 @@ function fake({flatRiskRows=false,brokenConfig=false,failStop=false,leverage=5,l
     status:'TRADING',filters:[{filterType:'MARKET_LOT_SIZE',stepSize:'.001',minQty:'.001'},
     {filterType:'PRICE_FILTER',tickSize:'.1'},{filterType:'MIN_NOTIONAL',notional:'5'}]}]};
    if(path==='/fapi/v1/ticker/price')return {symbol:'BTCUSDT',price:'77000'};
-   if(path==='/fapi/v1/order')return {symbol:'BTCUSDT',side:'BUY',positionSide:'BOTH',
-    status:'FILLED',executedQty:'.032',avgPrice:'77000',orderId:100,
-    clientOrderId:calls.find(x=>x.method==='POST'&&x.path==='/fapi/v1/order'&&x.p.reduceOnly!=='true')?.p.newClientOrderId};
+   if(path==='/fapi/v1/order'){
+    const entry=calls.filter(x=>x.method==='POST'&&x.path==='/fapi/v1/order'&&x.p.reduceOnly!=='true').at(-1)?.p;
+    return {symbol:'BTCUSDT',side:entry?.side||'BUY',positionSide:'BOTH',
+     status:'FILLED',executedQty:'.032',avgPrice:'77000',orderId:100,
+     clientOrderId:entry?.newClientOrderId};
+   }
    throw Error('Unexpected GET '+path);
   },
   async post(path,p){
@@ -42,7 +45,7 @@ function fake({flatRiskRows=false,brokenConfig=false,failStop=false,leverage=5,l
    }
    if(path==='/fapi/v1/order'){
     if(p.reduceOnly==='true'){position.qty=0;return {orderId:999,status:'FILLED'};}
-    position.qty=.032;return {orderId:100,status:'FILLED'};
+    position.qty=p.side==='BUY'?.032:-.032;return {orderId:100,status:'FILLED'};
    }
    if(path==='/fapi/v1/algoOrder'){
     if(failStop&&p.type==='STOP_MARKET')throw Error('Simulated Binance STOP failure');
@@ -94,11 +97,21 @@ test('Production Auto mock sends MARKET then confirmed STOP and three TP, never 
  assert.ok(service.snapshot().protectedPosition);
  await service.signal({side:'SHORT',barTime:1800000},true);
  assert.equal(fx.calls.filter(x=>x.method==='POST').length,5);
+ assert.ok(service.snapshot().events.some(e=>e.type==='SIGNAL_IGNORED_POSITION'));
+ fx.position.qty=.016; // TP1 has filled but BTC position remains open.
+ await service.monitor();
+ assert.equal(service.snapshot().protectedPosition.entry.side,'LONG');
+ await service.signal({side:'SHORT',barTime:2700000},true);
+ assert.equal(fx.calls.filter(x=>x.method==='POST').length,5);
  fx.position.qty=0;
  await service.monitor();
  assert.equal(fx.algo.length,0);
  assert.equal(service.snapshot().protectedPosition,null);
  assert.equal(service.snapshot().armed,true);
+ assert.equal(fx.calls.filter(x=>x.method==='POST').length,5); // no old queued signal replay
+ await service.signal({side:'SHORT',barTime:3600000},true); // NEW crossover after confirmed flat
+ assert.equal(fx.calls.filter(x=>x.method==='POST').length,10);
+ assert.equal(service.snapshot().protectedPosition?.entry.side,'SHORT');
  service.disarm();
 });
 test('Live unfinished intent after restart blocks arming until exchange confirmed FLAT',async t=>{

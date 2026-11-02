@@ -270,7 +270,11 @@ export class BrowserFutures{
   this.log('EMERGENCY_CLOSED','Đã xác minh giảm vị thế BTCUSDT về 0');
  }
  async signal(signal,feedHealthy){
-  if(!this.armed||this.busy||this.halted||this.activeProtection||this.environment!=='production'||!feedHealthy||!signal?.side)return;
+  if(!this.armed||this.busy||this.halted||this.environment!=='production'||!feedHealthy||!signal?.side)return;
+  if(this.activeProtection){
+   this.log('SIGNAL_IGNORED_POSITION','Bỏ qua tín hiệu '+signal.side+': vị thế BTCUSDT còn mở, tiếp tục giữ SL/TP.');
+   return;
+  }
 this.busy=true;
 let entrySubmissionPossible=false;
 try{

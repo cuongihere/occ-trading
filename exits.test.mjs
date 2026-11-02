@@ -71,12 +71,58 @@ test('Multi SHORT Points means raw price difference and supports selective targe
  assert.equal(c.length,1);assert.equal(c[0].price,995);
  assert.equal(e.position.qty,0.5);
 });
-test('Stop disabled and TP disabled legs remain until opposite signal closes them',()=>{
+test('With SL and TP disabled, opposite signals cannot close a position',()=>{
  const {e,time}=setup({exitMode:'Multi TP v5',slPercent:0,tp1Val:0,tp2Val:0,tp3Val:0});
  assert.equal(e.levels().sl,null);
  assert.equal(e.onTrade({price:500,time:time+1,id:2},true).length,0);
  assert.equal(e.position.qty,1);
 });
+test('Partial TP fills stay open through opposite OCC signal; only final TP completes position',()=>{
+ const {e,time}=setup();
+ const tp1=e.onTrade({price:1010,time:time+1,id:2},true);
+ assert.deepEqual(tp1.map(f=>f.reason),['TP1']);
+ assert.equal(e.position.qty,0.67);
+ const opposite=e.onCandle(bar(start+2*M15,100,92),{live:true,observedAt:start+3*M15});
+ assert.equal(opposite.side,'SHORT');
+ assert.equal(opposite.eligible,false);
+ assert.equal(e.pending,null);
+ const during=e.onTrade({price:1005,time:start+3*M15,id:3},true);
+ assert.equal(during.length,0);
+ assert.equal(e.position.side,'LONG');
+ assert.equal(e.position.qty,0.67);
+ assert.equal(e.trades.filter(f=>f.reason==='REVERSE').length,0);
+ const final=e.onTrade({price:1030,time:start+3*M15+1,id:4},true);
+ assert.deepEqual(final.map(f=>f.reason),['TP2','TP3']);
+ assert.equal(e.position,null);
+ assert.equal(e.onTrade({price:1010,time:start+3*M15+2,id:5},true).length,0);
+ const fresh=e.onCandle(bar(start+3*M15,100,108),{live:true,observedAt:start+4*M15});
+ assert.equal(fresh.side,'LONG');assert.equal(fresh.eligible,true);
+ const next=e.onTrade({price:1000,time:fresh.observedAt,id:6},true);
+ assert.equal(next.length,1);
+ assert.equal(next[0].action,'OPEN');
+});
+
+test('A stale queued reverse signal cannot open on the same tick that SL closes',()=>{
+ const {e,time}=setup();
+ const pending={time:time+1,observedAt:time+1,side:'SHORT',id:'old-opposite'};
+ e.pending=pending; // Simulates a checkpoint from the previous reversal strategy.
+ const fills=e.onTrade({price:980,time:time+1,id:2},true);
+ assert.deepEqual(fills.map(f=>f.reason),['SL']);
+ assert.equal(e.position,null);
+ assert.equal(e.pending,null);
+ assert.equal(e.trades.filter(x=>x.action==='OPEN').length,1);
+ assert.equal(e.onTrade({price:1000,time:time+2,id:3},true).length,0);
+});
+
+test('Opposite signal while no SL/TP is configured cannot force-close the position',()=>{
+ const {e,time}=setup({slPercent:0,tp1Val:0,tp2Val:0,tp3Val:0});
+ const opposite=e.onCandle(bar(start+2*M15,100,92),{live:true,observedAt:start+3*M15});
+ assert.equal(opposite.side,'SHORT');assert.equal(opposite.eligible,false);
+ const after=e.onTrade({price:800,time:start+3*M15,id:2},true);
+ assert.equal(after.length,0);
+ assert.equal(e.position.side,'LONG');assert.equal(e.position.qty,1);
+});
+
 test('Partial fills survive restart, and a complete position counts only once',()=>{
  const {e,time}=setup({exitMode:'Multi TP v5'});
  e.onTrade({price:1010,time:time+1,id:2},true);
