@@ -82,7 +82,7 @@ test('Unknown statuses or inconsistent TP sum do not silently promise protection
  const a=algos();a[1].algoStatus='CANCELED';
  const x=analyze({algoOrders:a});
  assert.equal(x.levels[1].confirmed,false);
- assert.ok(x.warnings.some(w=>w.includes('không phủ hết vị thế')));
+ assert.ok(x.warnings.some(w=>w.includes('chưa phủ hết vị thế')));
  const oversize=analyze({algoOrders:[sl(),tp(2,79170,.002),tp(3,80340,.002),tp(4,81900,.002)]});
  assert.ok(oversize.warnings.some(w=>w.includes('vượt vị thế')));
  assert.equal(oversize.scenarios.at(-1).remainingBTC,0);
