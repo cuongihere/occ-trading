@@ -197,7 +197,7 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
 <span id="settingStatus" class="small">Tự lưu · Auto OFF khi sửa</span></div>
  </div>
  <div class="panel accountPanel">
-  <h2>Vị thế & lệnh trên sàn · Phân tích SL/TP</h2>
+  <h2>Trạng thái vị thế & giao dịch</h2>
   <div class="positionGrid">
    <div><span class="label">Entry</span><strong id="entryPrice">—</strong></div>
    <div><span class="label">Mark Price</span><strong id="markPrice">—</strong></div>
@@ -211,17 +211,24 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
    <div><span class="key">Lệnh SL/TP:</span> <strong id="openAlgoCount">—</strong></div>
    <div><span class="key">Bot:</span> <strong id="botState">OFF</strong></div>
    <div class="small" id="autoHint">Bật Auto mới cho phép mở lệnh.</div></div>
-  <section class="positionAnalysis" id="positionAnalysis" aria-label="Phân tích vị thế Binance đang mở">
-   <div class="riskHeadline" id="riskHeadline">Đang đọc vị thế trực tiếp từ Binance…</div>
-   <div class="riskUpdated" id="riskUpdated">Không dùng giá dự kiến từ cấu hình bot</div>
-   <div class="riskSummary" id="riskSummary" hidden></div>
-   <div class="riskSectionTitle">Các nấc SL / TP trên sàn</div>
-   <div id="riskLevels" class="riskEmpty">Đang lấy lệnh từ Binance…</div>
-   <div class="riskSectionTitle">Kịch bản lãi / lỗ khi đóng lệnh</div>
-   <div id="riskScenarios" class="riskEmpty">Chờ dữ liệu vị thế.</div>
-   <div class="riskAlerts" id="riskAlerts" role="status"></div>
-   <div class="riskDisclaimer" id="riskDisclaimer">Các kịch bản chỉ để theo dõi, không đặt hoặc thay đổi lệnh.</div>
-  </section>
+  </div>
+</section>
+<section class="riskDashboard" id="positionAnalysis" aria-label="Phân tích vị thế Binance đang mở">
+ <div class="panel riskOverview">
+  <h2>Tổng quan vị thế đang mở</h2>
+  <div class="riskHeadline" id="riskHeadline">Đang đọc vị thế trực tiếp từ Binance…</div>
+  <div class="riskUpdated" id="riskUpdated">Không dùng giá dự kiến từ cấu hình bot</div>
+  <div class="riskSummary" id="riskSummary" hidden></div>
+  <div class="riskAlerts" id="riskAlerts" role="status"></div>
+  <div class="riskDisclaimer" id="riskDisclaimer">Các kịch bản chỉ để theo dõi, không đặt hoặc thay đổi lệnh.</div>
+ </div>
+ <div class="panel riskLevelsPanel">
+  <h2>SL / TP thực tế trên Binance</h2>
+  <div id="riskLevels" class="riskEmpty">Đang lấy lệnh từ Binance…</div>
+ </div>
+ <div class="panel riskScenariosPanel">
+  <h2>Kịch bản lời / lỗ theo từng nấc</h2>
+  <div id="riskScenarios" class="riskEmpty">Chờ dữ liệu vị thế.</div>
  </div>
 </section>
 <section class="below">
