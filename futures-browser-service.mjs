@@ -9,6 +9,7 @@ import {draftProtectedOrder} from './futures-order-plan.mjs';
 import {ProtectionCoordinator} from './futures-protection-orchestrator.mjs';
 import {ProtectionCheckpoint} from './futures-protection-checkpoint.mjs';
 import {WindowsCredentialVault} from './futures-credential-vault.mjs';
+import {analyzeFuturesPosition} from './futures-position-analysis.mjs';
 
 const DEFAULT={side:'BOTH',marginUSDT:20,leverage:5,slPercent:1,tpMode:'Percent',
  tp1Val:1,tp2Val:2,tp3Val:3,tp1Qty:33,tp2Qty:33};
@@ -26,6 +27,7 @@ export class BrowserFutures{
   this.armed=false;this.busy=false;this.halted=false;this.error=null;this.events=[];this.activeProtection=null;
   const unresolved=existsSync(this.intentPath)?JSON.parse(readFileSync(this.intentPath,'utf8')):null;
   const prior=existsSync(this.protectionPath)?new ProtectionCheckpoint(this.protectionPath).load():null;
+  this.previousProtection=prior&&prior.phase!=='IDLE'?prior:null; // ID reference only, never resume order management.
   if((unresolved&&unresolved.phase!=='CLEARED')||(prior&&prior.phase!=='IDLE')){
    this.halted=true;this.error='Có lệnh Futures thật chưa đối soát sau lần chạy trước. Kiểm tra Binance Futures thật trước khi tạo lệnh mới.';
   }
@@ -53,6 +55,21 @@ export class BrowserFutures{
    config:this.config,account:this.account,credentialSaved:this.vault.exists(),lastAccountSync:this.lastAccountSync,
    events:this.events.slice(-20),
    warning:'Giao dịch tiền thật có thể mất vốn. API Key/Secret chỉ giữ trong RAM; cần xác nhận mỗi khi bật Auto.'};
+ }
+ // Read-only exchange inspection works while AUTO is halted after restart.
+ // No checkpoint mutation, order placement or inferred fills.
+ async positionAnalysis(){
+  if(!this.api)throw Error('Chưa kết nối Binance Futures API');
+  if(this.busy)return {status:'syncing',fetchedAt:Date.now(),warnings:['Đang thực hiện giao dịch/đối soát; chờ dữ liệu Binance ổn định.']};
+  const [riskRows,algoOrders,openOrders]=await Promise.all([
+   this.api.get('/fapi/v3/positionRisk',{symbol:'BTCUSDT'}),
+   this.api.get('/fapi/v1/openAlgoOrders',{symbol:'BTCUSDT'}),
+   this.api.get('/fapi/v1/openOrders',{symbol:'BTCUSDT'})
+  ]);
+  const analysis=analyzeFuturesPosition({riskRows,algoOrders,openOrders,
+   checkpoint:this.activeProtection||this.previousProtection,
+   managed:!!this.activeProtection,leverage:this.account?.leverage,fetchedAt:Date.now()});
+  return {...analysis,halted:this.halted,armed:this.armed};
  }
  async inspect(){
   if(!this.api)throw Error('Chưa kết nối API');
@@ -338,7 +355,7 @@ this.log('PROTECTED','Futures thật entry '+response.orderId+' có SL và '+res
     if(other)throw Error('Có lệnh điều kiện ngoài OCC, không mở lệnh mới');
     new ProtectionCheckpoint(this.protectionPath).save({phase:'IDLE',entry:null,stop:null,tps:[],inFlight:null,halted:false});
     this.saveIntent({phase:'CLEARED',at:Date.now()});
-    this.activeProtection=null;this.log('FLAT','Đã đóng BTCUSDT Futures thật, hủy lệnh cũ và xác nhận sạch');
+    this.activeProtection=null;this.previousProtection=null;this.log('FLAT','Đã đóng BTCUSDT Futures thật, hủy lệnh cũ và xác nhận sạch');
    }else{
     if(Math.sign(amt)!==(managed.entry.side==='LONG'?1:-1)||
        !ours.some(x=>String(x.algoId)===String(managed.stop.id)))
@@ -362,7 +379,7 @@ this.log('HALTED','Auto vẫn ON nhưng khóa giao dịch; cần kiểm tra Bina
     throw Error('Binance Futures thật còn vị thế hoặc lệnh BTCUSDT, không thể xác nhận đã sạch');
    new ProtectionCheckpoint(this.protectionPath).save({phase:'IDLE',entry:null,stop:null,tps:[],inFlight:null,halted:false});
    this.saveIntent({phase:'CLEARED',at:Date.now()});
-   this.activeProtection=null;this.halted=false;this.error=null;this.log('RECOVERED','Đã xác minh vị thế và lệnh BTCUSDT Futures thật hoàn toàn sạch');
+   this.activeProtection=null;this.previousProtection=null;this.halted=false;this.error=null;this.log('RECOVERED','Đã xác minh vị thế và lệnh BTCUSDT Futures thật hoàn toàn sạch');
    return this.snapshot();
   }finally{this.busy=false;}
  }

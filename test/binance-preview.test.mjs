@@ -97,3 +97,22 @@ test('live margin/TP editing validates immediately and server checks before save
  const js=html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
  assert.ok(js);assert.doesNotThrow(()=>new Function(js));
 });
+
+test('Position analysis displays actual Binance SL TP steps and scenarios without configuration forecasts',()=>{
+ const html=read('BINANCE_UI_PREVIEW.html'),server=read('server.mjs');
+ const service=read('futures-browser-service.mjs'),build=read('BUILD_PORTABLE.ps1');
+ for(const id of ['positionAnalysis','riskHeadline','riskUpdated','riskSummary',
+  'riskLevels','riskScenarios','riskAlerts','riskDisclaimer'])
+  assert.ok(html.includes('id="'+id+'"'),'missing risk panel: '+id);
+ assert.match(html,/fetch\('\/api\/binance\/position-analysis'/);
+ assert.match(html,/setInterval\(refreshPositionAnalysis,12000\)/);
+ assert.match(html,/riskLine\(/);
+ assert.match(html,/const owner=level\.origin/); // ownership states are explicit
+ assert.doesNotMatch(html,/innerHTML\s*=/);
+ assert.match(server,/req\.url==='\/api\/binance\/position-analysis'/);
+ assert.match(service,/async positionAnalysis\(\)/);
+ assert.match(service,/analyzeFuturesPosition/);
+ assert.match(build,/'futures-position-analysis\.mjs'/);
+ const js=html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
+ assert.ok(js);assert.doesNotThrow(()=>new Function(js));
+});
