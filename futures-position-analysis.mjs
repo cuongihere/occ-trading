@@ -6,7 +6,6 @@ const isTrue=v=>v===true||v==='true';
 const activeStatus=new Set(['NEW','ACCEPTED','PENDING_NEW']);
 const round=n=>Number(n.toFixed(8));
 const gain=(direction,entry,price,qty)=>round(direction*(price-entry)*qty);
-const approx=(a,b)=>Math.abs(a-b)<=Math.max(1e-8,Math.min(a,b)*1e-6);
 export function analyzeFuturesPosition({riskRows,algoOrders,openOrders,checkpoint=null,managed=false,leverage=null,fetchedAt=Date.now()}){
  if(!Array.isArray(riskRows)||!Array.isArray(algoOrders)||!Array.isArray(openOrders))
   throw Error('Không xác minh được vị thế hoặc danh sách lệnh Binance');
@@ -68,8 +67,8 @@ export function analyzeFuturesPosition({riskRows,algoOrders,openOrders,checkpoin
   const level={...o,label:role,quantityBTC:o.validStop?qty:o.quantity,
    sharePercent:o.validStop?100:o.quantity!=null?round(o.quantity/qty*100):null,
    priceMovePercent:o.price!=null?round(direction*(o.price-entry)/entry*100):null,
-   grossUSDT:valid&&o.price!=null&&o.quantity!=null?
-    gain(direction,entry,o.price,Math.min(qty,o.quantity)):null,
+   grossUSDT:valid&&o.price!=null&&(o.validStop||o.quantity!=null)?
+    gain(direction,entry,o.price,Math.min(qty,o.validStop?qty:o.quantity)):null,
    confirmed:valid};
   usedLevels.push(level);
   if(!valid)warnings.push('Lệnh #'+(o.id||'?')+' ('+role+') thiếu giá, sai chiều, chưa active hoặc chưa xác minh reduce-only/close-all.');
