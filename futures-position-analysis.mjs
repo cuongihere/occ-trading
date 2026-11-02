@@ -50,6 +50,10 @@ export function analyzeFuturesPosition({riskRows,algoOrders,openOrders,checkpoin
   coverageBTC:null,slProtected:false,ownershipVerified:false,warnings,
   disclaimer:'Lãi/lỗ GROSS ước tính tại giá kích hoạt; chưa trừ phí mở/đóng, funding, trượt giá hoặc các TP đã khớp trước ảnh chụp. Kích hoạt không đảm bảo khớp đúng giá.'};
  if(!side){
+  // Surface orphaned protection after a fully closed position instead of hiding it.
+  // Without a position there is no meaningful quantity share or PnL projection.
+  snapshot.levels=orders.map(o=>({...o,label:o.role,quantityBTC:o.quantity,
+   sharePercent:null,priceMovePercent:null,grossUSDT:null,confirmed:false}));
   if(orders.length||normalCount)warnings.push('Không có vị thế BTCUSDT nhưng còn lệnh đang mở: cần kiểm tra Binance trước khi bật lại AUTO.');
   return snapshot;
  }
