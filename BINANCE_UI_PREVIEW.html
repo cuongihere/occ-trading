@@ -135,6 +135,62 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
 @media(max-height:780px) and (min-width:1000px){.app{grid-template-rows:44px 78px auto auto minmax(160px,1fr) 18px;gap:8px;padding:8px 12px}.kpi .value{font-size:22px}.panel{padding:10px 12px}.fields2,.fields3{gap:5px}input:not([type=checkbox]),select{height:30px}}
 @media(max-width:1100px){.app{height:auto;min-height:100vh;display:block}.topbar,.kpis,.topgrid,.riskDashboard,.below{margin-bottom:12px}.kpis{grid-template-columns:repeat(3,1fr)}.topgrid{grid-template-columns:1fr 1fr}.topgrid .accountPanel{grid-column:1/-1}.riskDashboard{grid-template-columns:repeat(2,minmax(0,1fr))}.riskDashboard .riskOverview{grid-column:1/-1}.riskDashboard .riskSummary{grid-template-columns:repeat(4,minmax(0,1fr))}.below{grid-template-columns:1fr}.panel{overflow:visible}#realCurve{height:190px}.tableScroll{height:270px}footer{padding-bottom:14px}}
 @media(max-width:650px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.topgrid,.riskDashboard{grid-template-columns:1fr}.topgrid .accountPanel,.riskDashboard .riskOverview{grid-column:auto}.riskDashboard .riskSummary{grid-template-columns:repeat(2,minmax(0,1fr))}.topbar{flex-wrap:wrap}.statLine{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Compact status: one source of position metrics, no duplicate overview card. */
+.topgrid{grid-template-columns:minmax(270px,.94fr) minmax(430px,1.44fr) minmax(315px,.98fr)}
+.accountPanel .riskHeadline{font-size:12px;margin-bottom:2px}
+.accountPanel .riskUpdated{margin-bottom:10px}
+.accountPanel .riskSummary{grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin:9px 0}
+.accountPanel .riskMetric{padding:5px 6px}
+.accountPanel .riskMetric span{font-size:10px}
+.accountPanel .riskMetric strong{font-size:12px}
+.accountPanel .botState{margin-top:9px;padding-top:7px;line-height:1.5}
+.accountPanel .riskAlerts{margin-top:6px;font-size:10px}
+.accountPanel .riskAlerts div{padding:3px 0}
+/* Two flat tables directly on the page; only normal page scrolling. */
+.riskDashboard{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);align-items:start}
+.riskDashboard>.panel{padding:10px 12px}
+.riskDashboard h2{margin-bottom:7px}
+.riskTable{width:100%;min-width:0;table-layout:fixed;border-collapse:collapse;font-size:11px;font-variant-numeric:tabular-nums}
+.riskTable th,.riskTable td{padding:7px 6px;white-space:normal;overflow-wrap:anywhere;border-bottom:1px solid #31445a;text-align:left;vertical-align:middle}
+.riskTable th{font-size:10px;color:#a4c0da;background:#1b2b40;position:static}
+.riskTable tr:last-child td{border-bottom:0}
+.riskTable td:first-child{font-weight:750}
+.riskTable td:nth-child(4){font-weight:700}
+.riskTable .sl td:first-child{color:#ff9b9f}
+.riskTable .tp td:first-child{color:#9ce9b4}
+.riskTable .warn td:first-child{color:#efc18d}
+.riskTable .riskSub{display:block;font-size:10px;color:#8fa9c3;font-weight:400;line-height:1.3;margin-top:2px}
+.riskTable td.positive{color:#96f0b7}
+.riskTable td.negative{color:#ff9ea0}
+.riskDashboard .riskDisclaimer{margin-top:7px;font-size:10px}
+.riskLevelsPanel .riskTable th:nth-child(1){width:14%}
+.riskLevelsPanel .riskTable th:nth-child(2){width:19%}
+.riskLevelsPanel .riskTable th:nth-child(3){width:22%}
+.riskLevelsPanel .riskTable th:nth-child(4){width:20%}
+.riskLevelsPanel .riskTable th:nth-child(5){width:25%}
+.riskScenariosPanel .riskTable th:nth-child(1){width:46%}
+.riskScenariosPanel .riskTable th:nth-child(2){width:17%}
+.riskScenariosPanel .riskTable th:nth-child(3){width:17%}
+.riskScenariosPanel .riskTable th:nth-child(4){width:20%}
+@media(max-width:1320px){
+ .riskDashboard{grid-template-columns:1fr}
+ .topgrid{grid-template-columns:minmax(280px,1fr) minmax(410px,1.3fr)}
+ .topgrid .accountPanel{grid-column:1/-1}
+ .accountPanel .riskSummary{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(max-width:750px){
+ .topgrid,.riskDashboard{grid-template-columns:1fr}
+ .topgrid .accountPanel{grid-column:auto}
+ .accountPanel .riskSummary{grid-template-columns:repeat(3,minmax(0,1fr))}
+ .riskTable{table-layout:auto}
+ .riskTable thead{display:none}
+ .riskTable tbody tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px 8px;padding:8px 0;border-bottom:1px solid #33485f}
+ .riskTable tbody td{display:block;padding:2px 4px;border:0;min-width:0}
+ .riskTable tbody td:before{content:attr(data-label);display:block;color:#91abc5;font-size:9px;font-weight:400;margin-bottom:2px}
+ .riskTable tbody td:first-child{grid-column:1/-1}
+ .riskTable tbody td[colspan]{grid-column:1/-1}
+}
 </style>
 </head>
 <body>
@@ -197,7 +253,9 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
 <span id="settingStatus" class="small">Tự lưu · Auto OFF khi sửa</span></div>
  </div>
  <div class="panel accountPanel">
-  <h2>Trạng thái vị thế & giao dịch</h2>
+  <h2>Vị thế BTCUSDT & trạng thái bot</h2>
+  <div class="riskHeadline" id="riskHeadline">Đang đọc vị thế từ Binance…</div>
+  <div class="riskUpdated" id="riskUpdated">Dữ liệu vị thế sẽ cập nhật tự động</div>
   <div class="positionGrid">
    <div><span class="label">Entry</span><strong id="entryPrice">—</strong></div>
    <div><span class="label">Mark Price</span><strong id="markPrice">—</strong></div>
@@ -205,30 +263,33 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
    <div><span class="label">P&L vị thế</span><strong id="btcPnl">—</strong></div>
    <div><span class="label">Margin</span><strong id="marginMode">—</strong></div>
    <div><span class="label">Đòn bẩy Binance</span><strong id="accountLeverage">—</strong>
-<span id="leverageMismatch" class="small" role="status"></span></div>
+    <span id="leverageMismatch" class="small" role="status"></span></div>
   </div>
-  <div class="botState"><div><span class="key">Lệnh đang chờ:</span> <strong id="openOrderCount">—</strong></div>
-   <div><span class="key">Lệnh SL/TP:</span> <strong id="openAlgoCount">—</strong></div>
-   <div><span class="key">Bot:</span> <strong id="botState">OFF</strong></div>
-   <div class="small" id="autoHint">Bật Auto mới cho phép mở lệnh.</div></div>
-  </div>
-</section>
-<section class="riskDashboard" id="positionAnalysis" aria-label="Phân tích vị thế Binance đang mở">
- <div class="panel riskOverview">
-  <h2>Tổng quan vị thế đang mở</h2>
-  <div class="riskHeadline" id="riskHeadline">Đang đọc vị thế trực tiếp từ Binance…</div>
-  <div class="riskUpdated" id="riskUpdated">Không dùng giá dự kiến từ cấu hình bot</div>
   <div class="riskSummary" id="riskSummary" hidden></div>
+  <div class="botState">
+   <span class="key">Lệnh chờ:</span> <strong id="openOrderCount">—</strong> ·
+   <span class="key">SL/TP:</span> <strong id="openAlgoCount">—</strong>
+   <div><span class="key">Bot:</span> <strong id="botState">OFF</strong></div>
+   <div class="small" id="autoHint">Bật Auto mới cho phép mở lệnh.</div>
+  </div>
   <div class="riskAlerts" id="riskAlerts" role="status"></div>
-  <div class="riskDisclaimer" id="riskDisclaimer">Các kịch bản chỉ để theo dõi, không đặt hoặc thay đổi lệnh.</div>
  </div>
+</section>
+<section class="riskDashboard" id="positionAnalysis" aria-label="Bảng SL TP và kịch bản lãi lỗ Binance">
  <div class="panel riskLevelsPanel">
   <h2>SL / TP thực tế trên Binance</h2>
-  <div id="riskLevels" class="riskEmpty">Đang lấy lệnh từ Binance…</div>
+  <table class="riskTable" aria-label="Các lệnh SL TP đang mở trên Binance">
+   <thead><tr><th>Mức</th><th>Giá kích hoạt</th><th>Khối lượng</th><th>Lãi/lỗ GROSS</th><th>Trạng thái</th></tr></thead>
+   <tbody id="riskLevels"><tr><td colspan="5">Đang đọc lệnh Binance…</td></tr></tbody>
+  </table>
  </div>
  <div class="panel riskScenariosPanel">
-  <h2>Kịch bản lời / lỗ theo từng nấc</h2>
-  <div id="riskScenarios" class="riskEmpty">Chờ dữ liệu vị thế.</div>
+  <h2>Kịch bản lời/lỗ</h2>
+  <table class="riskTable" aria-label="Các kịch bản kết quả của vị thế">
+   <thead><tr><th>Kịch bản</th><th>Đã chốt</th><th>Còn lại</th><th>Lãi/lỗ GROSS</th></tr></thead>
+   <tbody id="riskScenarios"><tr><td colspan="4">Đang tính theo lệnh trên sàn…</td></tr></tbody>
+  </table>
+  <div class="riskDisclaimer" id="riskDisclaimer">GROSS ước tính · chưa trừ phí, funding và trượt giá.</div>
  </div>
 </section>
 <section class="below">
@@ -497,86 +558,89 @@ function riskMetric(label,value,tone=''){
  if(tone)amount.className=tone;
  el.append(name,amount);return el;
 }
-function riskLine(label,value,detail,kind=''){
- const card=document.createElement('div');card.className='riskLine '+kind;
- const top=document.createElement('div');top.className='riskLineMain';
- const heading=document.createElement('span');heading.textContent=label;
- const result=document.createElement('strong');result.textContent=value;
- if(value.startsWith('+'))result.className='positive';
- else if(value.startsWith('-'))result.className='negative';
- top.append(heading,result);
- const sub=document.createElement('div');sub.className='riskLineSub';sub.textContent=detail;
- card.append(top,sub);return card;
+// Exchange data is assigned only as text nodes. No HTML injection from order fields.
+function riskRow(values,labels,kind='',descriptions=[]){
+ const row=document.createElement('tr');row.className=kind;
+ values.forEach((value,index)=>{
+  const cell=document.createElement('td');cell.dataset.label=labels[index];
+  cell.textContent=String(value??'—');
+  if(descriptions[index]){
+   const sub=document.createElement('span');sub.className='riskSub';
+   sub.textContent=descriptions[index];cell.append(sub);
+  }
+  if(typeof value==='string'&&value.startsWith('+')&&value.includes('USDT'))cell.classList.add('positive');
+  if(typeof value==='string'&&value.startsWith('-')&&value.includes('USDT'))cell.classList.add('negative');
+  row.append(cell);
+ });
+ return row;
+}
+function riskEmptyRow(message,count){
+ const row=document.createElement('tr'),cell=document.createElement('td');
+ cell.colSpan=count;cell.textContent=message;row.append(cell);return row;
 }
 function resetPositionAnalysis(message){
  $('riskHeadline').textContent=message;
- $('riskUpdated').textContent='Không có dữ liệu mới được xác minh';
+ $('riskUpdated').textContent='Chưa có dữ liệu Binance mới';
  $('riskSummary').hidden=true;$('riskSummary').replaceChildren();
- $('riskLevels').replaceChildren();$('riskLevels').textContent='—';
- $('riskScenarios').replaceChildren();$('riskScenarios').textContent='—';
+ $('riskLevels').replaceChildren(riskEmptyRow('Không có dữ liệu lệnh để hiển thị',5));
+ $('riskScenarios').replaceChildren(riskEmptyRow('Không đủ dữ liệu tính kịch bản',4));
  $('riskAlerts').replaceChildren();
- $('riskDisclaimer').textContent='Chỉ hiển thị khi lấy được dữ liệu mới trực tiếp từ Binance.';
+ $('riskDisclaimer').textContent='GROSS ước tính · không bao gồm phí, funding hoặc trượt giá.';
 }
 function showPositionAnalysis(data){
  if(!data||!['open','flat'].includes(data.status)){
-  resetPositionAnalysis(data?.message||data?.warnings?.[0]||'Đang chờ Binance đồng bộ vị thế');return;
+  resetPositionAnalysis(data?.message||data?.warnings?.[0]||'Chờ Binance đồng bộ vị thế');return;
  }
  const p=data.position,positionOpen=data.status==='open';
- $('riskHeadline').textContent=data.halted?'KHÓA AN TOÀN · Vẫn đọc lệnh trên Binance':
-  positionOpen?'Vị thế BTCUSDT · '+p.side+' · '+fmt(p.quantityBTC,6)+' BTC':'Không có vị thế BTCUSDT';
- $('riskUpdated').textContent='Đã đọc lệnh Binance lúc '+vn(data.fetchedAt)+' · '+data.algoCount+' lệnh Algo';
+ $('riskHeadline').textContent=positionOpen?
+  p.side+' · '+fmt(p.quantityBTC,6)+' BTC còn lại':'Không có vị thế BTCUSDT';
+ $('riskUpdated').textContent='Đọc từ Binance lúc '+vn(data.fetchedAt);
  const metrics=$('riskSummary');metrics.replaceChildren();metrics.hidden=!positionOpen;
  if(positionOpen){
   const tone=Number(p.unrealizedUSDT)>0?'positive':Number(p.unrealizedUSDT)<0?'negative':'';
   metrics.append(
-   riskMetric('Khối lượng còn lại',fmt(p.quantityBTC,6)+' BTC'),
-   riskMetric('Giá vào',fmt(p.entryPrice,2)+' USDT'),
-   riskMetric('Mark Price (sàn)',fmt(p.markPrice,2)),
-   riskMetric('Giá trị danh nghĩa',fmt(p.notionalUSDT,2)+' USDT'),
-   riskMetric('P&L chưa thực hiện',signedUSDT(p.unrealizedUSDT),tone),
-   riskMetric('Ký quỹ vị thế',p.initialMarginUSDT!=null?fmt(p.initialMarginUSDT,2)+' USDT':'—'),
-   riskMetric('ROI ước tính',p.roiPercent!=null?fmt(p.roiPercent,2)+'%':'—',tone),
-   riskMetric('Liq. Price',p.liquidationPrice!=null?fmt(p.liquidationPrice,2):'—')
+   riskMetric('BTC còn lại',fmt(p.quantityBTC,6)),
+   riskMetric('Giá trị (USDT)',fmt(p.notionalUSDT,2)),
+   riskMetric('ROI ước tính',p.roiPercent!=null?fmt(p.roiPercent,2)+'%':'—',tone)
   );
  }
- const levels=$('riskLevels');levels.replaceChildren();levels.className='';
- const list=data.levels||[];let tpIndex=0;
- for(const level of list){
+ const levels=$('riskLevels');levels.replaceChildren();
+ const headers=['Mức','Giá kích hoạt','Khối lượng','Lãi/lỗ GROSS','Trạng thái'];
+ let tpIndex=0;
+ for(const level of data.levels||[]){
   const isTp=level.role==='TP',isSl=level.role==='SL';
-  const label=isTp?'TP'+(++tpIndex):isSl?'STOP LOSS':'LỆNH KHÁC';
-  const price=level.price!=null?fmt(level.price,2):'Không có giá hợp lệ';
-  const qty=level.quantityBTC!=null?fmt(level.quantityBTC,6)+' BTC':'Không rõ khối lượng';
-  const part=level.sharePercent!=null?' · '+fmt(level.sharePercent,2)+'% vị thế':'';
-  const move=level.priceMovePercent!=null?' · chênh giá '+fmt(level.priceMovePercent,2)+'%':'';
-  const owner=level.origin==='BOT_ĐANG_QUẢN_LÝ'?'OCC đang quản lý':
-   level.origin==='KHỚP_CHECKPOINT'?'Khớp ID lưu trước đó':'Chưa xác minh sở hữu';
-  const valid=level.confirmed?'Đã kiểm tra thuộc tính lệnh':'Không đủ điều kiện xác minh';
-  const headline=label+' · '+price;
-  const detail=qty+part+move+' · '+level.status+' · '+owner+' · '+valid+
-   (level.workingType?' · kích hoạt '+level.workingType:'');
-  levels.append(riskLine(headline,signedUSDT(level.grossUSDT),detail,level.confirmed?(isSl?'sl':'tp'):'warn'));
+  const label=isTp?'TP'+(++tpIndex):isSl?'SL':'Khác';
+  const origin=level.origin==='BOT_ĐANG_QUẢN_LÝ'?'Bot quản lý':
+   level.origin==='KHỚP_CHECKPOINT'?'ID lưu trước':'Chưa rõ ID';
+  const status=level.confirmed?'Đang mở':'Cần kiểm tra';
+  const values=[label,level.price!=null?fmt(level.price,2):'—',
+   level.quantityBTC!=null?fmt(level.quantityBTC,6)+' BTC':'—',
+   signedUSDT(level.grossUSDT),status];
+  const notes=['',level.priceMovePercent!=null?fmt(level.priceMovePercent,2)+'% giá vào':'',
+   level.sharePercent!=null?fmt(level.sharePercent,2)+'% vị thế':'',
+   '',origin+' · '+(level.status||'—')];
+  const row=riskRow(values,headers,level.confirmed?(isSl?'sl':'tp'):'warn',notes);
+  row.title='ID '+(level.id||'—')+' · '+(level.workingType||'—')+' · '+origin;
+  levels.append(row);
  }
- if(!list.length)levels.textContent=positionOpen?'Không đọc thấy lệnh SL/TP đang mở trên Binance.':'Không có lệnh Algo đang mở.';
- const scenarios=$('riskScenarios');scenarios.replaceChildren();scenarios.className='';
- const scenarioList=data.scenarios||[];
- for(const scenario of scenarioList){
-  const detail='Đã chốt '+fmt(scenario.closedBTC,6)+' BTC · còn '+
-   fmt(scenario.remainingBTC,6)+' BTC · '+scenario.source;
-  scenarios.append(riskLine(scenario.label,signedUSDT(scenario.grossUSDT),detail,
-   scenario.grossUSDT==null?'warn':''));
+ if(!(data.levels||[]).length)levels.append(riskEmptyRow(
+  positionOpen?'Binance không có SL/TP đang mở.':'Không có lệnh SL/TP.',5));
+ const scenarios=$('riskScenarios');scenarios.replaceChildren();
+ const scenHeaders=['Kịch bản','Đã chốt','Còn lại','Lãi/lỗ GROSS'];
+ for(const item of data.scenarios||[]){
+  scenarios.append(riskRow(
+   [item.label,fmt(item.closedBTC,6)+' BTC',fmt(item.remainingBTC,6)+' BTC',signedUSDT(item.grossUSDT)],
+   scenHeaders,'',['',null,null,null]
+  ));
  }
- if(!scenarioList.length)scenarios.textContent=positionOpen?
-  'Chưa có đủ lệnh SL/TP hợp lệ để tính kịch bản.':'Chưa có vị thế để dự phóng kết quả.';
+ if(!(data.scenarios||[]).length)scenarios.append(riskEmptyRow(
+  positionOpen?'Thiếu dữ liệu SL/TP hợp lệ để tính.':'Chưa có vị thế mở.',4));
  const alerts=$('riskAlerts');alerts.replaceChildren();
- if(data.halted){
-  const n=document.createElement('div');
-  n.textContent='BOT ĐANG KHÓA AN TOÀN: chỉ xem giá và lệnh. Không có thao tác tự phục hồi/đặt lệnh. Kiểm tra Binance trước khi đối soát.';
-  alerts.append(n);
- }
+ // Safety state is already clearly shown by the dedicated botState above.
  for(const warning of data.warnings||[]){
-  const n=document.createElement('div');n.textContent=warning;alerts.append(n);
+  const item=document.createElement('div');item.textContent=warning;alerts.append(item);
  }
- $('riskDisclaimer').textContent=data.disclaimer||'Lãi/lỗ chỉ là ước tính, không đảm bảo giá khớp.';
+ $('riskDisclaimer').textContent='Kết quả GROSS tham khảo · chưa trừ phí, funding, trượt giá và P&L đã chốt trước đó.';
 }
 async function refreshPositionAnalysis(){
  if(positionAnalysisRefreshing)return;
