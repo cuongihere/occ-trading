@@ -25,6 +25,7 @@ export class BrowserFutures{
   this.lastAccountSync=null;
   this.api=null;this.environment=null;this.account=null;this.filters=null;
   this.armed=false;this.busy=false;this.halted=false;this.error=null;this.events=[];this.activeProtection=null;
+  this.recoveryStatus='idle';this.lastRecoveryCheck=null;this.restoreTask=null;
   const unresolved=existsSync(this.intentPath)?JSON.parse(readFileSync(this.intentPath,'utf8')):null;
   const prior=existsSync(this.protectionPath)?new ProtectionCheckpoint(this.protectionPath).load():null;
   this.previousProtection=prior&&prior.phase!=='IDLE'?prior:null; // ID reference only, never resume order management.
@@ -51,6 +52,7 @@ export class BrowserFutures{
  snapshot(){
   return {connected:!!this.api,environment:this.environment,armed:this.armed,
    realFuturesOnly:true,halted:this.halted,busy:this.busy,error:this.error,
+   recoveryStatus:this.recoveryStatus,lastRecoveryCheck:this.lastRecoveryCheck,
    protectedPosition:this.activeProtection?{entry:this.activeProtection.entry,stop:this.activeProtection.stop,tps:this.activeProtection.tps}:null,
    config:this.config,account:this.account,credentialSaved:this.vault.exists(),lastAccountSync:this.lastAccountSync,
    events:this.events.slice(-20),
@@ -154,23 +156,86 @@ export class BrowserFutures{
   try{await this.inspect();this.error=this.halted?this.error:null;
    if(remember===true)this.vault.save({apiKey,apiSecret});
    else if(remember===false&&this.vault.exists())this.vault.delete();
-   this.log('CONNECTED','Đã xác minh Binance Futures thật; Auto mặc định OFF');}
+   this.log('CONNECTED','Đã xác minh Binance Futures thật; Auto mặc định OFF');
+   // Only a completed OCC-protected position that is now fully FLAT may
+   // clear its stale restart checkpoint automatically. Never auto-arm.
+   await this.reconcileClosedAfterReconnect();
+  }
   catch(e){this.api.close();this.api=null;this.account=null;this.error=e.message;throw e;}
   return this.snapshot();
  }
  async restoreSavedConnection(){
-  if(this.api||!this.vault.exists())return this.snapshot();
-  try{
-   const creds=this.vault.load();
-   await this.connect({...creds,environment:'production',remember:null});
-   this.armed=false;
-   this.log('RESTORED','API được giải mã theo tài khoản Windows; Auto vẫn OFF');
-  }catch(e){
-   this.armed=false;this.error='Không thể khôi phục API đã lưu: '+e.message;
-   this.log('API_RESTORE_FAILED',this.error);
-  }
-  return this.snapshot();
+  if(this.restoreTask)return this.restoreTask;
+  if(this.api&&this.account)return this.snapshot();
+  if(!this.vault.exists())return this.snapshot();
+  this.restoreTask=(async()=>{
+   try{
+    const creds=this.vault.load();
+    await this.connect({...creds,environment:'production',remember:null});
+    this.armed=false;
+    this.log('RESTORED','Đã kết nối lại API Binance; Auto vẫn OFF');
+   }catch(e){
+    this.armed=false;this.error='Không thể khôi phục API đã lưu: '+e.message;
+    this.log('API_RESTORE_FAILED',this.error);
+   }
+   return this.snapshot();
+  })();
+  try{return await this.restoreTask;}
+  finally{this.restoreTask=null;}
  }
+ // A PROTECTED entry can close through its exchange SL/TP while the app is off.
+ // Re-check flat + zero orders independently; only then clear the stale checkpoint.
+ // Any ambiguous/in-flight checkpoint stays HALTED for manual review.
+ async reconcileClosedAfterReconnect(){
+  if(!this.api||this.armed||!this.halted||this.activeProtection)return false;
+  const intent=existsSync(this.intentPath)?JSON.parse(readFileSync(this.intentPath,'utf8')):null;
+  if(intent?.phase!=='PROTECTED'||this.previousProtection?.phase!=='PROTECTED'){
+   this.recoveryStatus='manual_required';
+   this.log('RECONCILE_REVIEW','Chỉ tự đối soát lệnh đã xác nhận PROTECTED; các trạng thái khác cần kiểm tra thủ công.');
+   return false;
+  }
+  this.recoveryStatus='checking';this.lastRecoveryCheck=Date.now();
+  try{
+   // First verification comes from connect() -> inspect(); read back again.
+   const first=this.account;
+   if(!first||first.positionBTC!==0||first.openOrders!==0||first.openAlgos!==0){
+    this.recoveryStatus='position_or_orders_open';return false;
+   }
+   const second=await this.inspect();
+   if(second.positionBTC!==0||second.openOrders!==0||second.openAlgos!==0){
+    this.recoveryStatus='position_or_orders_open';return false;
+   }
+   await this.reconcileFlat(); // final fresh inspection and durable IDLE/CLEARED writes
+   this.recoveryStatus='recovered';
+   this.lastRecoveryCheck=Date.now();
+   this.log('AUTO_RECONCILED','Binance xác nhận BTCUSDT đã FLAT và không còn SL/TP; đã mở khóa. AUTO vẫn OFF.');
+   return true;
+  }catch(e){
+   this.recoveryStatus='failed';
+   this.error='Chưa thể tự đối soát: '+e.message;
+   this.log('RECONCILE_FAILED',this.error);
+   return false;
+  }
+ }
+ // Explicit one-click recovery. May reconnect a saved DPAPI key, but may never
+ // bypass an open position/order, change Binance orders or auto-enable trades.
+ async checkBinanceAndReconcile(){
+  if(this.armed)throw Error('Nhấn OFF trước khi đối soát vị thế BTCUSDT');
+  if(!this.api||!this.account)await this.restoreSavedConnection();
+  if(!this.api||!this.account)throw Error(this.error||'Không kết nối được Binance API; nhập lại API Key hoặc thử lại');
+  this.recoveryStatus='checking';this.lastRecoveryCheck=Date.now();
+  try{
+   await this.reconcileFlat();
+   this.recoveryStatus='recovered';this.lastRecoveryCheck=Date.now();
+   return this.snapshot();
+  }catch(e){
+   this.recoveryStatus='manual_required';this.lastRecoveryCheck=Date.now();
+   this.error='Chưa đối soát được: '+e.message;
+   this.log('RECONCILE_BLOCKED',this.error);
+   throw e;
+  }
+ }
+
  forgetSavedCredentials(){
   if(this.armed||this.busy)throw Error('Tắt Auto trước khi xóa thông tin API');
   this.vault.delete();this.close();return this.snapshot();
