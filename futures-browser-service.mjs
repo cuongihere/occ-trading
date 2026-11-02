@@ -50,7 +50,7 @@ export class BrowserFutures{
   const temp=this.intentPath+'.tmp';writeFileSync(temp,JSON.stringify(record,null,2),{mode:0o600});renameSync(temp,this.intentPath);
  }
  snapshot(){
-  return {connected:!!this.api,environment:this.environment,armed:this.armed,
+  return {connected:!!this.api&&!!this.account,environment:this.environment,armed:this.armed,
    realFuturesOnly:true,halted:this.halted,busy:this.busy,error:this.error,
    recoveryStatus:this.recoveryStatus,lastRecoveryCheck:this.lastRecoveryCheck,
    protectedPosition:this.activeProtection?{entry:this.activeProtection.entry,stop:this.activeProtection.stop,tps:this.activeProtection.tps}:null,
@@ -189,7 +189,10 @@ export class BrowserFutures{
  async reconcileClosedAfterReconnect(){
   if(!this.api||this.armed||!this.halted||this.activeProtection)return false;
   const intent=existsSync(this.intentPath)?JSON.parse(readFileSync(this.intentPath,'utf8')):null;
-  if(intent?.phase!=='PROTECTED'||this.previousProtection?.phase!=='PROTECTED'){
+  if(intent?.phase!=='PROTECTED'||this.previousProtection?.phase!=='PROTECTED'||
+     !this.previousProtection?.entry||!this.previousProtection?.stop||
+     !Array.isArray(this.previousProtection?.tps)||!this.previousProtection.tps.length||
+     this.previousProtection.inFlight){
    this.recoveryStatus='manual_required';
    this.log('RECONCILE_REVIEW','Chỉ tự đối soát lệnh đã xác nhận PROTECTED; các trạng thái khác cần kiểm tra thủ công.');
    return false;
@@ -309,10 +312,10 @@ export class BrowserFutures{
   // Enforce on the server even if browser-side validation was bypassed.
   const sizing=this.sizingPreview(this.config,marketPrice);
   if(sizing.status!=='valid')throw Error('Chưa thể bật AUTO: '+sizing.message);
-  this.armed=true;this.log('AUTO_ON','BẬT AUTO TIỀN THẬT, chờ tín hiệu BTCUSDT');return this.snapshot();
+  this.armed=true;this.recoveryStatus='idle';this.log('AUTO_ON','BẬT AUTO TIỀN THẬT, chờ tín hiệu BTCUSDT');return this.snapshot();
  }
  disarm(){this.armed=false;this.log('AUTO_OFF','Không mở lệnh mới; giữ lệnh SL/TP đã đặt trên Futures thật');return this.snapshot();}
- close(){this.disarm();this.api?.close();this.api=null;this.account=null;}
+ close(){this.disarm();this.api?.close();this.api=null;this.account=null;this.recoveryStatus='idle';}
  // On failed exchange-side STOP, reduce-only MARKET can close a confirmed unprotected BTC position.
  // Never retry an ambiguous order and never submit opposite-opening quantity.
  async emergencyCloseIfUnprotected(){
