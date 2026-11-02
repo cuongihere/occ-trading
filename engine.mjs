@@ -112,7 +112,7 @@ export class OCCEngine {
   if(side&&live){
    const id=`${this.sessionId}:BTCUSDT:M15:${b.time}:${side}`;
    if(!this.signals.some(s=>s.id===id)){
-    signal={id,time:b.closeTime+1,barTime:b.time,observedAt,side,openSeries,closeSeries,eligible:this.running&&this.healthy,source:'Binance USD-M BTCUSDT',mode:'delay0',h4Provisional:(b.closeTime!==ht+H4-1)};
+    signal={id,time:b.closeTime+1,barTime:b.time,observedAt,side,openSeries,closeSeries,eligible:this.running&&this.healthy&&!this.position,source:'Binance USD-M BTCUSDT',mode:'delay0',h4Provisional:(b.closeTime!==ht+H4-1)};
     this.signals.push(Object.freeze(signal));
     if(signal.eligible)this.pending={...signal};
    }
@@ -124,6 +124,9 @@ export class OCCEngine {
   if(time<this.lastTradeTime||(id!==undefined&&id===this.lastTradeId))return [];
   this.lastPrice=price;this.lastTradeTime=time;this.lastTradeId=id??null;
   if(!healthy){this.setHealthy(false);return [];}this.healthy=true;
+  // Never reverse an existing position, including when its last TP/SL fills on this tick.
+  const wasPositionOpen=Boolean(this.position);
+  if(wasPositionOpen)this.pending=null; // discard any queued signal generated while occupied
   const fills=[],c=this.config,round=x=>Number(x.toFixed(12));
   const close=(qty,fillPrice,reason,signalId,fillId)=>{
    const p=this.position;if(!p||qty<=0)return;
@@ -161,10 +164,10 @@ export class OCCEngine {
   const pending=this.pending;
   if(!pending||!this.running||time<pending.time||time<pending.observedAt)return clone(fills);
   this.pending=null;
-  if(this.position?.side===pending.side)return clone(fills);
+  // Await a NEW OCC crossover observed only after the position is fully flat.
+  if(wasPositionOpen||this.position)return clone(fills);
   const direction=pending.side==='LONG'?1:-1;
   const fillPrice=price*(1+direction*c.slippageBps/10000);
-  if(this.position){close(this.position.qty,fillPrice,'REVERSE',pending.id,pending.id+':CLOSE');}
   const qty=round(Math.floor(Math.max(0,this.balance)*0.1/fillPrice/c.qtyStep+1e-10)*c.qtyStep);
   if(qty>=c.minQty&&qty*fillPrice>=c.minNotional&&qty>0){
    const fee=qty*fillPrice*c.feeBps/10000;this.fees+=fee;this.balance-=fee;
