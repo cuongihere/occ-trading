@@ -355,7 +355,7 @@ this.log('PROTECTED','Futures thật entry '+response.orderId+' có SL và '+res
     if(other)throw Error('Có lệnh điều kiện ngoài OCC, không mở lệnh mới');
     new ProtectionCheckpoint(this.protectionPath).save({phase:'IDLE',entry:null,stop:null,tps:[],inFlight:null,halted:false});
     this.saveIntent({phase:'CLEARED',at:Date.now()});
-    this.activeProtection=null;this.log('FLAT','Đã đóng BTCUSDT Futures thật, hủy lệnh cũ và xác nhận sạch');
+    this.activeProtection=null;this.previousProtection=null;this.log('FLAT','Đã đóng BTCUSDT Futures thật, hủy lệnh cũ và xác nhận sạch');
    }else{
     if(Math.sign(amt)!==(managed.entry.side==='LONG'?1:-1)||
        !ours.some(x=>String(x.algoId)===String(managed.stop.id)))
@@ -379,7 +379,7 @@ this.log('HALTED','Auto vẫn ON nhưng khóa giao dịch; cần kiểm tra Bina
     throw Error('Binance Futures thật còn vị thế hoặc lệnh BTCUSDT, không thể xác nhận đã sạch');
    new ProtectionCheckpoint(this.protectionPath).save({phase:'IDLE',entry:null,stop:null,tps:[],inFlight:null,halted:false});
    this.saveIntent({phase:'CLEARED',at:Date.now()});
-   this.activeProtection=null;this.halted=false;this.error=null;this.log('RECOVERED','Đã xác minh vị thế và lệnh BTCUSDT Futures thật hoàn toàn sạch');
+   this.activeProtection=null;this.previousProtection=null;this.halted=false;this.error=null;this.log('RECOVERED','Đã xác minh vị thế và lệnh BTCUSDT Futures thật hoàn toàn sạch');
    return this.snapshot();
   }finally{this.busy=false;}
  }
