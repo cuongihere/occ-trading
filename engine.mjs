@@ -10,10 +10,11 @@ export class OCCEngine {
  reset(config=this.config) {
   const c={capital:10000,feeBps:5,slippageBps:1,qtyStep:0.001,minQty:0.001,minNotional:0,
    tickSize:0.1,exitMode:'Multi TP v5',classicSlPoints:0,classicTpPoints:0,
-   slPercent:1,tpMode:'Percent',tp1Val:1,tp2Val:2,tp3Val:3,tp1Qty:33,tp2Qty:33,...config};
+   slPercent:1,tpMode:'Percent',tp1Val:1,tp2Val:2,tp3Val:3,tp1Qty:33,tp2Qty:33,reverseOnSignal:false,...config};
   const numeric=['capital','feeBps','slippageBps','qtyStep','minQty','minNotional','tickSize',
    'classicSlPoints','classicTpPoints','slPercent','tp1Val','tp2Val','tp3Val','tp1Qty','tp2Qty'];
   for(const k of numeric)c[k]=num(c[k],k);
+  if(typeof c.reverseOnSignal!=='boolean')throw Error('Invalid reversal setting');
   if(c.capital<=0||c.feeBps<0||c.slippageBps<0||c.slippageBps>=10000||
      c.qtyStep<=0||c.minQty<0||c.minNotional<0||c.tickSize<=0||
      !['Classic v3','Multi TP v5'].includes(c.exitMode)||!['Percent','Points'].includes(c.tpMode)||
@@ -68,7 +69,7 @@ export class OCCEngine {
  setRunning(value) { if(value&&!this.ready) throw Error('Warmup required'); this.running=!!value;if(!value)this.pending=null; }
  configure(update) {
   if(this.running||this.position)throw Error('Tạm dừng và đóng hết vị thế mô phỏng trước khi thay đổi cài đặt.');
-  const allowed=['feeBps','slippageBps','slPercent','tpMode','tp1Val','tp2Val','tp3Val','tp1Qty','tp2Qty'];
+  const allowed=['feeBps','slippageBps','slPercent','tpMode','tp1Val','tp2Val','tp3Val','tp1Qty','tp2Qty','reverseOnSignal'];
   const changes=Object.fromEntries(allowed.filter(k=>Object.hasOwn(update,k)).map(k=>[k,update[k]]));
   const next=new OCCEngine({...this.config,...changes,exitMode:'Multi TP v5'});
   if(next.config.feeBps>500||next.config.slippageBps>1000)throw Error('Phí hoặc slippage vượt giới hạn.');
@@ -112,7 +113,7 @@ export class OCCEngine {
   if(side&&live){
    const id=`${this.sessionId}:BTCUSDT:M15:${b.time}:${side}`;
    if(!this.signals.some(s=>s.id===id)){
-    signal={id,time:b.closeTime+1,barTime:b.time,observedAt,side,openSeries,closeSeries,eligible:this.running&&this.healthy&&!this.position,source:'Binance USD-M BTCUSDT',mode:'delay0',h4Provisional:(b.closeTime!==ht+H4-1)};
+    signal={id,time:b.closeTime+1,barTime:b.time,observedAt,side,openSeries,closeSeries,eligible:this.running&&this.healthy&&(!this.position||(this.config.reverseOnSignal&&this.position.side!==side)),source:'Binance USD-M BTCUSDT',mode:'delay0',h4Provisional:(b.closeTime!==ht+H4-1)};
     this.signals.push(Object.freeze(signal));
     if(signal.eligible)this.pending={...signal};
    }
@@ -126,7 +127,7 @@ export class OCCEngine {
   if(!healthy){this.setHealthy(false);return [];}this.healthy=true;
   // Never reverse an existing position, including when its last TP/SL fills on this tick.
   const wasPositionOpen=Boolean(this.position);
-  if(wasPositionOpen)this.pending=null; // discard any queued signal generated while occupied
+  if(wasPositionOpen&&!this.config.reverseOnSignal)this.pending=null; // hold mode: no old crossover replay
   const fills=[],c=this.config,round=x=>Number(x.toFixed(12));
   const close=(qty,fillPrice,reason,signalId,fillId)=>{
    const p=this.position;if(!p||qty<=0)return;
@@ -164,10 +165,15 @@ export class OCCEngine {
   const pending=this.pending;
   if(!pending||!this.running||time<pending.time||time<pending.observedAt)return clone(fills);
   this.pending=null;
-  // Await a NEW OCC crossover observed only after the position is fully flat.
-  if(wasPositionOpen||this.position)return clone(fills);
+  // Hold mode needs a fresh signal after fully flat. Reverse mode restores
+  // the original OCC opposite-crossover exit/entry semantics.
+  if(!this.config.reverseOnSignal&&(wasPositionOpen||this.position))return clone(fills);
+  if(this.position?.side===pending.side)return clone(fills);
   const direction=pending.side==='LONG'?1:-1;
   const fillPrice=price*(1+direction*c.slippageBps/10000);
+  if(this.position){
+   close(this.position.qty,fillPrice,'REVERSE',pending.id,pending.id+':CLOSE');
+  }
   const qty=round(Math.floor(Math.max(0,this.balance)*0.1/fillPrice/c.qtyStep+1e-10)*c.qtyStep);
   if(qty>=c.minQty&&qty*fillPrice>=c.minNotional&&qty>0){
    const fee=qty*fillPrice*c.feeBps/10000;this.fees+=fee;this.balance-=fee;
