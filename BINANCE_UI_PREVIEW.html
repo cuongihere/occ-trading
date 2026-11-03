@@ -69,6 +69,10 @@ button:disabled{opacity:.42;cursor:not-allowed}
 .apiActions button{font-size:11px;padding:7px 10px}
 .message{font-size:11px;line-height:1.35;max-height:48px;overflow:auto;margin:8px 0;color:#ffd0a8}
 .formSection{margin-bottom:9px}.formSection:last-child{margin-bottom:0}
+.reverseMode{display:flex;align-items:center;gap:9px;border:1px solid #445b6f;border-radius:8px;padding:7px 10px;margin:8px 0 6px;background:#102031}
+.reverseMode input{accent-color:#9feab5;flex-shrink:0;width:17px;height:17px}
+.reverseMode span{font-size:12px;color:#e3efff;font-weight:700}
+.reverseMode small{font-size:10px;color:#9fb7cb}
 .sizingAlert{font-size:11px;line-height:1.35;padding:6px 9px;margin:6px 0;border-radius:7px;border:1px solid #536176;background:#16293a;color:#b8c9df}
 .sizingAlert.invalid{border-color:#e7a04e;background:#423025;color:#ffd2a3}
 .sizingAlert.valid{border-color:#3a835d;background:#15392c;color:#a7edc1}
@@ -247,6 +251,11 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
   <div class="fields3"><label>Chốt TP1 (%)<input id="q1" type="number" step="any" min="0" max="100"></label>
   <label>Chốt TP2 (%)<input id="q2" type="number" step="any" min="0" max="100"></label>
   <label>TP3 còn lại (%)<input id="q3" type="text" disabled></label></div>
+  <label class="reverseMode" style="flex-direction:row" title="ON: tín hiệu OCC ngược đóng vị thế bằng reduceOnly, xác minh dọn SL/TP cũ rồi mở chiều mới. OFF: giữ đến SL/TP.">
+   <input id="reverseToggle" type="checkbox">
+   <span>Đảo chiều theo OCC: <strong id="reverseState">OFF</strong></span>
+   <small>ON: theo tín hiệu · OFF: giữ đến SL/TP</small>
+  </label>
   <div id="sizingAlert" class="sizingAlert unavailable" role="status" aria-live="polite">Đang kiểm tra khối lượng TP1/TP2/TP3 theo Binance…</div>
   <div class="settingActions"><div class="row"><button id="save" class="primary">Lưu cấu hình</button>
 <button id="applyLeverage" class="minor" disabled>Áp dụng đòn bẩy lên Binance</button></div>
@@ -325,15 +334,17 @@ const numbers=['marginUSDT','leverage','sl','tp1','tp2','tp3','q1','q2'];
 let setupLoaded=false,autoBusy=false,editingUntil=0,saveTimer=null,liveReport=null;
 let marketSnapshot=null,marketRefreshing=false;
 let positionAnalysisRefreshing=false;
-let sizingStatus='unavailable',sizingSequence=0,sizingTimer=null;
+let sizingStatus='unavailable',sizingSequence=0,sizingTimer=null,reverseBusy=false;
 const val=id=>$(id).value.trim()===''?NaN:Number($(id).value);
 function config(){return {side:$('side').value,marginUSDT:val('marginUSDT'),leverage:val('leverage'),
  slPercent:val('sl'),tpMode:$('mode').value,tp1Val:val('tp1'),tp2Val:val('tp2'),
- tp3Val:val('tp3'),tp1Qty:val('q1'),tp2Qty:val('q2')};}
+ tp3Val:val('tp3'),tp1Qty:val('q1'),tp2Qty:val('q2'),reverseOnSignal:$('reverseToggle').checked};}
 function applyConfig(c){
  for(const [id,value] of Object.entries({side:c.side,marginUSDT:c.marginUSDT,leverage:c.leverage,
   sl:c.slPercent,mode:c.tpMode,tp1:c.tp1Val,tp2:c.tp2Val,tp3:c.tp3Val,q1:c.tp1Qty,q2:c.tp2Qty}))
   if($(id))$(id).value=value??'';
+ $('reverseToggle').checked=c.reverseOnSignal===true;
+ $('reverseState').textContent=c.reverseOnSignal===true?'ON':'OFF';
  quantities();
 }
 function quantities(){
@@ -389,6 +400,19 @@ for(const id of [...numbers,'side','mode']){
  });
 }
 $('save').onclick=()=>{clearTimeout(saveTimer);saveConfig();};
+$('reverseToggle').onchange=async()=>{
+ const value=$('reverseToggle').checked;
+ if(value&&!confirm('BẬT ĐẢO CHIỀU FUTURES TIỀN THẬT? Khi có tín hiệu OCC ngược, bot có thể đóng vị thế hiện tại và mở vị thế ngược sau khi xác minh an toàn.')){
+  $('reverseToggle').checked=false;return;
+ }
+ reverseBusy=true;$('reverseToggle').disabled=true;
+ try{
+  await request('reverse-mode',{enabled:value});
+  $('reverseState').textContent=value?'ON':'OFF';
+  $('settingStatus').textContent=value?'Đã bật đảo chiều OCC':'Đã tắt đảo chiều · giữ đến SL/TP';
+ }catch(e){$('apiError').textContent='Không đổi được chế độ đảo chiều: '+e.message;}
+ finally{reverseBusy=false;await refreshLive();}
+};
 $('applyLeverage').onclick=async()=>{
  clearTimeout(saveTimer);
  const requestedLeverage=val('leverage');
@@ -469,6 +493,11 @@ async function refreshLive(){
   $('rememberApi').checked=s.credentialSaved||$('rememberApi').checked;
   $('apiError').textContent=s.error?('Cần kiểm tra: '+s.error):$('apiError').textContent;
   $('enabled').checked=!!s.armed;
+  if(!reverseBusy&&s.config){
+   $('reverseToggle').checked=s.config.reverseOnSignal===true;
+   $('reverseState').textContent=s.config.reverseOnSignal===true?'ON':'OFF';
+  }
+  $('reverseToggle').disabled=reverseBusy||s.busy;
   const desiredLeverage=Number(s.config?.leverage);
   const leverageMismatch=!!a&&Number.isInteger(desiredLeverage)&&Number(a.leverage)!==desiredLeverage;
 // OFF remains available even when the exchange is disconnected or safety-halted.

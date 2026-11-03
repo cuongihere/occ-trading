@@ -42,3 +42,32 @@ test('backfill creates no trades and immutable signal history survives warmup',(
 test('persistence restores paused; CSV and reset correct',()=>{const e=engine();const s=candle(e,1,108);e.onTrade({price:108,time:s.time,id:1},true);const f=OCCEngine.restore(e.serialize());assert.equal(f.running,false);assert.equal(f.healthy,false);assert.deepEqual(f.trades,e.trades);assert.match(f.exportCSV(),/marketPrice/);assert.equal(f.exportCSV().split('\r\n').length,2);e.reset({capital:20000});assert.equal(e.balance,20000);assert.equal(e.trades.length,0);assert.equal(e.ready,false);});
 test('slippage is adverse, lot-size rounded, no margin leverage',()=>{const e=engine();e.config.slippageBps=10;e.config.qtyStep=.01;const s=candle(e,1,108);e.onTrade({price:100,time:s.time,id:9},true);assert.equal(e.position.entryPrice,100.1);assert.ok(e.position.qty*100.1<=1000);assert.ok(Math.abs(e.position.qty/.01-Math.round(e.position.qty/.01))<1e-8);});
 test('snapshot caller cannot rewrite signal audit',()=>{const e=engine();candle(e,1,108);const s=e.snapshot();s.signals[0].side='SHORT';assert.equal(e.signals[0].side,'LONG');});
+
+test('reversal toggle defaults OFF; ON restores opposite OCC close-and-reopen behavior',()=>{
+ const e=engine(),entry=candle(e,1,108);
+ e.onTrade({price:108,time:entry.observedAt,id:1},true);
+ const oldQty=e.position.qty;
+ const ignored=candle(e,2,92);
+ assert.equal(ignored.side,'SHORT');assert.equal(ignored.eligible,false);
+ assert.equal(e.onTrade({price:108,time:ignored.observedAt,id:2},true).length,0);
+ assert.equal(e.position.side,'LONG');
+ // Use a new active configuration; existing position keeps its current SL/TP.
+ e.config.reverseOnSignal=true;
+ const signal=candle(e,3,108);
+ assert.equal(signal.side,'LONG');assert.equal(signal.eligible,false); // same direction
+ const reverse=candle(e,4,92);
+ assert.equal(reverse.side,'SHORT');assert.equal(reverse.eligible,true);
+ const fills=e.onTrade({price:108,time:reverse.observedAt,id:3},true);
+ assert.deepEqual(fills.map(f=>[f.action,f.reason]),[['CLOSE','REVERSE'],['OPEN',undefined]]);
+ assert.equal(fills[0].qty,oldQty);assert.equal(e.position.side,'SHORT');
+ assert.equal(e.trades.filter(f=>f.reason==='REVERSE').length,1);
+});
+
+test('Paper engine persists optional reverse mode through checkpoint without changing default OFF',()=>{
+ const e=new OCCEngine({reverseOnSignal:true});
+ assert.equal(e.config.reverseOnSignal,true);
+ const restored=OCCEngine.restore(e.serialize());
+ assert.equal(restored.config.reverseOnSignal,true);
+ assert.equal(new OCCEngine().config.reverseOnSignal,false);
+ assert.throws(()=>new OCCEngine({reverseOnSignal:'true'}),/reversal/);
+});

@@ -1,9 +1,10 @@
 // BTCUSDT live sizing and exchange-price quantization, independent of API.
 const finite=(v,name)=>{const n=Number(v);if(!Number.isFinite(n))throw Error('Invalid '+name);return n;};
 export const defaultLiveConfig=Object.freeze({side:'BOTH',marginUSDT:20,leverage:5,
- slPercent:1,tpMode:'Percent',tp1Val:1,tp2Val:2,tp3Val:3,tp1Qty:33,tp2Qty:33});
+ slPercent:1,tpMode:'Percent',tp1Val:1,tp2Val:2,tp3Val:3,tp1Qty:33,tp2Qty:33,reverseOnSignal:false});
 export function validateLiveConfig(value){
  const c={...defaultLiveConfig,...value};
+ if(typeof c.reverseOnSignal!=='boolean')throw Error('Invalid OCC reversal toggle');
  if(!['BOTH','LONG','SHORT'].includes(c.side)||!['Percent','Points'].includes(c.tpMode))throw Error('Invalid side/TP Mode');
  for(const k of ['marginUSDT','leverage','slPercent','tp1Val','tp2Val','tp3Val','tp1Qty','tp2Qty'])c[k]=finite(c[k],k);
  if(c.marginUSDT<=0||c.marginUSDT>1000||!Number.isInteger(c.leverage)||c.leverage<1||c.leverage>20||

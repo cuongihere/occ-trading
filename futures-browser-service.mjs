@@ -12,7 +12,7 @@ import {WindowsCredentialVault} from './futures-credential-vault.mjs';
 import {analyzeFuturesPosition} from './futures-position-analysis.mjs';
 
 const DEFAULT={side:'BOTH',marginUSDT:20,leverage:5,slPercent:1,tpMode:'Percent',
- tp1Val:1,tp2Val:2,tp3Val:3,tp1Qty:33,tp2Qty:33};
+ tp1Val:1,tp2Val:2,tp3Val:3,tp1Qty:33,tp2Qty:33,reverseOnSignal:false};
 const safeJSON=(value)=>JSON.parse(JSON.stringify(value));
 export class BrowserFutures{
  constructor({dataDir,transportFactory=null,credentialVault=null}){
@@ -37,6 +37,17 @@ export class BrowserFutures{
  sizingPreview(input,price){
   if(!this.api||!this.filters)return {status:'unavailable',message:'Kết nối Binance API để xác nhận bước khối lượng BTCUSDT.'};
   return previewLiveSizing(input,this.filters,price,this.account?.availableUSDT);
+ }
+ setReverseOnSignal(enabled){
+  if(typeof enabled!=='boolean')throw Error('Công tắc đảo chiều phải là ON hoặc OFF');
+  if(this.busy)throw Error('Đang xử lý giao dịch, không đổi chế độ đảo chiều lúc này');
+  const next=validateLiveConfig({...this.config,reverseOnSignal:enabled});
+  mkdirSync(this.dir,{recursive:true});
+  const temp=this.path+'.tmp';
+  writeFileSync(temp,JSON.stringify(next,null,2),{mode:0o600});renameSync(temp,this.path);
+  this.config=next;
+  this.log('REVERSE_MODE',enabled?'ĐẢO CHIỀU ON: khi an toàn mới đảo theo tín hiệu OCC.':'ĐẢO CHIỀU OFF: giữ lệnh đến SL/TP.');
+  return this.snapshot();
  }
  saveConfig(input){
   if(this.armed||this.busy||this.activeProtection)throw Error('Tắt Auto và đóng hết vị thế Futures thật đang quản lý trước khi sửa cấu hình');
@@ -354,15 +365,88 @@ export class BrowserFutures{
    throw Error('Emergency close not verified FLAT');
   this.log('EMERGENCY_CLOSED','Đã xác minh giảm vị thế BTCUSDT về 0');
  }
+ // Reversal may close ONLY an OCC-owned, exchange-verified position.
+ // The existing stop remains active until the reduceOnly close is confirmed FLAT.
+ async reverseManagedPosition(signal){
+  const managed=this.activeProtection;
+  if(!managed?.entry||!managed?.stop||!Array.isArray(managed.tps))throw Error('Missing managed position checkpoint');
+  const from=managed.entry.side,to=signal.side;
+  if(from===to)return false;
+  const a=await this.inspect(),amt=a.positionBTC;
+  if(a.openOrders||a.hasOtherPositions||a.dualSidePosition!==false||
+     a.marginType!=='ISOLATED'||a.leverage!==this.config.leverage)
+   throw Error('Unmanaged orders, positions or Binance account config mismatch');
+  if(!Number.isFinite(amt)||Math.sign(amt)!==(from==='LONG'?1:-1))
+   throw Error('Exchange position no longer matches OCC managed side');
+  const qty=floorStep(Math.abs(amt),this.filters.stepSize);
+  if(qty<this.filters.minQty||Math.abs(qty-Math.abs(amt))>1e-9||
+     qty>Number(managed.entry.qty)+1e-9)throw Error('Invalid remaining reduceOnly BTC quantity');
+  const algo=await this.api.get('/fapi/v1/openAlgoOrders',{symbol:'BTCUSDT'});
+  if(!Array.isArray(algo))throw Error('Cannot verify open Algo orders');
+  const ids=new Set([managed.stop.id,...managed.tps.map(x=>x.id)].map(String));
+  const statuses=new Set(['NEW','ACCEPTED','PENDING_NEW']);
+  const active=algo.filter(x=>x?.symbol==='BTCUSDT');
+  if(active.some(o=>!ids.has(String(o.algoId))||!statuses.has(String(o.algoStatus))))
+   throw Error('Unmanaged or unexpected Algo order; reversal blocked');
+  const stop=active.find(o=>String(o.algoId)===String(managed.stop.id));
+  if(!stop||stop.orderType!=='STOP_MARKET'||stop.closePosition!==true||
+     stop.side!==(from==='LONG'?'SELL':'BUY'))
+   throw Error('Original close-all STOP is not verified on Binance');
+  if(active.some(o=>o!==stop&&(o.orderType!=='TAKE_PROFIT_MARKET'||
+    o.reduceOnly!==true||o.side!==stop.side)))
+   throw Error('Original TP orders are not verified reduceOnly');
+  const closeId='OCCBTC-'+randomBytes(7).toString('hex');
+  // Checkpoint BEFORE any network mutation; unknown close or cancel outcome halts.
+  this.saveIntent({phase:'REVERSE_CLOSE_SENDING',oldClientId:managed.entry.clientPrefix,
+    oldEntryId:String(managed.entry.orderId),closeId,qty,targetSide:to,barTime:signal.barTime,at:Date.now()});
+  this.log('REVERSE_CLOSE','Đang đóng '+qty+' BTC '+from+' bằng reduceOnly trước khi đảo sang '+to);
+  const ack=await this.api.post('/fapi/v1/order',{symbol:'BTCUSDT',positionSide:'BOTH',
+   side:from==='LONG'?'SELL':'BUY',type:'MARKET',reduceOnly:'true',quantity:String(qty),
+   newClientOrderId:closeId,newOrderRespType:'RESULT'});
+  if(!ack?.orderId||ack.status!=='FILLED')throw Error('Reduce-only close not confirmed FILLED');
+  const flat=await this.inspect();
+  if(flat.positionBTC!==0)throw Error('Binance did not confirm BTCUSDT FLAT');
+  const remaining=await this.api.get('/fapi/v1/openAlgoOrders',{symbol:'BTCUSDT'});
+  if(!Array.isArray(remaining)||remaining.some(o=>o.symbol!=='BTCUSDT'||!ids.has(String(o.algoId))))
+   throw Error('Unrecognized Algo remains after FLAT; do not cancel unknown orders');
+  // Snapshot the list: a mock or shared adapter may mutate it on DELETE.
+  for(const o of [...remaining]){
+   this.saveIntent({phase:'REVERSE_ALGO_CLEARING',closeId,oldClientId:managed.entry.clientPrefix,
+    removingAlgoId:String(o.algoId),at:Date.now()});
+   await this.api.del('/fapi/v1/algoOrder',{symbol:'BTCUSDT',algoId:o.algoId});
+  }
+  const clean=await this.inspect();
+  if(clean.positionBTC!==0||clean.openOrders!==0||clean.openAlgos!==0)
+   throw Error('Old BTCUSDT orders not fully cleared');
+  new ProtectionCheckpoint(this.protectionPath).save({
+   phase:'IDLE',entry:null,stop:null,tps:[],inFlight:null,halted:false
+  });
+  this.saveIntent({phase:'CLEARED',at:Date.now()});
+  this.activeProtection=null;this.previousProtection=null;
+  this.log('REVERSE_FLAT','Đã đóng vị thế cũ và dọn SL/TP; Binance xác nhận FLAT');
+  return true;
+ }
  async signal(signal,feedHealthy){
   if(!this.armed||this.busy||this.halted||this.environment!=='production'||!feedHealthy||!signal?.side)return;
-  if(this.activeProtection){
-   this.log('SIGNAL_IGNORED_POSITION','Bỏ qua tín hiệu '+signal.side+': vị thế BTCUSDT còn mở, tiếp tục giữ SL/TP.');
+  const existing=this.activeProtection;
+  if(existing&&(!this.config.reverseOnSignal||existing.entry.side===signal.side||
+   (this.config.side!=='BOTH'&&this.config.side!==signal.side))){
+   this.log('SIGNAL_IGNORED_POSITION','Bỏ qua tín hiệu '+signal.side+': đảo chiều OFF, cùng chiều hoặc bị lọc.');
    return;
   }
 this.busy=true;
-let entrySubmissionPossible=false;
+let reverseAttempted=false,reverseCompleted=false,entrySubmissionPossible=false;
 try{
+ if(existing){
+  reverseAttempted=true;
+  const closed=await this.reverseManagedPosition(signal);
+  if(!closed)return;
+  reverseCompleted=true;
+  if(!this.armed||!this.config.reverseOnSignal){
+   this.log('REVERSE_STOPPED','Đã đóng vị thế cũ nhưng Auto/đảo chiều đã OFF; không mở vị thế mới.');
+   return;
+  }
+ }
  const a=await this.inspect();
  const quote=await this.api.get('/fapi/v1/ticker/price',{symbol:'BTCUSDT'});
    const plan=draftProtectedOrder({side:signal.side,account:a,filters:this.filters,
@@ -386,7 +470,15 @@ this.saveIntent({phase:'ENTRY_SENDING',clientId,side:signal.side,barTime:signal.
 this.error=null;
 this.log('PROTECTED','Futures thật entry '+response.orderId+' có SL và '+result.tps.length+' TP trên sàn; chờ vị thế đóng');
 }catch(e){
- if(!entrySubmissionPossible){
+ if(reverseAttempted&&!reverseCompleted){
+  // Unknown close/cancel outcomes: never retry or send an opposite-opening order.
+  this.halted=true;this.error='Đảo chiều chưa được xác nhận: '+e.message;
+  this.log('REVERSE_HALTED',this.error+' — kiểm tra vị thế và SL/TP trên Binance.');
+ }else if(reverseCompleted&&!entrySubmissionPossible){
+  // Old position is confirmed flat, but a new entry preflight failed.
+  this.halted=true;this.error='Đã đóng lệnh cũ nhưng không thể mở chiều mới: '+e.message;
+  this.log('REVERSE_HALTED',this.error);
+ }else if(!entrySubmissionPossible){
   // No entry was sent: transient preflight/quote errors must not toggle Auto OFF.
   this.error='Bỏ qua tín hiệu trước khi đặt lệnh: '+e.message;
   this.log('SIGNAL_SKIPPED','Auto vẫn ON, chưa đặt lệnh: '+e.message);
