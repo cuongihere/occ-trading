@@ -413,6 +413,7 @@ test('Reverse mode OFF preserves OCC position; ON closes reduceOnly, clears old 
  assert.equal(persisted.reverseOnSignal,true);
  await svc.signal({side:'SHORT',barTime:2700000},true);
  const posts=fx.calls.filter(x=>x.method==='POST');
+ assert.equal(svc.snapshot().halted,false,svc.snapshot().error);
  assert.equal(posts.length,11);
  assert.deepEqual(posts.slice(5).map(x=>x.path),[
   '/fapi/v1/order','/fapi/v1/order','/fapi/v1/algoOrder',
