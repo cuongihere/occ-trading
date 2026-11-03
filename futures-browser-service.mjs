@@ -365,6 +365,66 @@ export class BrowserFutures{
    throw Error('Emergency close not verified FLAT');
   this.log('EMERGENCY_CLOSED','Đã xác minh giảm vị thế BTCUSDT về 0');
  }
+ // Reversal may close ONLY an OCC-owned, exchange-verified position.
+ // The existing stop remains active until the reduceOnly close is confirmed FLAT.
+ async reverseManagedPosition(signal){
+  const managed=this.activeProtection;
+  if(!managed?.entry||!managed?.stop||!Array.isArray(managed.tps))throw Error('Missing managed position checkpoint');
+  const from=managed.entry.side,to=signal.side;
+  if(from===to)return false;
+  const a=await this.inspect(),amt=a.positionBTC;
+  if(a.openOrders||a.hasOtherPositions||a.dualSidePosition!==false||
+     a.marginType!=='ISOLATED'||a.leverage!==this.config.leverage)
+   throw Error('Unmanaged orders, positions or Binance account config mismatch');
+  if(!Number.isFinite(amt)||Math.sign(amt)!==(from==='LONG'?1:-1))
+   throw Error('Exchange position no longer matches OCC managed side');
+  const qty=floorStep(Math.abs(amt),this.filters.stepSize);
+  if(qty<this.filters.minQty||Math.abs(qty-Math.abs(amt))>1e-9||
+     qty>Number(managed.entry.qty)+1e-9)throw Error('Invalid remaining reduceOnly BTC quantity');
+  const algo=await this.api.get('/fapi/v1/openAlgoOrders',{symbol:'BTCUSDT'});
+  if(!Array.isArray(algo))throw Error('Cannot verify open Algo orders');
+  const ids=new Set([managed.stop.id,...managed.tps.map(x=>x.id)].map(String));
+  const statuses=new Set(['NEW','ACCEPTED','PENDING_NEW']);
+  const active=algo.filter(x=>x?.symbol==='BTCUSDT');
+  if(active.some(o=>!ids.has(String(o.algoId))||!statuses.has(String(o.algoStatus))))
+   throw Error('Unmanaged or unexpected Algo order; reversal blocked');
+  const stop=active.find(o=>String(o.algoId)===String(managed.stop.id));
+  if(!stop||stop.orderType!=='STOP_MARKET'||stop.closePosition!==true||
+     stop.side!==(from==='LONG'?'SELL':'BUY'))
+   throw Error('Original close-all STOP is not verified on Binance');
+  if(active.some(o=>o!==stop&&(o.orderType!=='TAKE_PROFIT_MARKET'||
+    o.reduceOnly!==true||o.side!==stop.side)))
+   throw Error('Original TP orders are not verified reduceOnly');
+  const closeId='OCCBTC-'+randomBytes(7).toString('hex');
+  // Checkpoint BEFORE any network mutation; unknown close or cancel outcome halts.
+  this.saveIntent({phase:'REVERSE_CLOSE_SENDING',oldClientId:managed.entry.clientPrefix,
+    oldEntryId:String(managed.entry.orderId),closeId,qty,targetSide:to,barTime:signal.barTime,at:Date.now()});
+  this.log('REVERSE_CLOSE','Đang đóng '+qty+' BTC '+from+' bằng reduceOnly trước khi đảo sang '+to);
+  const ack=await this.api.post('/fapi/v1/order',{symbol:'BTCUSDT',positionSide:'BOTH',
+   side:from==='LONG'?'SELL':'BUY',type:'MARKET',reduceOnly:'true',quantity:String(qty),
+   newClientOrderId:closeId,newOrderRespType:'RESULT'});
+  if(!ack?.orderId||ack.status!=='FILLED')throw Error('Reduce-only close not confirmed FILLED');
+  const flat=await this.inspect();
+  if(flat.positionBTC!==0)throw Error('Binance did not confirm BTCUSDT FLAT');
+  const remaining=await this.api.get('/fapi/v1/openAlgoOrders',{symbol:'BTCUSDT'});
+  if(!Array.isArray(remaining)||remaining.some(o=>o.symbol!=='BTCUSDT'||!ids.has(String(o.algoId))))
+   throw Error('Unrecognized Algo remains after FLAT; do not cancel unknown orders');
+  for(const o of remaining){
+   this.saveIntent({phase:'REVERSE_ALGO_CLEARING',closeId,oldClientId:managed.entry.clientPrefix,
+    removingAlgoId:String(o.algoId),at:Date.now()});
+   await this.api.del('/fapi/v1/algoOrder',{symbol:'BTCUSDT',algoId:o.algoId});
+  }
+  const clean=await this.inspect();
+  if(clean.positionBTC!==0||clean.openOrders!==0||clean.openAlgos!==0)
+   throw Error('Old BTCUSDT orders not fully cleared');
+  new ProtectionCheckpoint(this.protectionPath).save({
+   phase:'IDLE',entry:null,stop:null,tps:[],inFlight:null,halted:false
+  });
+  this.saveIntent({phase:'CLEARED',at:Date.now()});
+  this.activeProtection=null;this.previousProtection=null;
+  this.log('REVERSE_FLAT','Đã đóng vị thế cũ và dọn SL/TP; Binance xác nhận FLAT');
+  return true;
+ }
  async signal(signal,feedHealthy){
   if(!this.armed||this.busy||this.halted||this.environment!=='production'||!feedHealthy||!signal?.side)return;
   if(this.activeProtection){
