@@ -435,12 +435,13 @@ export class BrowserFutures{
    return;
   }
 this.busy=true;
-let reverseAttempted=false,entrySubmissionPossible=false;
+let reverseAttempted=false,reverseCompleted=false,entrySubmissionPossible=false;
 try{
  if(existing){
   reverseAttempted=true;
   const closed=await this.reverseManagedPosition(signal);
   if(!closed)return;
+  reverseCompleted=true;
   if(!this.armed||!this.config.reverseOnSignal){
    this.log('REVERSE_STOPPED','Đã đóng vị thế cũ nhưng Auto/đảo chiều đã OFF; không mở vị thế mới.');
    return;
@@ -469,10 +470,14 @@ this.saveIntent({phase:'ENTRY_SENDING',clientId,side:signal.side,barTime:signal.
 this.error=null;
 this.log('PROTECTED','Futures thật entry '+response.orderId+' có SL và '+result.tps.length+' TP trên sàn; chờ vị thế đóng');
 }catch(e){
- if(reverseAttempted){
-  // Never retry unknown close/cancel outcomes or blindly open the opposite side.
+ if(reverseAttempted&&!reverseCompleted){
+  // Unknown close/cancel outcomes: never retry or send an opposite-opening order.
   this.halted=true;this.error='Đảo chiều chưa được xác nhận: '+e.message;
   this.log('REVERSE_HALTED',this.error+' — kiểm tra vị thế và SL/TP trên Binance.');
+ }else if(reverseCompleted&&!entrySubmissionPossible){
+  // Old position is confirmed flat, but a new entry preflight failed.
+  this.halted=true;this.error='Đã đóng lệnh cũ nhưng không thể mở chiều mới: '+e.message;
+  this.log('REVERSE_HALTED',this.error);
  }else if(!entrySubmissionPossible){
   // No entry was sent: transient preflight/quote errors must not toggle Auto OFF.
   this.error='Bỏ qua tín hiệu trước khi đặt lệnh: '+e.message;
