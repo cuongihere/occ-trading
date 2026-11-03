@@ -397,3 +397,84 @@ test('Manual check restores encrypted API after failed startup and never auto-ar
  assert.equal(two.snapshot().armed,false);
  assert.equal(two.snapshot().recoveryStatus,'recovered');
 });
+
+test('Reverse mode OFF preserves OCC position; ON closes reduceOnly, clears old Algo, then opens opposite',async t=>{
+ const dir=tmp(t),fx=fake(),svc=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await svc.connect(creds);
+ svc.saveConfig({marginUSDT:500,leverage:5});
+ assert.equal(svc.snapshot().config.reverseOnSignal,false);
+ await svc.arm('CHAP NHAN BTC FUTURES',77000);
+ await svc.signal({side:'LONG',barTime:900000},true);
+ assert.equal(fx.position.qty,.032);
+ await svc.signal({side:'SHORT',barTime:1800000},true);
+ assert.equal(fx.calls.filter(x=>x.method==='POST').length,5);
+ svc.setReverseOnSignal(true);assert.equal(svc.snapshot().armed,true);
+ const persisted=JSON.parse(readFileSync(join(dir,'futures-browser-settings.json'),'utf8'));
+ assert.equal(persisted.reverseOnSignal,true);
+ await svc.signal({side:'SHORT',barTime:2700000},true);
+ const posts=fx.calls.filter(x=>x.method==='POST');
+ assert.equal(posts.length,11);
+ assert.deepEqual(posts.slice(5).map(x=>x.path),[
+  '/fapi/v1/order','/fapi/v1/order','/fapi/v1/algoOrder',
+  '/fapi/v1/algoOrder','/fapi/v1/algoOrder','/fapi/v1/algoOrder'
+ ]);
+ assert.equal(posts[5].p.reduceOnly,'true');assert.equal(posts[5].p.side,'SELL');
+ assert.equal(posts[5].p.quantity,'.032'.replace(/^\./,'0.'));
+ assert.equal(posts[6].p.side,'SELL');assert.equal(posts[6].p.reduceOnly,undefined);
+ const deletions=fx.calls.filter(x=>x.method==='DELETE');
+ assert.equal(deletions.length,4);
+ assert.equal(svc.snapshot().halted,false);
+ assert.equal(svc.snapshot().config.reverseOnSignal,true);
+ assert.equal(svc.snapshot().protectedPosition.entry.side,'SHORT');
+ assert.equal(fx.position.qty,-.032);
+ const reversedIndex=fx.calls.findIndex(x=>x.method==='POST'&&x.path==='/fapi/v1/order'&&x.p.reduceOnly==='true');
+ const newIndex=fx.calls.findIndex((x,i)=>i>reversedIndex&&x.method==='POST'&&x.path==='/fapi/v1/order'&&x.p.reduceOnly!=='true');
+ const lastDelete=fx.calls.findLastIndex(x=>x.method==='DELETE');
+ assert.ok(reversedIndex>=0&&lastDelete>reversedIndex&&newIndex>lastDelete);
+ svc.setReverseOnSignal(false);
+ await svc.signal({side:'LONG',barTime:3600000},true);
+ assert.equal(fx.calls.filter(x=>x.method==='POST').length,11);
+});
+
+test('If Binance STOP is absent, reverse is safety-halted without opening or closing any new position',async t=>{
+ const dir=tmp(t),fx=fake(),svc=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await svc.connect(creds);svc.saveConfig({marginUSDT:500,leverage:5,reverseOnSignal:true});
+ await svc.arm('CHAP NHAN BTC FUTURES',77000);
+ await svc.signal({side:'LONG',barTime:900000},true);
+ fx.algo.splice(fx.algo.findIndex(o=>o.orderType==='STOP_MARKET'),1);
+ const before=fx.calls.filter(x=>x.method==='POST').length;
+ await svc.signal({side:'SHORT',barTime:1800000},true);
+ assert.equal(fx.calls.filter(x=>x.method==='POST').length,before);
+ assert.equal(svc.snapshot().halted,true);
+ assert.equal(svc.snapshot().armed,true);
+ assert.equal(svc.snapshot().protectedPosition.entry.side,'LONG');
+});
+
+test('Unknown reduceOnly close outcome cannot send opposing Entry and leaves old stop untouched',async t=>{
+ const dir=tmp(t),fx=fake(),svc=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await svc.connect(creds);svc.saveConfig({marginUSDT:500,leverage:5,reverseOnSignal:true});
+ await svc.arm('CHAP NHAN BTC FUTURES',77000);
+ await svc.signal({side:'LONG',barTime:900000},true);
+ const post=fx.api.post.bind(fx.api);
+ fx.api.post=async(path,params)=>{if(path==='/fapi/v1/order'&&params.reduceOnly==='true')throw Error('unknown close outcome');return post(path,params);};
+ const before=fx.calls.filter(x=>x.method==='POST').length;
+ await svc.signal({side:'SHORT',barTime:1800000},true);
+ assert.equal(fx.calls.filter(x=>x.method==='POST').length,before);
+ assert.equal(fx.position.qty,.032);
+ assert.equal(fx.algo.length,4);
+ assert.equal(svc.snapshot().halted,true);
+ assert.equal(svc.snapshot().config.reverseOnSignal,true);
+ assert.equal(JSON.parse(readFileSync(join(dir,'futures-live-intent.json'),'utf8')).phase,'REVERSE_CLOSE_SENDING');
+ await svc.signal({side:'SHORT',barTime:2700000},true);
+ assert.equal(fx.calls.filter(x=>x.method==='POST').length,before);
+});
+
+test('Reverse switch rejects malformed values and cannot change during an in-flight order',async t=>{
+ const dir=tmp(t),svc=new BrowserFutures({dataDir:dir,transportFactory:()=>fake().api,credentialVault:makeVault(dir)});
+ assert.throws(()=>svc.setReverseOnSignal('true'),/ON hoặc OFF/);
+ svc.busy=true;
+ assert.throws(()=>svc.setReverseOnSignal(true),/Đang xử lý/);
+ svc.busy=false;
+ svc.setReverseOnSignal(true);assert.equal(svc.config.reverseOnSignal,true);
+ svc.setReverseOnSignal(false);assert.equal(svc.config.reverseOnSignal,false);
+});
