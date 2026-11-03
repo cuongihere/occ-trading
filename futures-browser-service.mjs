@@ -12,7 +12,7 @@ import {WindowsCredentialVault} from './futures-credential-vault.mjs';
 import {analyzeFuturesPosition} from './futures-position-analysis.mjs';
 
 const DEFAULT={side:'BOTH',marginUSDT:20,leverage:5,slPercent:1,tpMode:'Percent',
- tp1Val:1,tp2Val:2,tp3Val:3,tp1Qty:33,tp2Qty:33};
+ tp1Val:1,tp2Val:2,tp3Val:3,tp1Qty:33,tp2Qty:33,reverseOnSignal:false};
 const safeJSON=(value)=>JSON.parse(JSON.stringify(value));
 export class BrowserFutures{
  constructor({dataDir,transportFactory=null,credentialVault=null}){
@@ -37,6 +37,17 @@ export class BrowserFutures{
  sizingPreview(input,price){
   if(!this.api||!this.filters)return {status:'unavailable',message:'Kết nối Binance API để xác nhận bước khối lượng BTCUSDT.'};
   return previewLiveSizing(input,this.filters,price,this.account?.availableUSDT);
+ }
+ setReverseOnSignal(enabled){
+  if(typeof enabled!=='boolean')throw Error('Công tắc đảo chiều phải là ON hoặc OFF');
+  if(this.busy)throw Error('Đang xử lý giao dịch, không đổi chế độ đảo chiều lúc này');
+  const next=validateLiveConfig({...this.config,reverseOnSignal:enabled});
+  mkdirSync(this.dir,{recursive:true});
+  const temp=this.path+'.tmp';
+  writeFileSync(temp,JSON.stringify(next,null,2),{mode:0o600});renameSync(temp,this.path);
+  this.config=next;
+  this.log('REVERSE_MODE',enabled?'ĐẢO CHIỀU ON: khi an toàn mới đảo theo tín hiệu OCC.':'ĐẢO CHIỀU OFF: giữ lệnh đến SL/TP.');
+  return this.snapshot();
  }
  saveConfig(input){
   if(this.armed||this.busy||this.activeProtection)throw Error('Tắt Auto và đóng hết vị thế Futures thật đang quản lý trước khi sửa cấu hình');
