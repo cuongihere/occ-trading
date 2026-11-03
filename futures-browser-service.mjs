@@ -427,13 +427,24 @@ export class BrowserFutures{
  }
  async signal(signal,feedHealthy){
   if(!this.armed||this.busy||this.halted||this.environment!=='production'||!feedHealthy||!signal?.side)return;
-  if(this.activeProtection){
-   this.log('SIGNAL_IGNORED_POSITION','Bỏ qua tín hiệu '+signal.side+': vị thế BTCUSDT còn mở, tiếp tục giữ SL/TP.');
+  const existing=this.activeProtection;
+  if(existing&&(!this.config.reverseOnSignal||existing.entry.side===signal.side||
+   (this.config.side!=='BOTH'&&this.config.side!==signal.side))){
+   this.log('SIGNAL_IGNORED_POSITION','Bỏ qua tín hiệu '+signal.side+': đảo chiều OFF, cùng chiều hoặc bị lọc.');
    return;
   }
 this.busy=true;
-let entrySubmissionPossible=false;
+let reverseAttempted=false,entrySubmissionPossible=false;
 try{
+ if(existing){
+  reverseAttempted=true;
+  const closed=await this.reverseManagedPosition(signal);
+  if(!closed)return;
+  if(!this.armed||!this.config.reverseOnSignal){
+   this.log('REVERSE_STOPPED','Đã đóng vị thế cũ nhưng Auto/đảo chiều đã OFF; không mở vị thế mới.');
+   return;
+  }
+ }
  const a=await this.inspect();
  const quote=await this.api.get('/fapi/v1/ticker/price',{symbol:'BTCUSDT'});
    const plan=draftProtectedOrder({side:signal.side,account:a,filters:this.filters,
@@ -457,7 +468,11 @@ this.saveIntent({phase:'ENTRY_SENDING',clientId,side:signal.side,barTime:signal.
 this.error=null;
 this.log('PROTECTED','Futures thật entry '+response.orderId+' có SL và '+result.tps.length+' TP trên sàn; chờ vị thế đóng');
 }catch(e){
- if(!entrySubmissionPossible){
+ if(reverseAttempted){
+  // Never retry unknown close/cancel outcomes or blindly open the opposite side.
+  this.halted=true;this.error='Đảo chiều chưa được xác nhận: '+e.message;
+  this.log('REVERSE_HALTED',this.error+' — kiểm tra vị thế và SL/TP trên Binance.');
+ }else if(!entrySubmissionPossible){
   // No entry was sent: transient preflight/quote errors must not toggle Auto OFF.
   this.error='Bỏ qua tín hiệu trước khi đặt lệnh: '+e.message;
   this.log('SIGNAL_SKIPPED','Auto vẫn ON, chưa đặt lệnh: '+e.message);
