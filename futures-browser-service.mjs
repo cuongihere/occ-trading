@@ -409,7 +409,8 @@ export class BrowserFutures{
   const remaining=await this.api.get('/fapi/v1/openAlgoOrders',{symbol:'BTCUSDT'});
   if(!Array.isArray(remaining)||remaining.some(o=>o.symbol!=='BTCUSDT'||!ids.has(String(o.algoId))))
    throw Error('Unrecognized Algo remains after FLAT; do not cancel unknown orders');
-  for(const o of remaining){
+  // Snapshot the list: a mock or shared adapter may mutate it on DELETE.
+  for(const o of [...remaining]){
    this.saveIntent({phase:'REVERSE_ALGO_CLEARING',closeId,oldClientId:managed.entry.clientPrefix,
     removingAlgoId:String(o.algoId),at:Date.now()});
    await this.api.del('/fapi/v1/algoOrder',{symbol:'BTCUSDT',algoId:o.algoId});
