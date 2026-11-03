@@ -113,6 +113,7 @@ const server=createServer(async(req,res)=>{
     if(preview.status==='invalid')throw Error(preview.message);
     browserFutures.saveConfig(p);
    }
+   else if(req.url==='/control/live/reverse-mode'){browserFutures.setReverseOnSignal(p.enabled);}
    else if(req.url==='/control/live/leverage'){await browserFutures.applyExchangeLeverage(p);}
    else if(req.url==='/control/live/on'){
     if(!feed.healthy()||!liveSignalEngine.ready||!liveSignalEngine.healthy)
