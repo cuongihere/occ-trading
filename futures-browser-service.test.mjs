@@ -479,3 +479,28 @@ test('Reverse switch rejects malformed values and cannot change during an in-fli
  svc.setReverseOnSignal(true);assert.equal(svc.config.reverseOnSignal,true);
  svc.setReverseOnSignal(false);assert.equal(svc.config.reverseOnSignal,false);
 });
+
+test('If the reversed NEW Entry cannot place its STOP, bot emergency-closes only verified unprotected BTC and HALTs',async t=>{
+ const dir=tmp(t),fx=fake(),svc=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await svc.connect(creds);
+ svc.saveConfig({marginUSDT:500,leverage:5,reverseOnSignal:true});
+ await svc.arm('CHAP NHAN BTC FUTURES',77000);
+ await svc.signal({side:'LONG',barTime:900000},true);
+ const original=fx.api.post.bind(fx.api);
+ fx.api.post=async(path,p)=>{
+  if(path==='/fapi/v1/algoOrder'&&p.type==='STOP_MARKET'&&p.side==='BUY')
+   throw Error('new reversed stop failure');
+  return original(path,p);
+ };
+ await svc.signal({side:'SHORT',barTime:1800000},true);
+ const posts=fx.calls.filter(x=>x.method==='POST'&&x.path==='/fapi/v1/order');
+ assert.equal(posts.length,4); // LONG entry, reverse reduceOnly, SHORT entry, emergency reduceOnly
+ assert.equal(posts[0].p.side,'BUY');
+ assert.equal(posts[1].p.reduceOnly,'true');
+ assert.equal(posts[2].p.side,'SELL');
+ assert.equal(posts[3].p.reduceOnly,'true');
+ assert.equal(posts[3].p.side,'BUY');
+ assert.equal(fx.position.qty,0);
+ assert.equal(svc.snapshot().halted,true);
+ assert.equal(svc.snapshot().armed,true); // operator ON is retained but trading is blocked
+});
