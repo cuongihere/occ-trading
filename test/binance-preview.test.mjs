@@ -166,3 +166,22 @@ test('reconnect recovery keeps manual check clickable with DPAPI key even after 
  const js=html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
  assert.ok(js);assert.doesNotThrow(()=>new Function(js));
 });
+
+test('Futures reversal switch is visible and persisted separately from AUTO and SL TP configuration',()=>{
+ const html=read('BINANCE_UI_PREVIEW.html'),server=read('server.mjs'),
+  service=read('futures-browser-service.mjs');
+ assert.match(html,/id="reverseToggle"/);
+ assert.match(html,/id="reverseState"/);
+ assert.match(html,/Đảo chiều theo OCC/);
+ assert.match(html,/request\('reverse-mode',\{enabled:value\}\)/);
+ assert.match(html,/reverseOnSignal:\$\('reverseToggle'\)\.checked/);
+ assert.match(html,/s\.config\.reverseOnSignal===true/);
+ assert.match(server,/control\/live\/reverse-mode/);
+ assert.match(server,/setReverseOnSignal\(p.enabled\)/);
+ assert.match(service,/async reverseManagedPosition\(signal\)/);
+ assert.match(service,/reduceOnly:'true'/);
+ assert.match(service,/REVERSE_CLOSE_SENDING/);
+ assert.match(service,/REVERSE_HALTED/);
+ const js=html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
+ assert.ok(js);assert.doesNotThrow(()=>new Function(js));
+});
