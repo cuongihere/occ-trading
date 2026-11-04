@@ -85,3 +85,62 @@ test('Real stats endpoint and UI are independent of paper report and do not arm 
  assert.match(ui,/id="enabled" type="checkbox"/);
  assert.match(build,/'binance-live-stats\.mjs'/);
 });
+
+test('Binance Income tradeId matches OCC fill fee/PnL; funding and unknown trades are separate, never misattributed',t=>{
+ const path=pathFor(t),ledger=new LiveStatsLedger(path),now=Date.now();
+ ledger.register(order(100,'ENTRY','BUY'));ledger.register(order(101,'SL','SELL'));
+ const source=[fill(1,100,'BUY',.004,78000,0,.15),
+  fill(2,101,'SELL',.004,77375,-2.5,.16)];
+ source.forEach(x=>x.time=now-60000+x.id);
+ ledger.ingest(source);
+ const income=(tranId,tradeId,incomeType,income)=>({
+  symbol:'BTCUSDT',tranId,tradeId,incomeType,income:String(income),asset:'USDT',time:now-50000+tranId
+ });
+ const events=[income(3001,'1','COMMISSION',-.15),
+  income(3002,'2','COMMISSION',-.16),income(3003,'2','REALIZED_PNL',-2.5),
+  income(3004,'','FUNDING_FEE',-.12),
+  income(3005,'999','REALIZED_PNL',-4.2)];
+ assert.equal(ledger.ingestIncome(events),5);
+ assert.equal(ledger.ingestIncome(events),0);
+ const x=ledger.report(),p=x.positions[0];
+ assert.equal(p.auditStatus,'MATCHED');
+ assert.equal(p.netBinanceUSDT,-2.81);
+ assert.equal(p.netExFundingUSDT,-2.81);
+ assert.equal(x.summary.binanceAuditedClosed,1);
+ assert.equal(x.incomeAudit.fundingUSDT,-.12);
+ assert.equal(x.incomeAudit.unmatchedTradeEvents,1);
+ assert.equal(x.incomeAudit.unmatchedTradeIncomeUSDT,-4.2);
+ assert.equal(x.incomeAudit.totalUSDT,-7.13);
+ ledger.close();
+ const stored=readLiveReport(path);
+ assert.equal(stored.positions[0].netBinanceUSDT,-2.81);
+ assert.equal(stored.incomeAudit.fundingUSDT,-.12);
+});
+test('Missing or disagreeing Binance Income never produces a falsely audited Net',t=>{
+ const ledger=new LiveStatsLedger(pathFor(t)),now=Date.now();
+ ledger.register(order(100,'ENTRY','BUY'));ledger.register(order(101,'SL','SELL'));
+ const row1=fill(1,100,'BUY',.004,78000,0,.15),row2=fill(2,101,'SELL',.004,77375,-2.5,.16);
+ row1.time=now-1000;row2.time=now-900;
+ ledger.ingest([row1,row2]);
+ const event=(tranId,tradeId,incomeType,income)=>({
+  symbol:'BTCUSDT',tranId,tradeId,incomeType,income:String(income),asset:'USDT',time:now-700
+ });
+ ledger.ingestIncome([event(4001,'1','COMMISSION',-.15),event(4002,'2','REALIZED_PNL',-2.5)]);
+ let x=ledger.report();
+ assert.equal(x.positions[0].auditStatus,'PENDING');
+ assert.equal(x.positions[0].netBinanceUSDT,null);
+ ledger.ingestIncome([event(4003,'2','COMMISSION',-.26)]);
+ x=ledger.report();
+ assert.equal(x.positions[0].auditStatus,'MISMATCH');
+ assert.equal(x.positions[0].netBinanceUSDT,null);
+ assert.equal(x.summary.binanceAuditedClosed,0);
+ ledger.close();
+});
+test('Income from another symbol is never part of BTCUSDT account comparison',t=>{
+ const ledger=new LiveStatsLedger(pathFor(t));
+ assert.equal(ledger.ingestIncome([{
+  symbol:'ETHUSDT',tranId:5001,tradeId:'1',incomeType:'REALIZED_PNL',
+  income:'-100',asset:'USDT',time:Date.now()}]),0);
+ assert.equal(ledger.report().incomeAudit.available,false);
+ ledger.close();
+});
