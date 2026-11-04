@@ -459,6 +459,133 @@ export class BrowserFutures{
    throw Error('Emergency close not verified FLAT');
   this.log('EMERGENCY_CLOSED','Đã xác minh giảm vị thế BTCUSDT về 0');
  }
+ // Explicit operator-only exit. Never open an opposite position or retry
+ // a MARKET close whose Binance outcome is unknown. Position/Algo readbacks
+ // must be confirmed against the OCC checkpoint on every transition.
+ async manualMarketExit({role,confirmation,expectedEntryOrderId,expectedRemainingBTC}={}){
+  if(!['TP1','TP2','TP3','ALL'].includes(role))
+   throw Error('Chỉ hỗ trợ TP1, TP2, TP3 hoặc Đóng toàn bộ');
+  if(confirmation!=='XAC NHAN '+role+' BTCUSDT')
+   throw Error('Chưa xác nhận thao tác MARKET tiền thật');
+  if(!this.api||!this.account||this.environment!=='production')
+   throw Error('Chưa có kết nối Binance Futures thật');
+  if(this.busy)throw Error('Bot đang gửi/đối soát lệnh; không thể thao tác cùng lúc');
+  if(!Number.isFinite(Number(expectedRemainingBTC))||Number(expectedRemainingBTC)<=0||
+      !expectedEntryOrderId)throw Error('Thiếu thông tin vị thế mới nhất; hãy tải lại trạng thái');
+  const managed=this.activeProtection||this.previousProtection;
+  const intent=existsSync(this.intentPath)?JSON.parse(readFileSync(this.intentPath,'utf8')):null;
+  if(!managed?.entry||intent?.phase!=='PROTECTED'||
+     (this.halted&&this.previousProtection?.phase!=='PROTECTED'))
+   throw Error('Vị thế chưa được OCC xác minh PROTECTED; cần đối soát Binance trước');
+  this.busy=true;
+  let mutationStarted=false;
+  try{
+   const read=async()=>{
+    const account=await this.inspect();
+    const [algos,entryOrder]=await Promise.all([
+     this.api.get('/fapi/v1/openAlgoOrders',{symbol:'BTCUSDT'}),
+     this.api.get('/fapi/v1/order',{symbol:'BTCUSDT',orderId:managed.entry.orderId})
+    ]);
+    return {account,algos,entryOrder};
+   };
+   const original=await read();
+   const options={...original,managed,filters:this.filters,role,
+    expectedRemainingBTC,expectedEntryOrderId};
+   const pre=validateManagedExit(options);
+   const originalAlgos=new Map(pre.active.map(x=>[String(x.algoId),x]));
+   const closeId='OCCBTC-'+randomBytes(7).toString('hex');
+   if(role!=='ALL'){
+    // Cancel selected TP BEFORE reducing the position. This avoids having
+    // both the queued TP and the manual MARKET reducing BTC simultaneously.
+    mutationStarted=true;
+    this.saveIntent({phase:'MANUAL_TP_CANCEL_SENDING',oldClientId:managed.entry.clientPrefix,
+     oldEntryId:String(managed.entry.orderId),role,closeId,
+     removingAlgoId:String(pre.leg.id),quantity:pre.closeQty,at:Date.now()});
+    await this.api.del('/fapi/v1/algoOrder',{symbol:'BTCUSDT',algoId:pre.leg.id});
+    const recheck=await read();
+    const updated=validateManagedExit({...options,...recheck,role:'ALL'});
+    if(Math.abs(updated.quantityBTC-pre.quantityBTC)>1e-9||!updated.stop||
+       recheck.algos.some(x=>String(x.algoId)===String(pre.leg.id)))
+     throw Error('TP chưa hủy hoặc BTC/SL thay đổi; không gửi MARKET');
+    for(const [id] of originalAlgos){
+     if(id===String(pre.leg.id))continue;
+     if(!recheck.algos.some(x=>String(x.algoId)===id))
+      throw Error('Một TP hoặc STOP khác đã thay đổi khi đang hủy; không gửi MARKET');
+    }
+   }
+   // Persist the exact client order ID before POST; it can be investigated
+   // by Binance origClientOrderId after a process crash.
+   mutationStarted=true;
+   this.saveIntent({phase:'MANUAL_MARKET_SENDING',oldClientId:managed.entry.clientPrefix,
+    oldEntryId:String(managed.entry.orderId),role,closeId,quantity:pre.closeQty,at:Date.now()});
+   const side=pre.side==='LONG'?'SELL':'BUY';
+   const order=await this.api.post('/fapi/v1/order',{symbol:'BTCUSDT',positionSide:'BOTH',
+    side,type:'MARKET',reduceOnly:'true',quantity:String(pre.closeQty),
+    newClientOrderId:closeId,newOrderRespType:'RESULT'});
+   if(!order?.orderId||order.status!=='FILLED')throw Error('Binance chưa xác nhận MARKET FILLED');
+   const verified=await this.api.get('/fapi/v1/order',{symbol:'BTCUSDT',orderId:order.orderId});
+   if(verified?.symbol!=='BTCUSDT'||String(verified.orderId)!==String(order.orderId)||
+      verified.clientOrderId!==closeId||verified.side!==side||
+      verified.status!=='FILLED'||verified.positionSide!=='BOTH'||
+      !(verified.reduceOnly===true||verified.reduceOnly==='true')||
+      Math.abs(Number(verified.executedQty)-pre.closeQty)>1e-9)
+    throw Error('Không xác minh được lệnh đóng MARKET trên Binance');
+   const after=await this.inspect();
+   const expected=pre.remainingBTC*(pre.side==='LONG'?1:-1);
+   if(Math.abs(after.positionBTC-expected)>1e-9)
+    throw Error('BTCUSDT không khớp khối lượng còn lại sau MARKET; cần đối soát');
+   // Registration is durable and idempotent; actual P&L is read from userTrades.
+   this.registerRealOrder({orderId:order.orderId,groupId:managed.entry.clientPrefix,
+    clientId:closeId,role:role==='ALL'?'CLOSE':role,side});
+   if(pre.remainingBTC===0){
+    const remaining=await this.api.get('/fapi/v1/openAlgoOrders',{symbol:'BTCUSDT'});
+    if(!Array.isArray(remaining)||
+       remaining.some(o=>!originalAlgos.has(String(o.algoId))||
+        o.clientAlgoId!==originalAlgos.get(String(o.algoId))?.clientAlgoId))
+     throw Error('Có lệnh mới/không rõ chủ sở hữu sau đóng toàn bộ; không tự hủy');
+    for(const o of [...remaining]){
+     this.saveIntent({phase:'MANUAL_ALGO_CLEARING',oldClientId:managed.entry.clientPrefix,
+      role,closeId,removingAlgoId:String(o.algoId),at:Date.now()});
+     await this.api.del('/fapi/v1/algoOrder',{symbol:'BTCUSDT',algoId:o.algoId});
+    }
+    const clean=await this.inspect();
+    if(clean.positionBTC!==0||clean.openOrders!==0||clean.openAlgos!==0)
+     throw Error('Binance còn lệnh treo sau khi đóng toàn bộ');
+    new ProtectionCheckpoint(this.protectionPath).save({
+     phase:'IDLE',entry:null,stop:null,tps:[],inFlight:null,halted:false
+    });
+    this.saveIntent({phase:'CLEARED',at:Date.now()});
+    this.activeProtection=null;this.previousProtection=null;
+    this.halted=false;this.error=null;
+    this.log('MANUAL_EXIT_ALL','Đã đóng BTCUSDT toàn bộ bằng MARKET và dọn sạch SL/TP OCC.');
+   }else{
+    const live=await this.api.get('/fapi/v1/openAlgoOrders',{symbol:'BTCUSDT'});
+    const ids=new Set(originalAlgos.keys());
+    ids.delete(String(pre.leg?.id));
+    if(!Array.isArray(live)||!live.some(o=>String(o.algoId)===String(managed.stop.id))||
+      live.some(o=>!ids.has(String(o.algoId)))||
+      [...ids].some(id=>!live.some(o=>String(o.algoId)===id)))
+     throw Error('SL hoặc TP còn lại thay đổi bất ngờ; khóa để kiểm tra');
+    const kept={phase:'PROTECTED',entry:managed.entry,stop:managed.stop,
+     tps:managed.tps.filter(x=>x.role!==role),inFlight:null,halted:false};
+    new ProtectionCheckpoint(this.protectionPath).save(kept);
+    this.saveIntent({phase:'PROTECTED',clientId:managed.entry.clientPrefix,
+     orderId:String(managed.entry.orderId)});
+    if(this.activeProtection)this.activeProtection=kept;
+    if(this.previousProtection)this.previousProtection=kept;
+    this.error=null;
+    this.log('MANUAL_TP','Đã chốt MARKET '+role+' '+pre.closeQty+' BTC; giữ STOP và TP chưa khớp.');
+   }
+   return {ok:true,role,closedBTC:pre.closeQty,remainingBTC:pre.remainingBTC,
+    orderId:String(order.orderId),halted:this.halted,armed:this.armed};
+  }catch(e){
+   if(mutationStarted){
+    this.halted=true;this.error='Chốt MARKET cần đối soát: '+e.message;
+    this.log('MANUAL_EXIT_HALTED',this.error+'; không tự thử lại lệnh.');
+   }else this.log('MANUAL_EXIT_REJECTED',e.message);
+   throw e;
+  }finally{this.busy=false;}
+ }
  // Reversal may close ONLY an OCC-owned, exchange-verified position.
  // The existing stop remains active until the reduceOnly close is confirmed FLAT.
  async reverseManagedPosition(signal){
