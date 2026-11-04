@@ -66,7 +66,7 @@ p.emergencyClose=async function(){
  });
  if(!ack?.orderId||ack.status!=='FILLED')throw Error('Emergency MARKET chưa xác nhận FILLED');
  const read=await this.signed('GET','/fapi/v1/order',{symbol:'BTCUSDT',orderId:ack.orderId});
- if(read.clientOrderId!==clientId||read.status!=='FILLED'||!read.reduceOnly||
+ if(read.clientOrderId!==clientId||read.status!=='FILLED'||!occTrue(read.reduceOnly)||
     !plus(Number(read.executedQty),entry.qty))
   throw Error('Không xác nhận được emergency reduceOnly');
  const flat=await this.getSnapshot();
