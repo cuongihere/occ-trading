@@ -105,3 +105,33 @@ test('Crash before ACK registration can recover manual TP2 MARKET order from dur
  assert.equal(out.newFills,3);
  ledger.close();
 });
+
+test('Binance Income audit calls read-only income endpoint and persists Realized/Commission/Funding separately',async t=>{
+ const ledger=new LiveStatsLedger(pathFor(t)),api=reader(),original=api.get.bind(api),now=Date.now();
+ api.get=async(path,params={})=>{
+  if(path==='/fapi/v1/income'){
+   assert.equal(params.symbol,'BTCUSDT');
+   assert.equal(params.limit,1000);
+   assert.ok(params.endTime-params.startTime<=7*86400000);
+   return [
+    {symbol:'BTCUSDT',tranId:8121,tradeId:'1',incomeType:'COMMISSION',
+      income:'-0.15',asset:'USDT',time:now-2000},
+    {symbol:'BTCUSDT',tranId:8122,tradeId:'2',incomeType:'COMMISSION',
+      income:'-0.15',asset:'USDT',time:now-1900},
+    {symbol:'BTCUSDT',tranId:8123,tradeId:'2',incomeType:'REALIZED_PNL',
+      income:'-3',asset:'USDT',time:now-1900},
+    {symbol:'BTCUSDT',tranId:8124,tradeId:'',incomeType:'FUNDING_FEE',
+      income:'-0.2',asset:'USDT',time:now-1800}
+   ];
+  }
+  return original(path,params);
+ };
+ const r=await syncOCCLiveHistory(api,ledger,{syncIncome:true});
+ assert.equal(r.incomeUpdated,true);
+ assert.equal(r.newIncome,4);
+ assert.equal(r.report.incomeAudit.fundingUSDT,-.2);
+ assert.equal(r.report.summary.closed,1);
+ const second=await syncOCCLiveHistory(api,ledger,{syncIncome:true});
+ assert.equal(second.newIncome,0);
+ ledger.close();
+});
