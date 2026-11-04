@@ -24,7 +24,9 @@ test('Android credentials remain protected by Keystore and no order write is aut
  assert.match(java,/AES\/GCM\/NoPadding/);
  assert.match(java,/KeyProperties\.PURPOSE_ENCRYPT/);
  assert.match(java,/getPreferences\(MODE_PRIVATE\)/);
- assert.match(java,/return method\.equals\("GET"\) && SIGNED_GET\.contains\(path\);/);
+ assert.match(java,/if\(method\.equals\("GET"\)\)return SIGNED_GET\.contains\(path\);/);
+ assert.match(java,/acquireMutationLease\(method,path,args\)/);
+ assert.match(java,/intent\.put\("sent",true\)/);
  assert.match(java,/private static final Set<String> SIGNED_GET/);
  assert.match(java,/API = "https:\/\/fapi\.binance\.com"/);
 });
@@ -39,7 +41,7 @@ test('Android code reads real Futures account, position, conditional orders and 
  const feed=src('android/app/src/main/assets/server-feed.js');
  const js=src('android/app/src/main/assets/app.js');
  assert.match(feed,/window\.occPublicGet\(path\)/);
- assert.match(feed,/time!==this\.lastClosed\+M15/);
+ assert.match(feed,/time!==this\.lastClosed\+FEED_M15/);
  assert.match(js,/\/fapi\/v2\/account/);
  assert.match(js,/\/fapi\/v3\/positionRisk/);
  assert.match(js,/\/fapi\/v1\/openAlgoOrders/);
@@ -47,7 +49,8 @@ test('Android code reads real Futures account, position, conditional orders and 
  assert.match(js,/\/fapi\/v1\/userTrades/);
  assert.match(js,/indicator\.pending=null/);
  assert.match(js,/signal\?\.eligible&&opts\.live/);
- assert.doesNotMatch(js,/signed\('POST'|signed\('DELETE'/);
+ assert.match(js,/trade\.onSignal\(signal,lastTradePrice,true\)/);
+ assert.match(js,/trade\.manualClose\(role\)/);
  for(const code of [src('android/app/src/main/assets/engine.js'),feed,js])
   assert.doesNotThrow(()=>new Function(code));
 });
