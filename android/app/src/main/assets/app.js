@@ -1,9 +1,9 @@
 'use strict';
 const $=id=>document.getElementById(id);
-const num=(v,d=2)=>v==null||v===''||!Number.isFinite(Number(v))?'—':Number(v).toLocaleString('en-US',{maximumFractionDigits:d});
+const fmtValue=(v,d=2)=>v==null||v===''||!Number.isFinite(Number(v))?'—':Number(v).toLocaleString('en-US',{maximumFractionDigits:d});
 const stamp=v=>v?new Date(Number(v)).toLocaleString('vi-VN',{hour12:false}):'—';
 const pending=new Map();
-let seq=0,feed=null,healthy=false,lastTrade=0,lastMark=null,connected=false,account=null,algos=[],
+let seq=0,feed=null,healthy=false,lastTrade=0,lastTradePrice=null,lastMark=null,connected=false,account=null,algos=[],
     trades=[],income=[],lastIncome=0,indicator=new OCCEngine(),busy=false;
 let stored={phase:'IDLE',config:{marginUSDT:20,leverage:5,side:'BOTH',slPercent:1,tpMode:'Percent',
  tp1Val:1,tp2Val:2,tp3Val:3,tp1Qty:33,tp2Qty:33,reverseOnSignal:false}};
@@ -35,8 +35,26 @@ function callNative(method,...args){
 }
 window.occPublicGet=path=>callNative('publicGet',path);
 const signed=(method,path,parameters={})=>callNative('signed',method,path,JSON.stringify(parameters));
+const trade=new OCCMobileTrade({
+ signed, publicGet:window.occPublicGet,
+ load:()=>OCCAndroid.loadState(),save:value=>OCCAndroid.saveState(value),
+ newId:()=>OCCAndroid.newPrefix(),report:message=>log(message)
+});
+stored=trade.cp;
+function showAuto(){
+ $('autoState').textContent=trade.cp.halted?'AUTO KHÓA':trade.auto?'AUTO ON':'AUTO OFF';
+ $('autoState').className=trade.cp.halted?'negative':trade.auto?'positive':'muted';
+ $('autoToggle').textContent=trade.auto?'Tắt Auto':'Bật Auto';
+ $('autoToggle').disabled=trade.busy||!connected||(!trade.auto&&
+    (trade.cp.halted||trade.cp.phase!=='IDLE'||!healthy));
+ $('closeAll').disabled=trade.busy||trade.cp.halted||trade.cp.phase!=='PROTECTED'||!account;
+ $('applyLeverage').disabled=trade.busy||trade.auto||trade.cp.halted||
+    trade.cp.phase!=='IDLE'||!connected;
+ $('safetyLine').textContent=trade.cp.halted?'KHÓA · '+(trade.cp.error||trade.lastError):'';
+}
+
 function saveLocal(){
- if(!OCCAndroid.saveState(JSON.stringify(stored)))throw Error('Không thể lưu cấu hình Android');
+ trade.persist();
 }
 function displayConfig(){
  const c=stored.config;
@@ -59,10 +77,10 @@ function readConfig(){
  return c;
 }
 $('saveConfig').onclick=()=>{
- try{if(stored.phase!=='IDLE')throw Error('Không thay cấu hình khi có checkpoint giao dịch');
-  stored.config=readConfig();saveLocal();displayConfig();msg('Đã lưu cấu hình Android');
- }catch(e){msg(e)}
+ try{trade.setConfig(readConfig());displayConfig();showAuto();msg('Đã lưu cấu hình');}
+ catch(e){msg(e)}
 };
+
 function connectionStatus(){
  $('connection').textContent=connected?'ĐÃ KẾT NỐI':'CHƯA KẾT NỐI';
  $('connection').className=connected?'positive':'muted';
@@ -73,11 +91,12 @@ async function authenticate(op){
  try{
   const result=await callNative('auth',op,$('apiKey').value,$('apiSecret').value,$('remember').checked);
   $('apiKey').value='';$('apiSecret').value='';
-  connected=!!result.connected;connectionStatus();
+  connected=!!result.connected;trade.connected=connected;if(!connected)trade.disarm();
+  connectionStatus();showAuto();
   if(connected)$('apiEditor').open=false;
   else clearAccount();
   if(op!=='restore')msg(connected?'Đã kết nối Binance Futures':'Đã ngắt kết nối');
- }catch(e){connected=false;connectionStatus();if(op!=='restore')msg(e)}
+ }catch(e){connected=false;trade.connected=false;trade.disarm();connectionStatus();showAuto();if(op!=='restore')msg(e)}
  finally{busy=false}
  if(connected){await refresh();await refreshHistory()}
 }
@@ -95,13 +114,13 @@ function createLevel(label,order,side,entry,remaining){
  const el=document.createElement('div');el.className='level';
  const caption=document.createElement('small');caption.textContent=label;el.append(caption);
  const strong=document.createElement('strong');
- strong.textContent=order?num(order.triggerPrice,2):'—';el.append(strong);
+ strong.textContent=order?fmtValue(order.triggerPrice,2):'—';el.append(strong);
  const sub=document.createElement('small');
  if(order){
   const qty=order.closePosition===true||order.closePosition==='true'?remaining:Number(order.quantity);
   const direction=side==='LONG'?1:-1;
   const gross=(Number(order.triggerPrice)-entry)*qty*direction;
-  sub.textContent=num(qty,6)+' BTC · '+num(gross,3)+' USDT (gross)';
+  sub.textContent=fmtValue(qty,6)+' BTC · '+fmtValue(gross,3)+' USDT (gross)';
  }else sub.textContent='Không có lệnh active';
  el.append(sub);return el;
 }
@@ -121,15 +140,15 @@ async function refresh(){
   const setting=conf.find(x=>x.symbol==='BTCUSDT');
   const amount=Number(pos?.positionAmt||0),side=amount>0?'LONG':amount<0?'SHORT':null;
   const entry=Number(pos?.entryPrice||0),qty=Math.abs(amount);
-  $('wallet').textContent=num(usdt.walletBalance,2);
-  $('available').textContent=num(usdt.availableBalance,2);
-  $('equity').textContent=num(acc.totalMarginBalance,2);
-  $('unrealized').textContent=num(acc.totalUnrealizedProfit,2);color('unrealized',acc.totalUnrealizedProfit);
-  $('btcPosition').textContent=num(amount,6);color('btcPosition',amount);
-  $('entry').textContent=side?num(entry,2):'—';
-  $('positionMark').textContent=side?num(pos.markPrice,2):'—';
-  $('liq').textContent=side?num(pos.liquidationPrice,2):'—';
-  $('btcPnl').textContent=side?num(pos.unRealizedProfit,3):'—';color('btcPnl',pos?.unRealizedProfit);
+  $('wallet').textContent=fmtValue(usdt.walletBalance,2);
+  $('available').textContent=fmtValue(usdt.availableBalance,2);
+  $('equity').textContent=fmtValue(acc.totalMarginBalance,2);
+  $('unrealized').textContent=fmtValue(acc.totalUnrealizedProfit,2);color('unrealized',acc.totalUnrealizedProfit);
+  $('btcPosition').textContent=fmtValue(amount,6);color('btcPosition',amount);
+  $('entry').textContent=side?fmtValue(entry,2):'—';
+  $('positionMark').textContent=side?fmtValue(pos.markPrice,2):'—';
+  $('liq').textContent=side?fmtValue(pos.liquidationPrice,2):'—';
+  $('btcPnl').textContent=side?fmtValue(pos.unRealizedProfit,3):'—';color('btcPnl',pos?.unRealizedProfit);
   $('marginMode').textContent=setting?.marginType||'—';
   $('actualLeverage').textContent=setting?.leverage?setting.leverage+'x':'—';
   $('levels').replaceChildren();
@@ -160,13 +179,13 @@ async function refreshHistory(){
   const sum=type=>inc.filter(x=>x.incomeType===type&&x.asset==='USDT').reduce((v,x)=>v+Number(x.income),0);
   const r=sum('REALIZED_PNL'),fee=sum('COMMISSION'),fund=sum('FUNDING_FEE');
   const total=r+fee+fund;
-  $('realNet').textContent=num(total,3);color('realNet',total);
-  $('incomeSummary').textContent='7 ngày · Realized '+num(r,3)+' · Phí '+num(fee,3)+' · Funding '+num(fund,3)+
+  $('realNet').textContent=fmtValue(total,3);color('realNet',total);
+  $('incomeSummary').textContent='7 ngày · Realized '+fmtValue(r,3)+' · Phí '+fmtValue(fee,3)+' · Funding '+fmtValue(fund,3)+
    (inc.length>=1000||rows.length>=1000?' · DỮ LIỆU CHƯA ĐẦY ĐỦ':'');
   const body=$('historyBody');body.replaceChildren();
   for(const x of rows.slice(-100).reverse()){
    const tr=document.createElement('tr');
-   for(const v of [stamp(x.time),x.side,num(x.qty,6),num(x.price,2),num(x.realizedPnl,3),num(x.commission,3)]){
+   for(const v of [stamp(x.time),x.side,fmtValue(x.qty,6),fmtValue(x.price,2),fmtValue(x.realizedPnl,3),fmtValue(x.commission,3)]){
     const td=document.createElement('td');td.textContent=String(v);tr.append(td);
    }
    body.append(tr);
@@ -193,8 +212,8 @@ function connectFeed(){
  feed=new BinanceFeed({
   onStatus:({state,message})=>setFeed(state,message),
   onReady:({h4,m15,now})=>{indicator.warmup(h4,m15,now);indicator.setRunning(false);indicator.setHealthy(false)},
-  onTrade:({price,receivedAt})=>{lastTrade=receivedAt;$('last').textContent=num(price,1);$('priceTime').textContent=stamp(receivedAt)},
-  onMark:({price})=>{if(Number(price)>0){lastMark=Number(price);$('mark').textContent=num(price,2)}},
+  onTrade:({price,receivedAt})=>{lastTrade=receivedAt;$('last').textContent=fmtValue(price,1);$('priceTime').textContent=stamp(receivedAt)},
+  onMark:({price})=>{if(Number(price)>0){lastMark=Number(price);$('mark').textContent=fmtValue(price,2)}},
   onCandle:(bar,opts)=>{
    const signal=indicator.onCandle(bar,opts);indicator.pending=null;
    if(signal?.eligible&&opts.live){$('signal').textContent=signal.side;$('signal').className=signal.side==='LONG'?'positive':'negative';$('signalAt').textContent=stamp(signal.time)}
