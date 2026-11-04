@@ -103,5 +103,5 @@ export async function syncOCCLiveHistory(api,ledger,inputs={}){
  let synced={tracked:ledger.orders().length,newFills:0,report:ledger.report()};
  try{synced=await syncKnownOrderFills(api,ledger);}
  catch(e){found.warnings.push('Không đồng bộ đầy đủ được fill Binance: '+e.message);}
- return {...found,...synced};
+ return {...found,...synced,report:ledger.report(),incomeUpdated};
 }
