@@ -15,7 +15,7 @@ jobs:
         with:
           node-version: '24'
       - name: Run unit and integration tests
-        run: node --test
+        run: node --test --test-concurrency=1
       - name: Build verified standalone Windows ZIP
         shell: powershell
         run: |
