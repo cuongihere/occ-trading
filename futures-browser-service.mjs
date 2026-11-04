@@ -10,6 +10,8 @@ import {ProtectionCoordinator} from './futures-protection-orchestrator.mjs';
 import {ProtectionCheckpoint} from './futures-protection-checkpoint.mjs';
 import {WindowsCredentialVault} from './futures-credential-vault.mjs';
 import {analyzeFuturesPosition} from './futures-position-analysis.mjs';
+import {LiveStatsLedger} from './binance-live-stats.mjs';
+import {syncOCCLiveHistory} from './futures-live-history.mjs';
 
 const DEFAULT={side:'BOTH',marginUSDT:20,leverage:5,slPercent:1,tpMode:'Percent',
  tp1Val:1,tp2Val:2,tp3Val:3,tp1Qty:33,tp2Qty:33,reverseOnSignal:false};
@@ -26,6 +28,7 @@ export class BrowserFutures{
   this.api=null;this.environment=null;this.account=null;this.filters=null;
   this.armed=false;this.busy=false;this.halted=false;this.error=null;this.events=[];this.activeProtection=null;
   this.recoveryStatus='idle';this.lastRecoveryCheck=null;this.restoreTask=null;
+  this.historySyncTask=null;this.lastHistorySync=0;this.historyError=null;this.historyCount=0;
   const unresolved=existsSync(this.intentPath)?JSON.parse(readFileSync(this.intentPath,'utf8')):null;
   const prior=existsSync(this.protectionPath)?new ProtectionCheckpoint(this.protectionPath).load():null;
   this.previousProtection=prior&&prior.phase!=='IDLE'?prior:null; // ID reference only, never resume order management.
@@ -34,6 +37,39 @@ export class BrowserFutures{
   }
  }
  log(type,message){this.events.push({at:Date.now(),type,message:String(message).slice(0,400)});this.events=this.events.slice(-50);}
+ // Store independently from Paper SQLite; reopening OCC must not reset real fills.
+ registerRealOrder({orderId,groupId,clientId,role,side}){
+  const path=resolve(this.dir,'binance-live-stats.sqlite');
+  mkdirSync(this.dir,{recursive:true});
+  const ledger=new LiveStatsLedger(path);
+  try{return ledger.register({orderId,groupId,clientId,role,side});}
+  finally{ledger.close();}
+ }
+ async refreshRealHistory({force=false}={}){
+  if(!this.api||!this.account)return null;
+  if(this.historySyncTask)return this.historySyncTask;
+  if(!force&&Date.now()-this.lastHistorySync<60000)return null;
+  this.historySyncTask=(async()=>{
+   mkdirSync(this.dir,{recursive:true});
+   const ledger=new LiveStatsLedger(resolve(this.dir,'binance-live-stats.sqlite'));
+   try{
+    const intent=existsSync(this.intentPath)?JSON.parse(readFileSync(this.intentPath,'utf8')):null;
+    const checkpoint=this.activeProtection||this.previousProtection;
+    const result=await syncOCCLiveHistory(this.api,ledger,{checkpoint,intent});
+    this.historyCount=result.report.summary.closed;
+    this.historyError=result.warnings.length?result.warnings.slice(0,2).join(' | '):null;
+    this.lastHistorySync=Date.now();
+    this.log('HISTORY_SYNC','Đã lưu '+result.newFills+' fill mới; '+this.historyCount+' vị thế OCC đã đóng.');
+    return result;
+   }catch(e){
+    this.historyError='Chưa đồng bộ được lịch sử Binance: '+e.message;
+    this.log('HISTORY_FAILED',this.historyError);
+    return null;
+   }finally{ledger.close();}
+  })();
+  try{return await this.historySyncTask;}
+  finally{this.historySyncTask=null;}
+ }
  sizingPreview(input,price){
   if(!this.api||!this.filters)return {status:'unavailable',message:'Kết nối Binance API để xác nhận bước khối lượng BTCUSDT.'};
   return previewLiveSizing(input,this.filters,price,this.account?.availableUSDT);
@@ -64,6 +100,7 @@ export class BrowserFutures{
   return {connected:!!this.api&&!!this.account,environment:this.environment,armed:this.armed,
    realFuturesOnly:true,halted:this.halted,busy:this.busy,error:this.error,
    recoveryStatus:this.recoveryStatus,lastRecoveryCheck:this.lastRecoveryCheck,
+   lastHistorySync:this.lastHistorySync,historyError:this.historyError,historyCount:this.historyCount,
    protectedPosition:this.activeProtection?{entry:this.activeProtection.entry,stop:this.activeProtection.stop,tps:this.activeProtection.tps}:null,
    config:this.config,account:this.account,credentialSaved:this.vault.exists(),lastAccountSync:this.lastAccountSync,
    events:this.events.slice(-20),
