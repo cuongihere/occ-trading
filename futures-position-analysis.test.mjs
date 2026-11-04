@@ -71,7 +71,7 @@ test('Unverified external Algo orders show price but are never labeled OCC verif
  const x=analyze({checkpoint:null,managed:false});
  assert.equal(x.ownershipVerified,false);
  assert.ok(x.levels.every(l=>l.origin==='CHƯA_XÁC_MINH'));
- assert.ok(x.warnings.some(w=>w.includes('chưa khớp ID')));
+ assert.ok(x.warnings.some(w=>w.includes('Client Algo ID')));
 });
 
 test('Algo ID match without matching Binance clientAlgoId is never treated as confirmed OCC order',()=>{
