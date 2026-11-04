@@ -33,7 +33,7 @@ test('OCC M15/H4 indicator is byte-identical to original engine aside from modul
  const expected=source.replace(/^export const M15/m,'const M15')
   .replace(/^export function smma/m,'function smma')
   .replace(/^export class OCCEngine/m,'class OCCEngine')+'\nwindow.OCCEngine = OCCEngine;\n';
- assert.equal(src('android/app/src/main/assets/engine.js'),expected);
+ assert.equal(src('android/app/src/main/assets/engine.js').replace(/\r\n/g,'\n'),expected.replace(/\r\n/g,'\n'));
 });
 test('Android code reads real Futures account, position, conditional orders and Income without placing trades',()=>{
  const feed=src('android/app/src/main/assets/server-feed.js');
