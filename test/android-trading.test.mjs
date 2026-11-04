@@ -64,6 +64,7 @@ function harness(initial=null,options={}){
  newId:()=> 'OCCBTC-'+String(++index).padStart(14,'0'),
  report:()=>{}});
  bot.connected=true;
+ bot.setConfig({marginUSDT:70});
  return {bot,calls,algos,pos,orders,getSaved:()=>JSON.parse(persistent)};
 }
 async function ready(h){
