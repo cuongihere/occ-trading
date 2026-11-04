@@ -8,7 +8,7 @@ function harness(initial=null,options={}){
  for(const name of ['trade-core.js','trade-execution.js','trade-recovery.js'])
   runInNewContext(read(name),context,{filename:name});
  let persistent=initial||'',index=0;
- const calls=[],orders=[],algos=[],pos={qty:0,entry:78000,side:null},cfg={leverage:5};
+ const calls=[],orders=[],algos=[],finished=[],pos={qty:0,entry:78000,side:null},cfg={leverage:5};
  const api=async(method,path,params={})=>{
   calls.push({method,path,params:{...params}});
   if(method==='GET'){
@@ -22,6 +22,10 @@ function harness(initial=null,options={}){
    if(path==='/fapi/v1/positionSide/dual')return {dualSidePosition:false};
    if(path==='/fapi/v1/symbolConfig')return [{symbol:'BTCUSDT',marginType:'ISOLATED',
       leverage:cfg.leverage}];
+   if(path==='/fapi/v1/algoOrder'){
+    const a=finished.find(x=>String(x.algoId)===String(params.algoId));
+    if(!a)throw Error('Algo not finished');return {...a};
+   }
    if(path==='/fapi/v1/order'){
     const order=orders.find(x=>String(x.orderId)===String(params.orderId));
     if(!order)throw Error('Unknown order');return {...order};
@@ -65,7 +69,7 @@ function harness(initial=null,options={}){
  report:()=>{}});
  bot.connected=true;
  if(bot.cp.phase==='IDLE')bot.setConfig({marginUSDT:70});
- return {bot,calls,algos,pos,orders,getSaved:()=>JSON.parse(persistent)};
+ return {bot,calls,algos,finished,pos,orders,getSaved:()=>JSON.parse(persistent)};
 }
 async function ready(h){
  await h.bot.arm({price:78000,healthy:true,confirmation:'CHAP NHAN BTC FUTURES'});
@@ -92,7 +96,10 @@ test('Ambiguous STOP response locks executor without replay or further TP placem
  await assert.rejects(h.bot.enter('LONG',78000,'signal-2'),/STOP ACK ambiguous/);
  assert.equal(h.bot.cp.halted,true);assert.equal(h.bot.auto,false);
  assert.equal(h.calls.filter(x=>x.method==='POST'&&x.path==='/fapi/v1/algoOrder').length,1);
- assert.equal(h.calls.filter(x=>x.method==='POST'&&x.path==='/fapi/v1/order').length,1);
+ assert.equal(h.calls.filter(x=>x.method==='POST'&&x.path==='/fapi/v1/order').length,2);
+ assert.equal(h.pos.qty,0);
+ assert.equal(h.calls.filter(x=>x.method==='POST'&&x.path==='/fapi/v1/order')
+  .at(-1).params.reduceOnly,'true');
 });
 test('Manual TP1 cancels verified Algo before MARKET reduce-only; keeps STOP and other TP',async()=>{
  const h=harness();await ready(h);
@@ -117,4 +124,22 @@ test('Foreign Algo blocks manual close before any mutation',async()=>{
  const mutations=h.calls.filter(x=>x.method!=='GET').length;
  await assert.rejects(h.bot.manualClose('ALL'),/Algo/);
  assert.equal(h.calls.filter(x=>x.method!=='GET').length,mutations);
+});
+test('TP1 exchange execution is verified before remaining BTC is recognized',async()=>{
+ const h=harness();await ready(h);
+ const leg=h.bot.cp.tps.find(x=>x.role==='TP1');
+ const idx=h.algos.findIndex(x=>String(x.algoId)===leg.id);
+ const algo=h.algos.splice(idx,1)[0];
+ const childId='7001';
+ h.orders.push({symbol:'BTCUSDT',orderId:childId,clientOrderId:'BINANCE-TP1',
+  status:'FILLED',type:'MARKET',side:'SELL',positionSide:'BOTH',
+  executedQty:String(leg.qty),reduceOnly:true});
+ h.finished.push({...algo,algoStatus:'FINISHED',actualOrderId:childId});
+ h.pos.qty=Number((h.pos.qty-leg.qty).toFixed(8));
+ await h.bot.monitor();
+ assert.equal(h.bot.cp.halted,false);
+ assert.equal(h.bot.cp.phase,'PROTECTED');
+ assert.equal(h.bot.cp.tps.length,2);
+ assert.equal(h.bot.cp.fills[0].role,'TP1');
+ assert.equal(h.bot.cp.fills[0].qty,leg.qty);
 });
