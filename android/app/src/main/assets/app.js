@@ -122,7 +122,16 @@ function createLevel(label,order,side,entry,remaining){
   const gross=(Number(order.triggerPrice)-entry)*qty*direction;
   sub.textContent=fmtValue(qty,6)+' BTC · '+fmtValue(gross,3)+' USDT (gross)';
  }else sub.textContent='Không có lệnh active';
- el.append(sub);return el;
+ el.append(sub);
+ const cp=trade.cp;
+ if(label.startsWith('TP')&&order&&cp.phase==='PROTECTED'&&!cp.halted&&cp.entry?.side===side){
+  const leg=cp.tps?.find(x=>x.role===label);
+  if(leg&&String(leg.id)===String(order.algoId)&&leg.clientId===order.clientAlgoId){
+   const button=document.createElement('button');button.textContent='Chốt MKT';
+   button.onclick=()=>performManual(label);el.append(button);
+  }
+ }
+ return el;
 }
 async function refresh(){
  if(!connected||busy)return;
@@ -153,14 +162,21 @@ async function refresh(){
   $('actualLeverage').textContent=setting?.leverage?setting.leverage+'x':'—';
   $('levels').replaceChildren();
   if(side){
-   const active=openAlgos.filter(x=>['NEW','ACCEPTED','PENDING_NEW'].includes(x.algoStatus));
-   const stop=active.find(x=>x.orderType==='STOP_MARKET');
-   const tp=active.filter(x=>x.orderType==='TAKE_PROFIT_MARKET')
-     .sort((a,b)=>(side==='LONG'?1:-1)*(Number(a.triggerPrice)-Number(b.triggerPrice)));
-   for(const [i,o] of [stop,...tp.slice(0,3)].entries())$('levels').append(createLevel(i===0?'SL':'TP'+i,o,side,entry,qty));
-   if(!stop)log('Không thấy SL Binance đang hoạt động');
+   const active=openAlgos.filter(x=>OCC_ACTIVE.has(String(x.algoStatus)));
+   const cp=trade.cp,managed=cp.phase==='PROTECTED'&&cp.entry?.side===side;
+   const byCheckpoint=r=>r?active.find(x=>String(x.algoId)===String(r.id)&&x.clientAlgoId===r.clientId):null;
+   const sl=managed?byCheckpoint(cp.stop):active.find(x=>x.orderType==='STOP_MARKET');
+   $('levels').append(createLevel('SL',sl,side,entry,qty));
+   const sorted=active.filter(x=>x.orderType==='TAKE_PROFIT_MARKET')
+    .sort((a,b)=>(side==='LONG'?1:-1)*(Number(a.triggerPrice)-Number(b.triggerPrice)));
+   for(let i=0;i<3;i++){
+    const role='TP'+(i+1);
+    const order=managed?byCheckpoint(cp.tps.find(x=>x.role===role)):sorted[i];
+    $('levels').append(createLevel(role,order,side,entry,qty));
+   }
+   if(!sl)log('Không xác minh được STOP đang hoạt động');
   }
-  account=acc;algos=openAlgos;
+  account=acc;algos=openAlgos;showAuto();
   $('status').textContent=healthy?'LIVE':'CHỜ GIÁ';
  }catch(e){msg(e)}
  finally{busy=false}
