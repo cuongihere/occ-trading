@@ -98,58 +98,36 @@ test('live margin/TP editing validates immediately and server checks before save
  assert.ok(js);assert.doesNotThrow(()=>new Function(js));
 });
 
-test('Position analysis displays actual Binance SL TP steps and scenarios without configuration forecasts',()=>{
+test('Binance status shows only four compact SL/TP projections, without separate risk tables',()=>{
  const html=read('BINANCE_UI_PREVIEW.html'),server=read('server.mjs');
  const service=read('futures-browser-service.mjs'),build=read('BUILD_PORTABLE.ps1');
- for(const id of ['positionAnalysis','riskHeadline','riskUpdated','riskSummary',
-  'riskLevels','riskScenarios','riskAlerts','riskDisclaimer'])
-  assert.ok(html.includes('id="'+id+'"'),'missing risk panel: '+id);
- assert.match(html,/fetch\('\/api\/binance\/position-analysis'/);
+ const top=html.indexOf('<section class="topgrid">'),history=html.indexOf('<section class="below">');
+ assert.ok(top>=0&&history>top);
+ const main=html.slice(top,history);
+ for(const id of ['entryPrice','markPrice','liqPrice','btcPnl','botState','riskHeadline',
+  'riskUpdated','riskSummary','riskAlerts','positionAnalysis','compactSubtitle','compactNote',
+  'compactSLshare','compactTP1share','compactTP2share','compactTP3share',
+  'compactSLprice','compactTP1price','compactTP2price','compactTP3price',
+  'compactSLpnl','compactTP1pnl','compactTP2pnl','compactTP3pnl'])
+  assert.match(main,new RegExp('id="'+id+'"'),'Missing compact position element: '+id);
+ assert.equal((main.match(/class="compactRow"/g)||[]).length,4);
+ assert.doesNotMatch(html,/<section class="riskDashboard"/);
+ assert.doesNotMatch(html,/<div class="panel riskLevelsPanel"|<div class="panel riskScenariosPanel"/);
+ assert.doesNotMatch(html,/id="riskLevels"|id="riskScenarios"/);
+ assert.match(html,/function showPositionAnalysis\(data\)/);
+ assert.match(html,/plan\.basis==='illustration'/);
+ assert.match(html,/row\.effectiveSharePercent/);
+ assert.match(html,/row\.configuredSharePercent/);
  assert.match(html,/setInterval\(refreshPositionAnalysis,12000\)/);
- assert.match(html,/riskRow\(/);
- assert.match(html,/const origin=level\.origin/); // ownership states are explicit
- assert.doesNotMatch(html,/innerHTML\s*=/);
+ assert.match(html,/fetch\('\/api\/binance\/position-analysis'/);
  assert.match(server,/req\.url==='\/api\/binance\/position-analysis'/);
- assert.match(service,/async positionAnalysis\(\)/);
- assert.match(service,/analyzeFuturesPosition/);
- assert.match(build,/'futures-position-analysis\.mjs'/);
+ assert.match(server,/referencePrice:quote\.live===true\?quote\.lastPrice:null/);
+ assert.match(service,/projectCompactSLTP/);
+ assert.match(build,/'futures-compact-pnl\.mjs'/);
+ assert.doesNotMatch(html,/innerHTML\s*=/);
  const js=html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
  assert.ok(js);assert.doesNotThrow(()=>new Function(js));
 });
-
-test('status and risk metrics are consolidated in one account panel; SL TP and scenarios are compact tables',()=>{
- const html=read('BINANCE_UI_PREVIEW.html');
- const top=html.indexOf('<section class="topgrid">');
- const risk=html.indexOf('<section class="riskDashboard" id="positionAnalysis"');
- const history=html.indexOf('<section class="below">');
- assert.ok(top>=0&&risk>top&&history>risk,'Tables must follow the account status row');
- const primary=html.slice(top,risk),tables=html.slice(risk,history);
- for(const id of ['entryPrice','markPrice','liqPrice','btcPnl','marginMode',
-  'accountLeverage','botState','riskHeadline','riskUpdated','riskSummary','riskAlerts'])
-  assert.match(primary,new RegExp('id="'+id+'"'),'Missing consolidated status: '+id);
- assert.doesNotMatch(tables,/id="riskSummary"|riskOverview|Tổng quan vị thế đang mở/);
- assert.doesNotMatch(primary,/Tổng quan vị thế đang mở/);
- assert.match(tables,/id="riskLevels"/);
- assert.match(tables,/id="riskScenarios"/);
- assert.equal((html.match(/id="riskSummary"/g)||[]).length,1);
- assert.equal((html.match(/class="panel riskLevelsPanel"/g)||[]).length,1);
- assert.equal((html.match(/class="panel riskScenariosPanel"/g)||[]).length,1);
- assert.match(tables,/class="riskTable" aria-label="Các lệnh SL TP đang mở trên Binance"/);
- assert.match(tables,/class="riskTable" aria-label="Các kịch bản kết quả của vị thế"/);
- assert.match(html,/function riskRow\(/);
- assert.match(html,/\.riskDashboard\{grid-template-columns:minmax\(0,1\.1fr\) minmax\(0,1fr\)/);
- assert.match(html,/\.accountPanel\{overflow:visible\}/);
- assert.doesNotMatch(html,/\.accountPanel\{overflow-y:auto/);
- assert.match(html,/\.app\{max-width:1780px;min-height:100dvh;height:auto/);
- assert.match(html,/@media\(max-width:750px\)/);
- assert.match(html,/fetch\('\/api\/binance\/position-analysis'/);
- assert.match(html,/setInterval\(refreshPositionAnalysis,12000\)/);
- assert.doesNotMatch(html,/innerHTML\s*=/);
- const js=html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
- assert.ok(js);
- assert.doesNotThrow(()=>new Function(js));
-});
-
 test('reconnect recovery keeps manual check clickable with DPAPI key even after saved API reconnect fails',()=>{
  const html=read('BINANCE_UI_PREVIEW.html'),server=read('server.mjs');
  const svc=read('futures-browser-service.mjs');

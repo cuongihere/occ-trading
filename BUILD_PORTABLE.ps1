@@ -11,7 +11,7 @@ New-Item -ItemType Directory -Path $stage -Force | Out-Null
 $files = @(
     'START_WINDOWS.bat','BOOTSTRAP_RUNTIME.ps1',
     'CHECK_BINANCE_WINDOWS.bat','CHECK_BINANCE.ps1','CHECK_BINANCE.mjs','binance-account.mjs','binance-live-stats.mjs','futures-live-history.mjs','BINANCE_API_SETUP.md',
-    'futures-transport.mjs','futures-sizing.mjs','futures-order-plan.mjs','futures-lifecycle.mjs','futures-protection-plan.mjs','futures-protection-orchestrator.mjs','futures-protection-checkpoint.mjs','futures-browser-service.mjs','futures-credential-vault.mjs','futures-position-analysis.mjs','FUTURES_EXECUTION_STATUS.md',
+    'futures-transport.mjs','futures-sizing.mjs','futures-order-plan.mjs','futures-lifecycle.mjs','futures-protection-plan.mjs','futures-protection-orchestrator.mjs','futures-protection-checkpoint.mjs','futures-browser-service.mjs','futures-credential-vault.mjs','futures-position-analysis.mjs','futures-compact-pnl.mjs','FUTURES_EXECUTION_STATUS.md',
     'server.mjs','server-feed.mjs','btc-market-quote.mjs','engine.mjs','store.mjs','stats.mjs',
     'dashboard.html','BINANCE_UI_PREVIEW.html','package.json','README.md','README_VI.md',
     'RUNTIME_SOURCE.txt','PORTABLE_BUILD.md'
