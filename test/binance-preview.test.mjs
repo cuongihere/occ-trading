@@ -224,28 +224,35 @@ test('Operator BTCUSDT manual TP1 TP2 TP3 and close-all buttons require confirma
  assert.ok(js);assert.doesNotThrow(()=>new Function(js));
 });
 
-test('Compact Binance configuration keeps every functional field while removing oversized inputs and price panel',()=>{
+test('API, real Binance quote and minimized Auto config share a row without losing trading controls',()=>{
  const html=read('BINANCE_UI_PREVIEW.html');
- const apiStart=html.indexOf('<div class="panel apiPanel">'),configStart=html.indexOf('<div class="panel configPanel">');
- const positionStart=html.indexOf('<div class="panel accountPanel">');
- assert.ok(apiStart>=0&&configStart>apiStart&&positionStart>configStart);
- const api=html.slice(apiStart,configStart),config=html.slice(configStart,positionStart);
- assert.match(api,/class="marketTicker stale" id="btcMarketTicker"/);
+ const apiStart=html.indexOf('<div class="panel apiPanel">');
+ const priceStart=html.indexOf('<div class="panel pricePanel"');
+ const configStart=html.indexOf('<div class="panel configPanel">');
+ const positionStart=html.indexOf('<section class="positionSection"');
+ assert.ok(apiStart>=0&&priceStart>apiStart&&configStart>priceStart&&positionStart>configStart);
+ const api=html.slice(apiStart,priceStart),price=html.slice(priceStart,configStart),config=html.slice(configStart,positionStart);
+ assert.doesNotMatch(api,/id="btcMarketTicker"/);
+ assert.match(price,/class="marketTicker stale" id="btcMarketTicker"/);
+ assert.equal((html.match(/id="btcMarketTicker"/g)||[]).length,1);
  for(const id of ['credentialEditor','apiKey','apiSecret','rememberApi','apiConnect','apiDisconnect','apiForget','apiReconcile'])
   assert.match(api,new RegExp('id="'+id+'"'));
  for(const id of ['marginUSDT','leverage','side','sl','mode','tp1','tp2','tp3','q1','q2','q3','reverseToggle','reverseState','sizingAlert','save','applyLeverage','settingStatus'])
   assert.match(config,new RegExp('id="'+id+'"'));
+ assert.match(config,/<details id="autoConfigDetails" class="autoConfigDetails">/);
+ assert.doesNotMatch(config,/<details id="autoConfigDetails"[^>]* open/);
+ assert.match(config,/id="autoConfigSnapshot"/);
  assert.match(config,/class="configPrimary"/);
  assert.match(config,/class="configTargets"/);
- assert.equal((config.match(/<label/g)||[]).length,12); // five primary, six targets, one reverse toggle.
- assert.doesNotMatch(config,/class="formSection fields2"|class="formSection fields3"/);
- assert.match(html,/\.topgrid\{align-items:start;gap:10px\}/);
- assert.match(html,/\.apiPanel \.marketTicker\{flex:0 0 auto;min-height:128px;max-height:143px/);
- assert.match(html,/\.configPanel \.configTargets\{display:grid;grid-template-columns:repeat\(6,minmax\(0,1fr\)\)/);
- assert.match(html,/\.configPanel input:not\(\[type=checkbox\]\),\.configPanel select\{height:32px/);
- assert.match(html,/@media\(max-width:1400px\)/);
+ assert.equal((config.match(/<label/g)||[]).length,12);
+ assert.match(html,/\.topgrid\{display:grid;grid-template-columns:minmax\(310px,1\.15fr\) minmax\(260px,\.9fr\) minmax\(350px,1fr\)/);
+ assert.match(html,/\.pricePanel \.marketTicker\{flex:1 1 auto;margin:0/);
+ assert.match(html,/\.configPanel \.configTargets\{grid-template-columns:repeat\(6,minmax\(0,1fr\)\)/);
+ assert.match(html,/@media\(max-width:1220px\)/);
  assert.match(html,/@media\(max-width:750px\)/);
- assert.match(html,/@media\(max-width:390px\)/);
+ assert.match(html,/function updateAutoConfigSnapshot\(\)/);
+ assert.match(html,/updateAutoConfigSnapshot\(\);/);
+ assert.match(html,/setInterval\(refreshMarketPrice,1000\)/);
  const js=html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
  assert.ok(js);assert.doesNotThrow(()=>new Function(js));
 });
@@ -271,7 +278,7 @@ test('BTC position is one full-width horizontal panel BELOW API and Auto setting
   'manualTP3','manualCloseAll','manualActionStatus','riskAlerts'])
   assert.match(section,new RegExp('id="'+id+'"'),'Missing full-width position element '+id);
  assert.match(html,/grid-template-rows:48px 90px auto auto minmax\(180px,1fr\) 20px/);
- assert.match(html,/\.topgrid\{grid-template-columns:minmax\(300px,\.82fr\) minmax\(500px,1\.53fr\)\}/);
+ assert.match(html,/\.topgrid\{display:grid;grid-template-columns:minmax\(310px,1\.15fr\) minmax\(260px,\.9fr\) minmax\(350px,1fr\)/);
  assert.match(html,/\.positionSection>\.accountPanel\{\s*display:grid/);
  assert.match(html,/\.positionSection \.positionGrid\{\s*grid-column:1\/-1;grid-row:4;\s*grid-template-columns:repeat\(6,minmax\(0,1fr\)\)/);
  assert.match(html,/\.positionSection \.compactRows\{\s*display:grid;grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
