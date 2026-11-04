@@ -178,6 +178,9 @@ const futuresMonitor=setInterval(()=>browserFutures.monitor().catch(e=>console.e
 const accountRefresh=setInterval(()=>browserFutures.refreshAccountOverview().catch(e=>{
   console.error('Futures account refresh:',e.message);
 }),25000);accountRefresh.unref();
+const liveHistoryRefresh=setInterval(()=>browserFutures.refreshRealHistory()
+ .catch(e=>console.error('Binance OCC history:',e.message)),60000);
+liveHistoryRefresh.unref();
 server.listen(port,'127.0.0.1',()=>{
  console.log('Local dashboard http://127.0.0.1:'+port+'; Futures Auto OFF by default');
  browserFutures.restoreSavedConnection().catch(e=>console.error('Saved Binance credentials:',e.message));
@@ -185,7 +188,7 @@ server.listen(port,'127.0.0.1',()=>{
 });
 function shutdown(code=0){
  if(closing)return;closing=true;
- clearInterval(futuresMonitor);clearInterval(accountRefresh);
+ clearInterval(futuresMonitor);clearInterval(accountRefresh);clearInterval(liveHistoryRefresh);
  // Commit an explicit shutdown checkpoint. No pending orders are replayed later.
  if(code===0){try{commit('process_stop',{tradingEnabled:engine.tradingEnabled},null,Date.now(),()=>engine.setRunning(false));}
  catch(e){console.error('Failed to persist shutdown:',e.message);code=1;}}
