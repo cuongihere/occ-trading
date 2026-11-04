@@ -32,7 +32,7 @@ function fake({flatRiskRows=false,brokenConfig=false,failStop=false,leverage=5,l
    if(path==='/fapi/v1/order'){
     const entry=calls.filter(x=>x.method==='POST'&&x.path==='/fapi/v1/order'&&x.p.reduceOnly!=='true').at(-1)?.p;
     return {symbol:'BTCUSDT',side:entry?.side||'BUY',positionSide:'BOTH',
-     status:'FILLED',executedQty:'.032',avgPrice:'77000',orderId:position.entryOrderId,
+     status:'FILLED',type:'MARKET',executedQty:'.032',avgPrice:'77000',orderId:position.entryOrderId,
      clientOrderId:entry?.newClientOrderId};
    }
    throw Error('Unexpected GET '+path);
