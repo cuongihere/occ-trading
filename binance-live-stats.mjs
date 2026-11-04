@@ -178,11 +178,15 @@ export function computeLiveReport(orders,fills,incomes=[],now=Date.now()){
  const knownFillIds=new Set(fills.map(x=>String(x.fill_id)));
  const unmatched=window.filter(x=>['REALIZED_PNL','COMMISSION'].includes(x.income_type)&&
   (!x.trade_id||!knownFillIds.has(String(x.trade_id))));
+ const matched=window.filter(x=>['REALIZED_PNL','COMMISSION'].includes(x.income_type)&&
+  x.trade_id&&knownFillIds.has(String(x.trade_id)));
+ const roundSum=list=>Number(list.reduce((v,x)=>v+x.amount,0).toFixed(8));
  r.incomeAudit={source:'BINANCE_INCOME_BTCUSDT',startAt:windowStart,endAt:now,
   entries:window.length,realizedUSDT:total('REALIZED_PNL'),
   commissionUSDT:total('COMMISSION'),fundingUSDT:total('FUNDING_FEE'),
   totalUSDT:Number((total('REALIZED_PNL')+total('COMMISSION')+total('FUNDING_FEE')).toFixed(8)),
-  unmatchedTradeIncomeUSDT:Number(unmatched.reduce((v,x)=>v+x.amount,0).toFixed(8)),
+  matchedTradeIncomeUSDT:roundSum(matched),matchedTradeEvents:matched.length,
+  unmatchedTradeIncomeUSDT:roundSum(unmatched),
   unmatchedTradeEvents:unmatched.length,available:window.length>0,
   warning:'Binance Income BTCUSDT có thể gồm cả giao dịch ngoài OCC. Funding không có ID vị thế nên không tự gán vào từng lệnh.'};
  if(s.binanceUnverifiedClosed)r.warnings.push(s.binanceUnverifiedClosed+
