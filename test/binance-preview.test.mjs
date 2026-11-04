@@ -108,7 +108,8 @@ test('Binance status shows only four compact SL/TP projections, without separate
   'riskUpdated','riskSummary','riskAlerts','positionAnalysis','compactSubtitle','compactNote',
   'compactSLshare','compactTP1share','compactTP2share','compactTP3share',
   'compactSLprice','compactTP1price','compactTP2price','compactTP3price',
-  'compactSLpnl','compactTP1pnl','compactTP2pnl','compactTP3pnl'])
+  'compactSLpnl','compactTP1pnl','compactTP2pnl','compactTP3pnl',
+  'compactSLmeta','compactTP1meta','compactTP2meta','compactTP3meta','slTpRefresh'])
   assert.match(main,new RegExp('id="'+id+'"'),'Missing compact position element: '+id);
  assert.equal((main.match(/class="compactRow"/g)||[]).length,4);
  assert.doesNotMatch(html,/<section class="riskDashboard"/);
@@ -120,6 +121,12 @@ test('Binance status shows only four compact SL/TP projections, without separate
  assert.match(html,/x\.active&&x\.confirmed/);
  assert.match(html,/x\.origin!=='CHƯA_XÁC_MINH'/);
  assert.match(html,/x\.clientId\?\.endsWith\('-'\+role\)/);
+ assert.match(html,/Binance xác minh/);
+ assert.match(html,/Algo #/);
+ assert.match(html,/Chưa xác minh|CHƯA XÁC MINH/);
+ assert.match(html,/\$\('slTpRefresh'\)\.onclick=async/);
+ assert.match(html,/row\.hidden=false/);
+ assert.match(html,/không phải lợi nhuận Binance/);
  assert.doesNotMatch(html,/plan\.basis==='illustration'/);
  assert.match(html,/setInterval\(refreshPositionAnalysis,12000\)/);
  assert.match(html,/fetch\('\/api\/binance\/position-analysis'/);
