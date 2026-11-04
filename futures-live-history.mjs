@@ -72,9 +72,11 @@ export async function discoverOCCOrderIds(api,ledger,{checkpoint=null,intent=nul
    const o=await api.get('/fapi/v1/order',{symbol:'BTCUSDT',origClientOrderId:intent.closeId});
    if(o?.symbol==='BTCUSDT'&&o.clientOrderId===intent.closeId&&
      o.status==='FILLED'&&o.type==='MARKET'&&(o.reduceOnly===true||o.reduceOnly==='true')&&
-     numericOrder(o.orderId))
+     numericOrder(o.orderId)){
+    const role=['TP1','TP2','TP3','CLOSE'].includes(intent.role)?intent.role:'REVERSE';
     add({orderId:String(o.orderId),groupId:intent.oldClientId,
-     clientId:intent.closeId,role:'REVERSE',side:o.side});
+     clientId:intent.closeId,role,side:o.side});
+   }
   }catch(e){warnings.push('Không xác minh được lệnh đóng đảo chiều: '+e.message);}
  }
  return {discovered,warnings};
