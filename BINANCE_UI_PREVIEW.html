@@ -392,6 +392,12 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
  .pricePanel .marketTicker{min-height:130px}
  .autoConfigSummary{padding:11px 12px}
 }
+#realStats .statLine{grid-template-columns:repeat(5,minmax(0,1fr))}
+#realStats .stat{min-width:0;padding:7px 8px}
+#realStats .stat strong{font-size:16px;overflow-wrap:anywhere}
+#occScopeWarning{margin:0 0 6px;color:#a7bcd4;line-height:1.4}
+#incomeReconcileSummary{color:#e2c192}
+@media(max-width:650px){#realStats .statLine{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 </head>
 <body>
@@ -409,7 +415,7 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
  <div class="kpi"><div class="label">Tài sản Equity</div><div id="equity" class="value">—</div><div class="detail">USDT · Margin balance</div></div>
  <div class="kpi"><div class="label">P&L chưa chốt</div><div id="unrealized" class="value">—</div><div class="detail">USDT · Futures</div></div>
  <div class="kpi"><div class="label">Vị thế BTC</div><div id="btcPosition" class="value">—</div><div class="detail">BTCUSDT · +Long / −Short</div></div>
- <div class="kpi"><div class="label">Net OCC theo fill</div><div id="realNet" class="value">—</div><div class="detail">USDT · chưa gồm funding</div></div>
+ <div class="kpi" title="Chỉ BTCUSDT · Binance Futures Income 7 ngày; đã gồm phí và funding. Không gồm P&L chưa chốt hay các coin khác."><div class="label">P&L Binance BTC · 7 ngày</div><div id="binanceIncomeTotal" class="value">—</div><div id="incomeKpiDetail" class="detail">Đang đối soát Binance Income</div></div>
 </section>
 <section class="topgrid">
  <div class="panel apiPanel">
@@ -517,7 +523,9 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
    <div class="stat">Thắng/Thua/Hòa<strong id="realWl">0/0/0</strong></div>
    <div class="stat">Win rate<strong id="realWin">—</strong></div>
    <div class="stat">Phí (USDT)<strong id="realFees">0</strong></div>
+   <div class="stat" title="Chỉ các vị thế OCC đã đóng và đủ fill, không bao gồm funding hoặc các lệnh thiếu dữ liệu.">Net OCC đã đóng<strong id="realNet">—</strong></div>
   </div>
+  <div class="small" id="occScopeWarning">Net OCC không phải tổng P&L Binance: chưa gồm các lệnh chưa ghép fill và funding.</div>
   <canvas id="realCurve" width="720" height="170" aria-label="P&L cộng dồn lệnh bot"></canvas>
   <span id="realGross" hidden></span>
  </div>
@@ -525,6 +533,7 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
   <div class="historyHead"><h2>Lịch sử lệnh OCC trên Binance</h2><div class="row"><button class="minor" id="statsRefresh">Làm mới</button><button class="minor" id="statsCsv">Xuất CSV</button></div></div>
   <div class="small" id="realOpen" style="margin-bottom:5px"></div><div class="small" id="historySyncStatus" role="status"></div>
   <div class="small" id="incomeAuditSummary" role="status" style="margin:5px 0;line-height:1.45"></div>
+  <div class="small" id="incomeReconcileSummary" role="status" style="margin:5px 0;line-height:1.45"></div>
   <div class="tableScroll"><table>
    <thead><tr><th>Vào / Ra (VN)</th><th>Chiều</th><th>BTC</th><th>Entry → Exit</th><th>TP/SL</th><th>Gross fill</th><th>Phí fill</th><th>Net fill</th><th>Net Binance Income</th><th>Kết quả / đối soát</th></tr></thead>
    <tbody id="realHistory"><tr><td colspan="10">Chưa có lệnh OCC đã xác minh.</td></tr></tbody>
@@ -541,6 +550,18 @@ const color=(el,n)=>{el.classList.remove('positive','negative');if(Number(n)>0)e
 const vn=t=>t==null?'—':new Date(t).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',hour12:false});
 const numbers=['marginUSDT','leverage','sl','tp1','tp2','tp3','q1','q2'];
 let setupLoaded=false,autoBusy=false,editingUntil=0,saveTimer=null,liveReport=null;
+let incomeLastCheckedAt=null,incomeIsConnected=false;
+function renderBinanceIncomeKpi(){
+ const ia=liveReport?.incomeAudit;
+ const syncAge=incomeLastCheckedAt==null?Infinity:Date.now()-Number(incomeLastCheckedAt);
+ const fresh=incomeIsConnected&&syncAge>=0&&syncAge<11*60*1000&&
+  ia?.available===true&&Number.isFinite(Number(ia.totalUSDT));
+ $('binanceIncomeTotal').textContent=fresh?fmt(ia.totalUSDT,2):'—';
+ color($('binanceIncomeTotal'),fresh?ia.totalUSDT:null);
+ $('incomeKpiDetail').textContent=fresh?
+  'USDT · Realized + phí + funding':
+  ia?.available?'Income chưa cập nhật · bấm Làm mới':'Chưa có Binance Income xác minh';
+}
 let marketSnapshot=null,marketRefreshing=false;
 let positionAnalysisRefreshing=false,manualBusy=false,manualSnapshot=null,manualPosition=null;
 let sizingStatus='unavailable',sizingSequence=0,sizingTimer=null,reverseBusy=false;
@@ -705,6 +726,8 @@ async function refreshLive(){
   const r=await fetch('/api/binance/live-status',{cache:'no-store'});
   if(!r.ok)throw Error('HTTP '+r.status);
   const s=await r.json(),a=s.account||null;
+   incomeLastCheckedAt=s.lastIncomeSync||null;incomeIsConnected=!!s.connected;
+   renderBinanceIncomeKpi();
   if(!setupLoaded&&s.config){applyConfig(s.config);setupLoaded=true;scheduleSizingValidation();if(s.connected)$('credentialEditor').open=false;}
   $('connection').textContent=s.connected?'BINANCE KẾT NỐI':s.error?'API LỖI · THỬ LẠI':s.credentialSaved?'ĐANG KẾT NỐI':'CHƯA KẾT NỐI';
   $('connection').className='status'+(s.connected?' ok':s.error?' bad':'');
@@ -783,6 +806,7 @@ async function refreshReport(){
   const r=await fetch('/api/binance/live-report',{cache:'no-store'});
   if(!r.ok)throw Error('HTTP '+r.status);
   const data=await r.json();liveReport=data;
+  renderBinanceIncomeKpi();
   const s=data.summary||{};
   $('realNet').textContent=fmt(s.netExFundingUSDT,2);
   color($('realNet'),s.netExFundingUSDT);
@@ -793,19 +817,26 @@ async function refreshReport(){
   $('realGross').textContent=fmt(s.grossRealizedUSDT??0,2);
   $('statsStatus').textContent=(data.registeredOrders||0)+' order ID OCC · '+
    (s.binanceAuditedClosed||0)+' / '+(s.closed||0)+' vị thế khớp Binance Income';
-  $('realOpen').textContent=(s.open||0)+' nhóm chưa ghép đủ fill (KHÔNG khẳng định đang mở) · '+
-   (s.closed||0)+' nhóm đã khép đủ theo fill'; 
+  $('realOpen').textContent=(s.open||0)+' nhóm OCC chưa ghép đủ fill đóng (KHÔNG khẳng định đang mở) · '+
+   (s.closed||0)+' nhóm đã khép đủ theo fill';
+  $('occScopeWarning').textContent='Net OCC '+(s.closed||0)+' vị thế đã đóng được nhận diện (toàn bộ lịch sử đã ghi nhận, chưa gồm funding).'+
+   ((s.open||0)?' Còn '+s.open+' nhóm thiếu fill đóng nên KHÔNG phải tổng lãi/lỗ tài khoản.':' Không bao gồm giao dịch ngoài OCC.'); 
   const ia=data.incomeAudit;
   $('incomeAuditSummary').textContent=ia?.available?
-   'Binance Income BTCUSDT 7 ngày (toàn bộ tài khoản, có thể gồm lệnh ngoài OCC): '+
-   'Realized '+signedUSDT(ia.realizedUSDT)+
+   'Binance BTCUSDT Income 7 ngày: Realized '+signedUSDT(ia.realizedUSDT)+
    ' · Phí '+signedUSDT(ia.commissionUSDT)+
    ' · Funding '+signedUSDT(ia.fundingUSDT)+
-   ' · Tổng '+signedUSDT(ia.totalUSDT)+
-   (ia.unmatchedTradeEvents?
-    ' · '+ia.unmatchedTradeEvents+' khoản chưa ghép fill OCC ('+
-    signedUSDT(ia.unmatchedTradeIncomeUSDT)+')':''):
-   'Chưa có dữ liệu Binance Income để đối chiếu P&L. Số Net fill không bao gồm funding.';
+   ' · TỔNG '+signedUSDT(ia.totalUSDT):
+   'Không có Binance Income xác minh; không thể xác định lãi/lỗ BTCUSDT toàn tài khoản.';
+  $('incomeReconcileSummary').textContent=ia?.available?
+   'Đối soát 7 ngày: đã khớp fill '+signedUSDT(ia.matchedTradeIncomeUSDT)+
+   ' ('+(ia.matchedTradeEvents??0)+' khoản) + chưa ghép fill '+signedUSDT(ia.unmatchedTradeIncomeUSDT)+
+   ' ('+(ia.unmatchedTradeEvents??0)+' khoản) + funding '+signedUSDT(ia.fundingUSDT)+
+   ' = '+signedUSDT(ia.totalUSDT)+'.'+
+   ((ia.unmatchedTradeEvents||s.open)?
+    ' Còn dữ liệu chưa ghép OCC; không sử dụng Net OCC làm tổng P&L tài khoản.':''):
+   'Các khoản chưa ghép chưa được gán cho OCC vì thiếu xác minh order/trade ID.';
+
   if((data.warnings||[]).length)
    $('incomeAuditSummary').textContent+=' · '+data.warnings.slice(-2).join(' | ');
   curveData=data.curve||[];drawCurve();
