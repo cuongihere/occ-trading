@@ -7,12 +7,14 @@ const EPS=1e-8;
 const schema=[
 "PRAGMA journal_mode=WAL","PRAGMA foreign_keys=ON",
 "CREATE TABLE IF NOT EXISTS orders (order_id TEXT PRIMARY KEY,group_id TEXT NOT NULL,client_id TEXT NOT NULL,role TEXT NOT NULL,side TEXT NOT NULL,synced_at INTEGER NOT NULL DEFAULT 0)",
-"CREATE TABLE IF NOT EXISTS fills (fill_id TEXT PRIMARY KEY,order_id TEXT NOT NULL REFERENCES orders(order_id),side TEXT NOT NULL,qty REAL NOT NULL,price REAL NOT NULL,realized REAL NOT NULL,fee REAL NOT NULL,asset TEXT NOT NULL,filled_at INTEGER NOT NULL)"
+"CREATE TABLE IF NOT EXISTS fills (fill_id TEXT PRIMARY KEY,order_id TEXT NOT NULL REFERENCES orders(order_id),side TEXT NOT NULL,qty REAL NOT NULL,price REAL NOT NULL,realized REAL NOT NULL,fee REAL NOT NULL,asset TEXT NOT NULL,filled_at INTEGER NOT NULL)",
+"CREATE TABLE IF NOT EXISTS income_events (income_type TEXT NOT NULL,tran_id TEXT NOT NULL,trade_id TEXT,asset TEXT NOT NULL,amount REAL NOT NULL,occurred_at INTEGER NOT NULL,PRIMARY KEY(income_type,tran_id))"
 ].join(';')+';';
 export const emptyLiveReport=()=>({source:'BINANCE_VERIFIED_OCC_ONLY',asOf:null,registeredOrders:0,
  summary:{closed:0,open:0,wins:0,losses:0,breakeven:0,winRate:null,grossRealizedUSDT:0,
- usdtFees:0,netExFundingUSDT:0,incomplete:0,nonUSDTFeeFills:0},
- positions:[],openPositions:[],curve:[],
+ usdtFees:0,netExFundingUSDT:0,incomplete:0,nonUSDTFeeFills:0,
+  binanceAuditedNetUSDT:0,binanceAuditedClosed:0,binanceUnverifiedClosed:0},
+ positions:[],openPositions:[],curve:[],incomeAudit:null,
  warnings:['Chỉ tính lệnh BTCUSDT đã được bot đăng ký ID và đối chiếu với Binance.',
  'P&L sau phí USDT chưa bao gồm funding và các phí không tính bằng USDT.',
  'Hiện chưa có bộ thực thi lệnh thật; khi chỉ chạy Paper/Preview sẽ không có giao dịch thực.']});
@@ -41,6 +43,36 @@ export class LiveStatsLedger{
  markChecked(orderId,at=Date.now()){
   this.#db.prepare('UPDATE orders SET synced_at=? WHERE order_id=?').run(at,String(orderId));
  }
+ ingestIncome(rows){
+  if(!Array.isArray(rows))throw Error('Invalid Binance income history');
+  const add=this.#db.prepare('INSERT INTO income_events VALUES (?,?,?,?,?,?)');
+  const old=this.#db.prepare('SELECT * FROM income_events WHERE income_type=? AND tran_id=?');
+  let added=0;
+  this.#db.exec('BEGIN IMMEDIATE');
+  try{
+   for(const x of rows){
+    if(x.symbol!=='BTCUSDT'||!['REALIZED_PNL','COMMISSION','FUNDING_FEE'].includes(x.incomeType))
+     continue;
+    const amount=Number(x.income),at=Number(x.time),type=String(x.incomeType),
+      tran=String(x.tranId),trade=x.tradeId==null?'':String(x.tradeId),
+      asset=String(x.asset||'');
+    if(!/^[0-9]{1,24}$/.test(tran)||!Number.isFinite(amount)||
+       !Number.isSafeInteger(at)||at<0||!/^[A-Z0-9]{2,12}$/.test(asset)||
+       (trade!==''&&!/^[0-9]{1,24}$/.test(trade)))
+     throw Error('Invalid Binance income event');
+    const row=[type,tran,trade,asset,amount,at];
+    const prior=old.get(type,tran);
+    if(prior){
+     if(['income_type','tran_id','trade_id','asset','amount','occurred_at']
+       .some((k,i)=>prior[k]!==row[i]))throw Error('Conflicting Binance income transaction');
+     continue;
+    }
+    add.run(...row);added++;
+   }
+   this.#db.exec('COMMIT');return added;
+  }catch(e){this.#db.exec('ROLLBACK');throw e;}
+ }
+ incomeEvents(){return this.#db.prepare('SELECT * FROM income_events ORDER BY occurred_at,tran_id').all();}
  ingest(rows){
   if(!Array.isArray(rows))throw Error('Expected Binance userTrades array');
   const valid=new Map(this.orders().map(o=>[o.order_id,o]));
@@ -64,10 +96,12 @@ export class LiveStatsLedger{
    this.#db.exec('COMMIT');return added;
   }catch(e){this.#db.exec('ROLLBACK');throw e;}
  }
- report(){return computeLiveReport(this.orders(),this.#db.prepare('SELECT * FROM fills ORDER BY filled_at,CAST(fill_id AS INTEGER)').all());}
+ report(){return computeLiveReport(this.orders(),
+  this.#db.prepare('SELECT * FROM fills ORDER BY filled_at,CAST(fill_id AS INTEGER)').all(),
+  this.incomeEvents());}
  close(){this.#db.close();}
 }
-export function computeLiveReport(orders,fills){
+export function computeLiveReport(orders,fills,incomes=[],now=Date.now()){
  const r=emptyLiveReport(),known=new Map(),groups=new Map();
  for(const order of orders){
   known.set(order.order_id,order);
