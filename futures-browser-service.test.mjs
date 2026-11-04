@@ -689,3 +689,70 @@ test('Manual TP selected cancelled on Binance then MARKET response unknown: halt
  assert.ok(!fx.algo.some(x=>x.clientAlgoId.endsWith('-TP2')));
  assert.equal(JSON.parse(readFileSync(join(dir,'futures-live-intent.json'),'utf8')).phase,'MANUAL_MARKET_SENDING');
 });
+
+test('Sequential manual TP2 and TP3 after TP1 never recalculate the original lots; TP3 can finish the position',async t=>{
+ const dir=tmp(t),fx=manualFake(),svc=new BrowserFutures({
+  dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await svc.connect(creds);svc.saveConfig({marginUSDT:500,leverage:5});
+ await svc.arm('CHAP NHAN BTC FUTURES',77000);
+ await svc.signal({side:'LONG',barTime:900000},true);
+ for(const [role,qty,remaining] of [['TP1',.01,.022],['TP2',.01,.012],['TP3',.012,0]]){
+  const p=await svc.positionAnalysis();
+  assert.equal(p.manual.allowed,true);
+  assert.equal(p.manual[role].quantityBTC,qty);
+  const result=await svc.manualMarketExit({role,confirmation:'XAC NHAN '+role+' BTCUSDT',
+   expectedEntryOrderId:p.manual.entryOrderId,
+   expectedRemainingBTC:p.manual.remainingBTC});
+  assert.equal(result.closedBTC,qty);
+  assert.equal(result.remainingBTC,remaining);
+  assert.equal(fx.position.qty,remaining);
+ }
+ assert.equal(fx.algo.length,0);
+ assert.equal(svc.snapshot().halted,false);
+ assert.equal(svc.snapshot().protectedPosition,null);
+ const ledger=new LiveStatsLedger(join(dir,'binance-live-stats.sqlite'));
+ assert.deepEqual(ledger.orders().filter(x=>/^TP[123]$/.test(x.role)).map(x=>x.role),
+  ['TP1','TP2','TP3']);
+ ledger.close();
+});
+
+test('Manual close ALL after restart still works for verified OCC PROTECTED checkpoint while AUTO is OFF',async t=>{
+ const dir=tmp(t),fx=manualFake();
+ const first=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await first.connect(creds);first.saveConfig({marginUSDT:500,leverage:5});
+ await first.arm('CHAP NHAN BTC FUTURES',77000);
+ await first.signal({side:'LONG',barTime:900000},true);
+ first.close();
+ const next=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ assert.equal(next.snapshot().halted,true);
+ await next.restoreSavedConnection();
+ const p=await next.positionAnalysis();
+ assert.equal(p.manual.allowed,true);
+ assert.equal(p.manual.ALL.quantityBTC,.032);
+ const result=await next.manualMarketExit({role:'ALL',confirmation:'XAC NHAN ALL BTCUSDT',
+  expectedEntryOrderId:p.manual.entryOrderId,expectedRemainingBTC:p.manual.remainingBTC});
+ assert.equal(result.remainingBTC,0);
+ assert.equal(next.snapshot().halted,false);
+ assert.equal(next.snapshot().armed,false);
+ assert.equal(fx.algo.length,0);
+});
+
+test('Market exit with a stale quantity or unknown external Algo never sends a close or cancellation',async t=>{
+ const dir=tmp(t),fx=manualFake();
+ const svc=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await svc.connect(creds);svc.saveConfig({marginUSDT:500,leverage:5});
+ await svc.arm('CHAP NHAN BTC FUTURES',77000);
+ await svc.signal({side:'LONG',barTime:900000},true);
+ const initial=await svc.positionAnalysis();
+ let before=fx.calls.filter(x=>x.method==='POST'||x.method==='DELETE').length;
+ await assert.rejects(svc.manualMarketExit({role:'TP1',confirmation:'XAC NHAN TP1 BTCUSDT',
+  expectedEntryOrderId:initial.manual.entryOrderId,expectedRemainingBTC:.031}),/Khối lượng BTC thay đổi/);
+ assert.equal(fx.calls.filter(x=>x.method==='POST'||x.method==='DELETE').length,before);
+ fx.algo.push({symbol:'BTCUSDT',positionSide:'BOTH',algoId:999999,
+  clientAlgoId:'manual-extra',algoStatus:'NEW',orderType:'TAKE_PROFIT_MARKET',
+  side:'SELL',reduceOnly:true,quantity:'.001'});
+ before=fx.calls.filter(x=>x.method==='POST'||x.method==='DELETE').length;
+ await assert.rejects(svc.manualMarketExit({role:'ALL',confirmation:'XAC NHAN ALL BTCUSDT',
+  expectedEntryOrderId:initial.manual.entryOrderId,expectedRemainingBTC:.032}),/không thuộc OCC/);
+ assert.equal(fx.calls.filter(x=>x.method==='POST'||x.method==='DELETE').length,before);
+});
