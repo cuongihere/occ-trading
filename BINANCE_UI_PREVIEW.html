@@ -448,6 +448,7 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
     <div class="compactRow"><span class="compactName">TP3<small id="compactTP3share">—</small><small class="compactOrderMeta" id="compactTP3meta">—</small></span><span id="compactTP3price">—</span><strong id="compactTP3pnl">—</strong><button id="manualTP3" class="manualTp" disabled type="button" title="Chốt TP3 ngay bằng MARKET reduceOnly">Chốt MKT</button></div>
    </div>
    <div class="compactNote" id="compactNote">Giá và khối lượng lệnh đọc trực tiếp từ Binance. Lãi/lỗ tại giá kích hoạt chỉ là ước tính.</div>
+   <div class="compactNote" id="compactUnverified" hidden></div>
    <div class="manualExitBar"><button type="button" id="manualCloseAll" class="manualClose" disabled>Đóng toàn bộ MARKET</button><span class="small" id="manualActionStatus" role="status">Chỉ bật khi có vị thế OCC đã xác minh trên Binance.</span></div>
   </div>
   <div class="riskAlerts" id="riskAlerts" role="status"></div>
@@ -840,6 +841,8 @@ function clearCompact(message){
   $('compact'+role+'meta').textContent='—';
   row.title='';
  }
+ $('compactUnverified').hidden=true;
+ $('compactUnverified').textContent='';
 }
 function resetPositionAnalysis(message){
  manualSnapshot=null;manualPosition=null;setManualButtons();
@@ -896,6 +899,15 @@ function showPositionAnalysis(data){
    row.title='Binance Algo #'+found.id+' | Client ID: '+found.clientId+
     ' | Trạng thái: '+found.status+' | Giá kích hoạt từ Binance: '+found.price;
   }
+  const foreign=(data.levels||[]).filter(x=>x.active&&x.origin==='CHƯA_XÁC_MINH'&&
+   (x.role==='SL'||x.role==='TP'));
+  $('compactUnverified').hidden=foreign.length===0;
+  $('compactUnverified').textContent=foreign.length?
+   'Lệnh Algo trên Binance chưa xác minh thuộc OCC: '+
+   foreign.slice(0,5).map(x=>x.role+' #'+(x.id||'?')+
+    ' @ '+(x.price!=null?fmt(x.price,2):'—')+
+    (x.quantityBTC!=null?' · '+fmt(x.quantityBTC,6)+' BTC':'')).join(' | ')+
+   (foreign.length>5?' · và '+(foreign.length-5)+' lệnh khác':''):'';
   $('compactSubtitle').textContent='Binance xác minh '+validCount+'/4 mức · cập nhật '+vn(data.fetchedAt);
   $('compactNote').textContent='Giá và lượng: Binance Open Algo Orders thực tế. P&L GROSS: OCC ước tính, không phải lợi nhuận Binance; chưa gồm phí, funding và trượt giá.'+
    (validCount<4?' Có '+(4-validCount)+' mức chưa xác minh, hãy kiểm tra trực tiếp trên Binance.':'');
