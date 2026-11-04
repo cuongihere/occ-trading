@@ -80,7 +80,7 @@ test('Auto never restores ON after restart, including when exchange checkpoint i
 test('Verified Entry first, STOP second, and three TP conditional orders; no duplicate signal',async()=>{
  const h=harness();await ready(h);
  assert.equal(h.bot.cp.phase,'PROTECTED');assert.equal(h.bot.cp.stop.role,'SL');
- assert.deepEqual(h.bot.cp.tps.map(x=>x.role),['TP1','TP2','TP3']);
+ assert.deepEqual(Array.from(h.bot.cp.tps,x=>x.role),['TP1','TP2','TP3']);
  assert.deepEqual(h.calls.filter(x=>x.method==='POST').map(x=>x.path),
   ['/fapi/v1/order',...Array(4).fill('/fapi/v1/algoOrder')]);
  assert.equal(await h.bot.onSignal({side:'LONG',eligible:true,barTime:900000},78000,true),false);
