@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="vi">
+<head>
+ <meta charset="utf-8">
+ <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+ <title>OCC Android · BTCUSDT</title>
+ <style>
+ :root{color-scheme:dark;font-family:system-ui,Roboto,Arial,sans-serif;background:#0a1423;color:#ebf3ff}
+ *{box-sizing:border-box}body{margin:0;padding:16px 14px 24px}
+ h1{font-size:23px;letter-spacing:-.7px;margin:0}h2{font-size:14px;margin:0 0 10px}
+ small,.sub{color:#94abc6;font-size:11px}.sub{margin:5px 0}
+ .tag{display:inline-block;padding:4px 9px;font-size:10px;font-weight:800;color:#ffd0a5;border:1px solid #987252;background:#3d2c28;border-radius:7px;margin:14px 0}
+ .card{border:1px solid #314a67;background:#18283b;border-radius:12px;padding:14px;margin-bottom:10px}
+ .title{font-size:11px;color:#96b9df;text-transform:uppercase;letter-spacing:.5px}
+ #last{font-size:clamp(39px,12vw,62px);color:#ffdb77;font-weight:850;line-height:1.15;margin:6px 0}
+ .meta{color:#a9c6df;font-size:12px}
+ .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-bottom:10px}
+ .grid .card{margin:0;padding:11px}
+ .metric{font-size:19px;font-weight:750;margin:7px 0 0;overflow-wrap:anywhere}
+ .ok{color:#94f0bb}.error{color:#ffa6a6}.muted{color:#96acc3}.watch{color:#ffd0a0}
+ #signal{font-size:26px;font-weight:800;margin:7px 0}
+ #health{font-weight:700;font-size:13px}
+ .banner{color:#f5d4a3;background:#322a29;border:1px solid #785a4a;border-radius:10px;padding:12px;font-size:12px;line-height:1.5;margin-bottom:12px}
+ button{font:inherit;background:#244565;border:1px solid #5683a9;color:white;border-radius:9px;padding:10px 14px;font-weight:700}
+ button:disabled{opacity:.6}
+ .row{display:flex;justify-content:space-between;align-items:center;gap:9px;flex-wrap:wrap}
+ #events{font-size:11px;color:#a7b8cf;line-height:1.6;white-space:pre-line;max-height:180px;overflow:auto}
+ #time{font-size:11px;color:#a3bfd7}
+ </style>
+</head>
+<body>
+<header class="row"><div><h1>OCC / BTCUSDT</h1><p class="sub">Android độc lập · Binance Futures USDⓈ-M</p></div><span id="clock" class="sub">—</span></header>
+<div class="tag">BẢN THỬ NGHIỆM · CHỈ ĐỌC · KHÔNG GIAO DỊCH THẬT</div>
+<section class="card" aria-label="Giá Binance">
+ <div class="title">BTCUSDT Futures · LAST</div><div id="last">—</div>
+ <div class="meta">Mark: <strong id="mark">—</strong> · <span id="time">Đang đồng bộ...</span></div>
+</section>
+<section class="grid">
+ <div class="card"><div class="title">Trạng thái dữ liệu</div><div class="metric" id="health">ĐANG KẾT NỐI</div></div>
+ <div class="card"><div class="title">Đồng bộ chỉ báo</div><div class="metric" id="warmup">CHỜ NẾN</div></div>
+ <div class="card"><div class="title">Nến M15 cuối</div><div class="metric" id="m15">—</div></div>
+ <div class="card"><div class="title">OCC SMMA8 chênh lệch</div><div class="metric" id="smma">—</div></div>
+</section>
+<section class="card">
+ <div class="title">Tín hiệu OCC mới nhất</div><div id="signal">CHƯA CÓ</div>
+ <div class="sub" id="signalTime">Chỉ ghi nhận giao cắt LIVE hợp lệ; không phát lại tín hiệu khi mất mạng.</div>
+</section>
+<div class="banner">
+ Màn hình được giữ sáng khi app đang mở. Mất mạng, hết pin, hệ điều hành đóng app hoặc Binance hạn chế kết nối vẫn có thể ngắt hoạt động. Bản này <b>không có API Key và không gửi lệnh Futures</b> — cần kiểm chứng hệ thống đặt SL/TP trước khi cho phép tiền thật.
+</div>
+<section class="card">
+ <div class="row"><h2>Nhật ký kết nối</h2><button id="reconnect" type="button">Kết nối lại</button></div>
+ <div id="events">Đang khởi động...</div>
+</section>
+<script src="engine.js"></script>
+<script src="server-feed.js"></script>
+<script src="app.js"></script>
+</body></html>
