@@ -629,7 +629,7 @@ test('TP1 manual MARKET cancels ONLY pending TP1, closes exact lot, leaves SL + 
  assert.deepEqual(fx.algo.map(o=>o.clientAlgoId.endsWith('-SL')?'SL':o.clientAlgoId.slice(-3)),['SL','TP2','TP3']);
  const performed=fx.calls.slice(before).filter(x=>x.method==='POST'||x.method==='DELETE');
  assert.deepEqual(performed.map(x=>x.method),['DELETE','POST']);
- assert.equal(performed[0].p.algoId,201);
+ assert.equal(String(performed[0].p.algoId),'201');
  assert.equal(performed[1].p.reduceOnly,'true');
  assert.equal(performed[1].p.quantity,'0.01');
  assert.equal(svc.snapshot().armed,true);assert.equal(svc.snapshot().halted,false);
