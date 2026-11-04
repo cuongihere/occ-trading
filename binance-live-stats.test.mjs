@@ -110,11 +110,16 @@ test('Binance Income tradeId matches OCC fill fee/PnL; funding and unknown trade
  assert.equal(x.incomeAudit.fundingUSDT,-.12);
  assert.equal(x.incomeAudit.unmatchedTradeEvents,1);
  assert.equal(x.incomeAudit.unmatchedTradeIncomeUSDT,-4.2);
+ assert.equal(x.incomeAudit.matchedTradeIncomeUSDT,-2.81);
+ assert.equal(x.incomeAudit.matchedTradeEvents,3);
+ assert.equal(Number((x.incomeAudit.matchedTradeIncomeUSDT+x.incomeAudit.unmatchedTradeIncomeUSDT+
+  x.incomeAudit.fundingUSDT).toFixed(8)),x.incomeAudit.totalUSDT);
  assert.equal(x.incomeAudit.totalUSDT,-7.13);
  ledger.close();
  const stored=readLiveReport(path);
  assert.equal(stored.positions[0].netBinanceUSDT,-2.81);
  assert.equal(stored.incomeAudit.fundingUSDT,-.12);
+ assert.equal(stored.incomeAudit.matchedTradeIncomeUSDT,-2.81);
 });
 test('Missing or disagreeing Binance Income never produces a falsely audited Net',t=>{
  const ledger=new LiveStatsLedger(pathFor(t)),now=Date.now();
