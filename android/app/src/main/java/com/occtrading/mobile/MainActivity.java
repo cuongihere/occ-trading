@@ -194,7 +194,8 @@ public final class MainActivity extends Activity {
                     p.optString("side").equals("LONG".equals(intent.optString("side"))?"BUY":"SELL")&&
                     !p.optBoolean("reduceOnly",false)&&
                     Math.abs(p.optDouble("quantity")-intent.optDouble("qty"))<1e-8;
-                boolean close="MANUAL_SENDING".equals(phase)&&"CLOSE".equals(kind)&&
+                boolean close=("MANUAL_SENDING".equals(phase)||"EMERGENCY_SENDING".equals(phase))&&
+                    "CLOSE".equals(kind)&&
                     p.optString("newClientOrderId").equals(intent.optString("clientId"))&&
                     "true".equals(p.optString("reduceOnly"))&&
                     Math.abs(p.optDouble("quantity")-intent.optDouble("qty"))<1e-8;
