@@ -68,7 +68,9 @@ class OCCMobileTrade {
   const current=risk.filter(p=>p.symbol==='BTCUSDT');
   if(current.length>1||current.some(x=>x.positionSide!=='BOTH'))
    throw Error('BTCUSDT có nhiều vị thế hoặc không ở One-way');
-  const p=current[0]||null,amount=occNumber(p?.positionAmt)||0;
+  const p=current[0]||null,rawAmount=p?occNumber(p.positionAmt):0;
+  if(!Number.isFinite(rawAmount))throw Error('Binance positionAmt không hợp lệ');
+  const amount=rawAmount;
   const symbol=settings.find(x=>x.symbol==='BTCUSDT');
   const usdt=acc.assets.find(x=>x.asset==='USDT');
   if(!symbol||!usdt||acc.canTrade!==true)throw Error('Thiếu USDT hoặc quyền Futures');
@@ -98,7 +100,8 @@ class OCCMobileTrade {
  }
  plan(s,price,rules){
   const c=this.cp.config;
-  if(!(price>0)||s.availableUSDT<c.marginUSDT)throw Error('Không đủ số dư/giá');
+  if(!(Number.isFinite(price)&&price>0&&Number.isFinite(s.availableUSDT)&&
+     s.availableUSDT>=c.marginUSDT))throw Error('Không đủ số dư/giá');
   const qty=occFloor(c.marginUSDT*c.leverage/price,rules.step);
   const a=occFloor(qty*c.tp1Qty/100,rules.step),b=occFloor(qty*c.tp2Qty/100,rules.step);
   const parts=[a,b,occRound(qty-a-b)];
