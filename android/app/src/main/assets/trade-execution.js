@@ -1,0 +1,124 @@
+'use strict';
+// Actual Binance Futures live execution. One-shot mutations, verified ACKs, no retry.
+(function(){
+const p=OCCMobileTrade.prototype;
+const eq=(a,b)=>String(a)===String(b);
+const closeSide=s=>s==='LONG'?'SELL':'BUY';
+const plus=(a,b)=>Math.abs(a-b)<=1e-8;
+function roleTarget(entry,side,value,mode){
+ return mode==='Percent'?entry*(1+(side==='LONG'?1:-1)*value/100):
+  entry+(side==='LONG'?1:-1)*value;
+}
+p.verifyOwnership=async function(){
+ const cp=this.cp,e=cp.entry;
+ if(!e||!occValidId(e.clientId)||!e.orderId)throw Error('Thiếu Entry OCC đã xác minh');
+ const order=await this.signed('GET','/fapi/v1/order',{symbol:'BTCUSDT',orderId:e.orderId});
+ if(order.symbol!=='BTCUSDT'||!eq(order.orderId,e.orderId)||order.clientOrderId!==e.clientId||
+   order.side!==(e.side==='LONG'?'BUY':'SELL')||order.positionSide!=='BOTH'||
+   order.type!=='MARKET'||order.status!=='FILLED'||!(Number(order.executedQty)>0))
+  throw Error('Entry Binance khác checkpoint OCC');
+ return order;
+};
+p.verifyAlgo=async function(record){
+ const current=await this.signed('GET','/fapi/v1/openAlgoOrders',{symbol:'BTCUSDT'});
+ if(!Array.isArray(current))throw Error('Binance Open Algo không hợp lệ');
+ const a=current.find(x=>eq(x.algoId,record.id));
+ if(!a||a.clientAlgoId!==record.clientId||a.side!==record.side||
+    !OCC_ACTIVE.has(String(a.algoStatus))||!plus(Number(a.triggerPrice),record.price))
+  throw Error('Algo '+record.role+' chưa được Binance xác minh');
+ if(record.role==='SL'){
+  if(a.orderType!=='STOP_MARKET'||!occTrue(a.closePosition))
+   throw Error('SL không đóng toàn bộ vị thế');
+ }else if(a.orderType!=='TAKE_PROFIT_MARKET'||!occTrue(a.reduceOnly)||
+   !plus(Number(a.quantity),record.qty))throw Error('TP không reduceOnly/đúng BTC');
+ return a;
+};
+p.sendAlgo=async function(request,record){
+ this.cp.phase='PROTECTION_SENDING';
+ this.cp.intent={kind:'ALGO',role:record.role,clientId:record.clientId,sent:false};
+ this.persist();
+ const ack=await this.signed('POST','/fapi/v1/algoOrder',request);
+ if(!ack?.algoId||ack.clientAlgoId!==record.clientId)throw Error('Binance Algo ACK không chắc chắn');
+ record.id=String(ack.algoId);
+ await this.verifyAlgo(record);
+ if(record.role==='SL')this.cp.stop=record;else this.cp.tps.push(record);
+ this.cp.intent=null;this.persist();
+ return record;
+};
+p.enter=async function(side,price,signalId){
+ return this.locked(async()=>{
+  if(!this.auto||this.cp.halted||this.cp.phase!=='IDLE'||
+    !['LONG','SHORT'].includes(side)||
+    (this.cp.config.side!=='BOTH'&&side!==this.cp.config.side))return false;
+  let started=false;
+  try{
+   const s=await this.getSnapshot();this.verifyFlat(s);
+   const rules=await this.getRules(),plan=this.plan(s,price,rules);
+   const clientId=this.newId();
+   if(!occValidId(clientId))throw Error('Không tạo được Client ID giao dịch');
+   this.cp.phase='ENTRY_SENDING';
+   this.cp.intent={kind:'ENTRY',clientId,qty:plan.qty,side,signalId,sent:false};
+   this.persist();started=true;
+   const ack=await this.signed('POST','/fapi/v1/order',{
+    symbol:'BTCUSDT',positionSide:'BOTH',side:side==='LONG'?'BUY':'SELL',
+    type:'MARKET',quantity:String(plan.qty),newClientOrderId:clientId,newOrderRespType:'RESULT'
+   });
+   if(!ack?.orderId)throw Error('Không nhận được Entry Order ID');
+   const order=await this.signed('GET','/fapi/v1/order',{symbol:'BTCUSDT',orderId:ack.orderId});
+   if(order.symbol!=='BTCUSDT'||order.clientOrderId!==clientId||!eq(order.orderId,ack.orderId)||
+      order.status!=='FILLED'||order.positionSide!=='BOTH'||order.type!=='MARKET'||
+      order.side!==(side==='LONG'?'BUY':'SELL'))throw Error('Entry ACK/readback không khớp');
+   const qty=Number(order.executedQty),avg=Number(order.avgPrice);
+   if(!(avg>0)||!plus(qty,plan.qty))throw Error('Entry khớp sai lượng hoặc giá');
+   const live=await this.getSnapshot();
+   if(live.side!==side||!plus(live.qty,qty)||live.openOrders.length)
+    throw Error('Binance vị thế khác Entry sau khớp');
+   this.cp.entry={orderId:String(order.orderId),clientId,side,qty,avg,signalId};
+   this.cp.phase='ENTRY_VERIFIED';this.cp.intent=null;this.persist();
+   const c=this.cp.config,isLong=side==='LONG',out=closeSide(side);
+   const common={algoType:'CONDITIONAL',symbol:'BTCUSDT',positionSide:'BOTH',
+    side:out,workingType:'CONTRACT_PRICE'};
+   const slPrice=occTick(avg*(1+(isLong?-1:1)*c.slPercent/100),rules.tick,!isLong);
+   await this.sendAlgo({...common,type:'STOP_MARKET',closePosition:'true',
+     triggerPrice:String(slPrice),clientAlgoId:clientId+'-SL'},
+     {role:'SL',clientId:clientId+'-SL',price:slPrice,qty,side:out});
+   const parts=[occFloor(qty*c.tp1Qty/100,rules.step),occFloor(qty*c.tp2Qty/100,rules.step)];
+   parts.push(occRound(qty-parts[0]-parts[1]));
+   if(parts.some(q=>q<rules.min))throw Error('BTC thực nhận không đủ để tạo 3 TP');
+   for(let i=0;i<3;i++){
+    const role='TP'+(i+1),target=occTick(
+      roleTarget(avg,side,c['tp'+(i+1)+'Val'],c.tpMode),rules.tick,isLong);
+    await this.sendAlgo({...common,type:'TAKE_PROFIT_MARKET',reduceOnly:'true',
+      quantity:String(parts[i]),triggerPrice:String(target),clientAlgoId:clientId+'-'+role},
+      {role,clientId:clientId+'-'+role,price:target,qty:parts[i],side:out});
+   }
+   this.cp.phase='PROTECTED';this.cp.intent=null;this.cp.halted=false;this.persist();
+   this.event('Đã xác nhận '+side+' '+qty+' BTC, SL và TP1/TP2/TP3');
+   return true;
+  }catch(e){
+   if(started)this.halt(e.message+' · KIỂM TRA BINANCE NGAY');
+   else this.event('Bỏ qua tín hiệu: '+e.message);
+   throw e;
+  }
+ });
+};
+p.onSignal=async function(signal,price,healthy){
+ if(!this.auto||!healthy||this.busy||this.cp.halted||!signal?.eligible||
+    !['LONG','SHORT'].includes(signal.side))return false;
+ // Do not replay prior closed candles or queued events after reconnect.
+ if(this.lastSignalTime!=null&&signal.barTime<=this.lastSignalTime)return false;
+ this.lastSignalTime=signal.barTime;
+ if(this.cp.phase==='PROTECTED'){
+  if(!this.cp.config.reverseOnSignal||this.cp.entry?.side===signal.side)return false;
+  const expected=this.cp.entry;
+  try{
+   await this.manualClose('ALL',{automaticReversal:true});
+   if(this.cp.phase==='IDLE'&&this.auto&&!this.cp.halted)
+    return this.enter(signal.side,price,signal.id);
+  }catch(e){this.event('Không đảo chiều: '+e.message);}
+  return false;
+ }
+ if(this.cp.phase!=='IDLE')return false;
+ return this.enter(signal.side,price,signal.id);
+};
+})();
