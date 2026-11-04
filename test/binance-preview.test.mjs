@@ -207,3 +207,29 @@ test('Operator BTCUSDT manual TP1 TP2 TP3 and close-all buttons require confirma
  const js=html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
  assert.ok(js);assert.doesNotThrow(()=>new Function(js));
 });
+
+test('Compact Binance configuration keeps every functional field while removing oversized inputs and price panel',()=>{
+ const html=read('BINANCE_UI_PREVIEW.html');
+ const apiStart=html.indexOf('<div class="panel apiPanel">'),configStart=html.indexOf('<div class="panel configPanel">');
+ const positionStart=html.indexOf('<div class="panel accountPanel">');
+ assert.ok(apiStart>=0&&configStart>apiStart&&positionStart>configStart);
+ const api=html.slice(apiStart,configStart),config=html.slice(configStart,positionStart);
+ assert.match(api,/class="marketTicker stale" id="btcMarketTicker"/);
+ for(const id of ['credentialEditor','apiKey','apiSecret','rememberApi','apiConnect','apiDisconnect','apiForget','apiReconcile'])
+  assert.match(api,new RegExp('id="'+id+'"'));
+ for(const id of ['marginUSDT','leverage','side','sl','mode','tp1','tp2','tp3','q1','q2','q3','reverseToggle','reverseState','sizingAlert','save','applyLeverage','settingStatus'])
+  assert.match(config,new RegExp('id="'+id+'"'));
+ assert.match(config,/class="configPrimary"/);
+ assert.match(config,/class="configTargets"/);
+ assert.equal((config.match(/<label/g)||[]).length,12); // five primary, six targets, one reverse toggle.
+ assert.doesNotMatch(config,/class="formSection fields2"|class="formSection fields3"/);
+ assert.match(html,/\.topgrid\{align-items:start;gap:10px\}/);
+ assert.match(html,/\.apiPanel \.marketTicker\{flex:0 0 auto;min-height:128px;max-height:143px/);
+ assert.match(html,/\.configPanel \.configTargets\{display:grid;grid-template-columns:repeat\(6,minmax\(0,1fr\)\)/);
+ assert.match(html,/\.configPanel input:not\(\[type=checkbox\]\),\.configPanel select\{height:32px/);
+ assert.match(html,/@media\(max-width:1400px\)/);
+ assert.match(html,/@media\(max-width:750px\)/);
+ assert.match(html,/@media\(max-width:390px\)/);
+ const js=html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
+ assert.ok(js);assert.doesNotThrow(()=>new Function(js));
+});
