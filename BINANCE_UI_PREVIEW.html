@@ -201,7 +201,7 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
 .compactTitle{font-size:12px;font-weight:750;color:#d8eaff;margin-bottom:3px}
 .compactSub,.compactNote{font-size:10px;color:#98b3cc;line-height:1.35}
 .compactRows{margin:6px 0 5px}
-.compactRow{display:grid;grid-template-columns:minmax(0,1.28fr) minmax(65px,.9fr) minmax(88px,1.05fr);
+.compactRow{display:grid;grid-template-columns:minmax(0,1fr) minmax(55px,.8fr) minmax(73px,.95fr) auto;
  gap:5px;align-items:center;padding:5px 2px;border-bottom:1px solid #2b4056;font-variant-numeric:tabular-nums}
 .compactRow:last-child{border-bottom:0}
 .compactName{font-size:11px;font-weight:700;color:#e6f3ff}
@@ -209,7 +209,12 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
 .compactRow>span:nth-child(2){text-align:right;color:#c0d5eb;font-size:11px}
 .compactRow strong{text-align:right;font-size:12px;white-space:nowrap}
 .compactRow strong.negative{color:#ff9ea0}.compactRow strong.positive{color:#91edb2}
-@media(max-width:750px){.compactRow{grid-template-columns:minmax(0,1.4fr) minmax(85px,1fr) minmax(90px,1.1fr)}}
+@media(max-width:750px){.compactRow{grid-template-columns:minmax(0,1fr) minmax(55px,.8fr) minmax(72px,1fr) auto}}
+.manualTp{font-size:10px;padding:5px 7px;min-width:62px;border-color:#477d99;background:#12354a;white-space:nowrap}
+.manualTp:not(:disabled):hover{border-color:#85c5e3}
+.manualExitBar{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.manualClose{font-size:11px;background:#46252e;border-color:#b36e7c;color:#ffced0;white-space:nowrap}
+.manualExitBar .small{font-size:10px;flex:1;line-height:1.4}
 </style>
 </head>
 <body>
@@ -301,11 +306,12 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
    <div class="compactSub" id="compactSubtitle">Đang tính theo giá và khối lượng BTC…</div>
    <div class="compactRows">
     <div class="compactRow"><span class="compactName">SL<small id="compactSLshare">100% vị thế</small></span><span id="compactSLprice">—</span><strong id="compactSLpnl">—</strong></div>
-    <div class="compactRow"><span class="compactName">TP1<small id="compactTP1share">—</small></span><span id="compactTP1price">—</span><strong id="compactTP1pnl">—</strong></div>
-    <div class="compactRow"><span class="compactName">TP2<small id="compactTP2share">—</small></span><span id="compactTP2price">—</span><strong id="compactTP2pnl">—</strong></div>
-    <div class="compactRow"><span class="compactName">TP3<small id="compactTP3share">—</small></span><span id="compactTP3price">—</span><strong id="compactTP3pnl">—</strong></div>
+    <div class="compactRow"><span class="compactName">TP1<small id="compactTP1share">—</small></span><span id="compactTP1price">—</span><strong id="compactTP1pnl">—</strong><button id="manualTP1" class="manualTp" disabled type="button" title="Chốt TP1 ngay bằng MARKET reduceOnly">Chốt MKT</button></div>
+    <div class="compactRow"><span class="compactName">TP2<small id="compactTP2share">—</small></span><span id="compactTP2price">—</span><strong id="compactTP2pnl">—</strong><button id="manualTP2" class="manualTp" disabled type="button" title="Chốt TP2 ngay bằng MARKET reduceOnly">Chốt MKT</button></div>
+    <div class="compactRow"><span class="compactName">TP3<small id="compactTP3share">—</small></span><span id="compactTP3price">—</span><strong id="compactTP3pnl">—</strong><button id="manualTP3" class="manualTp" disabled type="button" title="Chốt TP3 ngay bằng MARKET reduceOnly">Chốt MKT</button></div>
    </div>
    <div class="compactNote" id="compactNote">GROSS dự kiến, chưa trừ phí và trượt giá.</div>
+   <div class="manualExitBar"><button type="button" id="manualCloseAll" class="manualClose" disabled>Đóng toàn bộ MARKET</button><span class="small" id="manualActionStatus" role="status">Chỉ bật khi có vị thế OCC đã xác minh trên Binance.</span></div>
   </div>
   <div class="riskAlerts" id="riskAlerts" role="status"></div>
  </div>
@@ -342,7 +348,7 @@ const vn=t=>t==null?'—':new Date(t).toLocaleString('vi-VN',{timeZone:'Asia/Ho_
 const numbers=['marginUSDT','leverage','sl','tp1','tp2','tp3','q1','q2'];
 let setupLoaded=false,autoBusy=false,editingUntil=0,saveTimer=null,liveReport=null;
 let marketSnapshot=null,marketRefreshing=false;
-let positionAnalysisRefreshing=false;
+let positionAnalysisRefreshing=false,manualBusy=false,manualSnapshot=null,manualPosition=null;
 let sizingStatus='unavailable',sizingSequence=0,sizingTimer=null,reverseBusy=false;
 const val=id=>$(id).value.trim()===''?NaN:Number($(id).value);
 function config(){return {side:$('side').value,marginUSDT:val('marginUSDT'),leverage:val('leverage'),
