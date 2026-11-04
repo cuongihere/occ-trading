@@ -125,10 +125,32 @@ export function computeLiveReport(orders,fills,incomes=[],now=Date.now()){
   const fees=list.filter(x=>x.asset==='USDT').reduce((s,x)=>s+x.fee,0);
   const other=list.filter(x=>x.asset!=='USDT').length,net=other?null:real-fees;
   const complete=Math.abs(qty-closedQty)<=Math.max(EPS,qty*1e-8);
+  // Match independent Binance Income using its tradeId, never a time-window guess.
+  const matches=incomes.filter(x=>x.asset==='USDT'&&
+    list.some(f=>String(f.fill_id)===String(x.trade_id))&&
+    ['REALIZED_PNL','COMMISSION'].includes(x.income_type));
+  const amountFor=(id,type)=>matches.filter(x=>x.trade_id===String(id)&&x.income_type===type)
+    .reduce((v,x)=>v+x.amount,0);
+  let incomeMissing=false,incomeMismatch=false;
+  for(const f of list){
+   const feeEvents=matches.filter(x=>x.trade_id===String(f.fill_id)&&x.income_type==='COMMISSION');
+   const pnlEvents=matches.filter(x=>x.trade_id===String(f.fill_id)&&x.income_type==='REALIZED_PNL');
+   if((f.asset==='USDT'&&f.fee>EPS&&!feeEvents.length)||
+      (Math.abs(f.realized)>EPS&&!pnlEvents.length))incomeMissing=true;
+   if(feeEvents.length&&Math.abs(amountFor(f.fill_id,'COMMISSION')+f.fee)>.02||
+      pnlEvents.length&&Math.abs(amountFor(f.fill_id,'REALIZED_PNL')-f.realized)>.02)
+    incomeMismatch=true;
+  }
+  const auditStatus=incomeMismatch?'MISMATCH':incomeMissing||!matches.length?'PENDING':'MATCHED';
+  const incomePnL=matches.filter(x=>x.income_type==='REALIZED_PNL').reduce((v,x)=>v+x.amount,0);
+  const incomeFees=matches.filter(x=>x.income_type==='COMMISSION').reduce((v,x)=>v+x.amount,0);
+  const netBinanceUSDT=auditStatus==='MATCHED'&&complete?Number((incomePnL+incomeFees).toFixed(8)):null;
   const item={id,side:entryOrder.side==='BUY'?'LONG':'SHORT',qty,closedQty,remaining:Math.max(0,qty-closedQty),
    entryPrice:avg(entry),exitPrice:avg(exits),entryAt:Math.min(...entry.map(x=>x.filled_at)),
    exitAt:complete?Math.max(...exits.map(x=>x.filled_at)):null,
    grossRealizedUSDT:real,usdtFees:fees,netExFundingUSDT:net,nonUSDTFeeFills:other,
+   auditStatus,binanceIncomeRealizedUSDT:matches.length?incomePnL:null,
+   binanceIncomeCommissionUSDT:matches.length?incomeFees:null,netBinanceUSDT,
    exitReasons:[...new Set(exits.map(x=>x.role))],fills:list.length,
    result:complete?(net===null?'UNVERIFIED':net>EPS?'WIN':net< -EPS?'LOSS':'BREAKEVEN'):'OPEN'};
   (complete?r.positions:r.openPositions).push(item);
@@ -143,6 +165,32 @@ export function computeLiveReport(orders,fills,incomes=[],now=Date.now()){
  s.usdtFees=r.positions.reduce((v,x)=>v+x.usdtFees,0);
  s.nonUSDTFeeFills=r.positions.reduce((v,x)=>v+x.nonUSDTFeeFills,0);
  s.netExFundingUSDT=r.positions.filter(x=>x.netExFundingUSDT!==null).reduce((v,x)=>v+x.netExFundingUSDT,0);
+ s.binanceAuditedClosed=r.positions.filter(x=>x.auditStatus==='MATCHED').length;
+ s.binanceUnverifiedClosed=r.positions.length-s.binanceAuditedClosed;
+ s.binanceAuditedNetUSDT=Number(r.positions.filter(x=>x.netBinanceUSDT!==null)
+  .reduce((v,x)=>v+x.netBinanceUSDT,0).toFixed(8));
+ // Account-level Binance BTCUSDT Income includes manual and other trades;
+ // NEVER assign unattributed amounts/funding to a specific OCC position.
+ const windowStart=now-7*86400000;
+ const window=incomes.filter(x=>x.occurred_at>=windowStart&&x.occurred_at<=now&&x.asset==='USDT');
+ const total=type=>Number(window.filter(x=>x.income_type===type)
+  .reduce((v,x)=>v+x.amount,0).toFixed(8));
+ const knownFillIds=new Set(fills.map(x=>String(x.fill_id)));
+ const unmatched=window.filter(x=>['REALIZED_PNL','COMMISSION'].includes(x.income_type)&&
+  (!x.trade_id||!knownFillIds.has(String(x.trade_id))));
+ r.incomeAudit={source:'BINANCE_INCOME_BTCUSDT',startAt:windowStart,endAt:now,
+  entries:window.length,realizedUSDT:total('REALIZED_PNL'),
+  commissionUSDT:total('COMMISSION'),fundingUSDT:total('FUNDING_FEE'),
+  totalUSDT:Number((total('REALIZED_PNL')+total('COMMISSION')+total('FUNDING_FEE')).toFixed(8)),
+  unmatchedTradeIncomeUSDT:Number(unmatched.reduce((v,x)=>v+x.amount,0).toFixed(8)),
+  unmatchedTradeEvents:unmatched.length,available:window.length>0,
+  warning:'Binance Income BTCUSDT có thể gồm cả giao dịch ngoài OCC. Funding không có ID vị thế nên không tự gán vào từng lệnh.'};
+ if(s.binanceUnverifiedClosed)r.warnings.push(s.binanceUnverifiedClosed+
+  ' lệnh OCC đã đóng chưa đối chiếu đầy đủ với Binance Income theo tradeId.');
+ if(r.openPositions.length)r.warnings.push(r.openPositions.length+
+  ' nhóm OCC thiếu fill đóng; chưa thể kết luận vị thế còn mở trên Binance.');
+ if(unmatched.length)r.warnings.push('Có '+unmatched.length+
+  ' khoản Income chưa ghép với fill OCC; có thể còn giao dịch chưa được thống kê.');
  let cumulative=0;
  r.curve=r.positions.filter(x=>x.netExFundingUSDT!==null).map(x=>({at:x.exitAt,cumulative:cumulative+=x.netExFundingUSDT}));
  r.asOf=Date.now();return r;
@@ -150,7 +198,12 @@ export function computeLiveReport(orders,fills,incomes=[],now=Date.now()){
 export function readLiveReport(path){
  if(!existsSync(path))return emptyLiveReport();
  const db=new DatabaseSync(path,{readOnly:true});
- try{return computeLiveReport(db.prepare('SELECT * FROM orders').all(),db.prepare('SELECT * FROM fills ORDER BY filled_at,CAST(fill_id AS INTEGER)').all());}
+ try{
+  const hasIncome=!!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='income_events'").get();
+  const incomes=hasIncome?db.prepare('SELECT * FROM income_events').all():[];
+  return computeLiveReport(db.prepare('SELECT * FROM orders').all(),
+   db.prepare('SELECT * FROM fills ORDER BY filled_at,CAST(fill_id AS INTEGER)').all(),incomes);
+ }
  finally{db.close();}
 }
 export async function syncKnownOrderFills(reader,ledger){
