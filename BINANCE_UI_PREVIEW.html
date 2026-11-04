@@ -626,6 +626,49 @@ function riskMetric(label,value,tone=''){
  el.append(name,amount);return el;
 }
 // Exchange data is assigned only as text nodes. No HTML injection from order fields.
+function setManualButtons(){
+ for(const role of ['TP1','TP2','TP3']){
+  const b=$('manual'+role);
+  b.disabled=manualBusy||!manualSnapshot?.allowed||!manualSnapshot?.[role];
+ }
+ $('manualCloseAll').disabled=manualBusy||!manualSnapshot?.allowed||!manualSnapshot?.ALL;
+}
+async function performManualExit(role){
+ const current=manualSnapshot,position=manualPosition,leg=current?.[role];
+ if(manualBusy||!current?.allowed||!leg||!position)return;
+ const qty=Number(leg.quantityBTC),mark=Number(position.markPrice);
+ const est=Number.isFinite(mark)&&Number(position.entryPrice)>0?
+   (mark-Number(position.entryPrice))*qty*(position.side==='LONG'?1:-1):null;
+ const msg='CHỐT MARKET '+(role==='ALL'?'TOÀN BỘ':role)+' BTCUSDT THẬT?'+
+  '\\nVị thế: '+position.side+' · '+fmt(current.remainingBTC,6)+' BTC còn lại.'+
+  '\\nLượng đóng ngay: '+fmt(qty,6)+' BTC (reduceOnly).'+
+  '\\nGROSS theo Mark hiện tại: '+signedUSDT(est)+
+  '\\nMARKET KHÔNG chờ giá TP hiển thị, có thể trượt giá và phát sinh phí.'+
+  '\\n'+(role==='ALL'?'Đóng toàn bộ rồi hủy SL/TP OCC còn chờ.':
+       'Hủy TP '+role+' chờ trước, rồi đóng MARKET; giữ SL và các TP khác.');
+ if(!confirm(msg))return;
+ manualBusy=true;setManualButtons();
+ $('manualActionStatus').textContent='Đang xử lý MARKET '+role+' trên Binance; không thao tác khác…';
+ try{
+  const result=await request('manual-exit',{
+   role,confirmation:'XAC NHAN '+role+' BTCUSDT',
+   expectedEntryOrderId:current.entryOrderId,
+   expectedRemainingBTC:current.remainingBTC
+  });
+  $('manualActionStatus').textContent='Đã xác minh đóng '+fmt(result.closedBTC,6)+
+   ' BTC qua MARKET. Còn '+fmt(result.remainingBTC,6)+' BTC; kiểm tra lịch sử fill.';
+  $('apiError').textContent='Manual '+role+' đã xác minh Binance. Không gửi lại lệnh.';
+ }catch(e){
+  $('manualActionStatus').textContent='KHÔNG XÁC NHẬN ĐƯỢC MARKET: '+e.message+
+   ' Kiểm tra Binance và đối soát; không nhấn lại liên tục.';
+  $('apiError').textContent='Manual '+role+': '+e.message;
+ }finally{
+  manualBusy=false;manualSnapshot=null;setManualButtons();
+  await refreshLive();await refreshPositionAnalysis();await refreshReport();
+ }
+}
+for(const role of ['TP1','TP2','TP3'])$('manual'+role).onclick=()=>performManualExit(role);
+$('manualCloseAll').onclick=()=>performManualExit('ALL');
 function clearCompact(message){
  $('compactSubtitle').textContent=message;
  $('compactNote').textContent='GROSS chỉ là dự kiến, chưa trừ phí, funding và trượt giá.';
@@ -637,6 +680,7 @@ function clearCompact(message){
  }
 }
 function resetPositionAnalysis(message){
+ manualSnapshot=null;manualPosition=null;setManualButtons();
  $('riskHeadline').textContent=message;
  $('riskUpdated').textContent='Chưa có dữ liệu Binance mới';
  $('riskSummary').hidden=true;$('riskSummary').replaceChildren();
@@ -677,6 +721,32 @@ function showPositionAnalysis(data){
   }
   $('compactNote').textContent=plan.note+' GROSS chưa trừ phí, funding và trượt giá.';
  }else clearCompact(plan?.reason||'Chờ giá và khối lượng Binance để tính.');
+ // For an open, OCC-verified position use the exact still-active Binance
+ // protection legs, not a fresh 33/33/34 split of the smaller remaining BTC.
+ if(positionOpen&&data.manual?.allowed){
+  $('compactSubtitle').textContent='Các nấc còn chờ trên Binance · '+
+   fmt(p.quantityBTC,6)+' BTC còn lại.';
+  for(const role of ['SL','TP1','TP2','TP3']){
+   const level=(data.levels||[]).find(x=>(role==='SL'&&x.role==='SL')||
+    (role!=='SL'&&x.clientId?.endsWith('-'+role)));
+   const verified=level?.confirmed&&level.origin!=='CHƯA_XÁC_MINH';
+   $('compact'+role+'price').textContent=verified?fmt(level.price,2):'—';
+   $('compact'+role+'pnl').textContent=verified?signedUSDT(level.grossUSDT):'—';
+   $('compact'+role+'pnl').className=verified&&level.grossUSDT>0?'positive':
+    verified&&level.grossUSDT<0?'negative':'';
+   $('compact'+role+'share').textContent=verified?
+    fmt(role==='SL'?100:level.sharePercent,2)+'% · '+
+    fmt(level.quantityBTC,6)+' BTC':
+    'Không còn lệnh chờ';
+  }
+  $('compactNote').textContent='Giá SL/TP trên Binance. Chốt MKT dùng giá thị trường tại lúc khớp, không dùng giá TP chờ.';
+ }
+ manualSnapshot=data.manual||null;manualPosition=positionOpen?p:null;
+ setManualButtons();
+ $('manualActionStatus').textContent=manualSnapshot?.allowed?
+  'Chốt MKT chỉ khi lệnh TP còn chờ; MARKET có thể trượt giá.':
+  positionOpen?'Chưa thể chốt thủ công: vị thế hoặc lệnh bảo vệ chưa được OCC xác minh.':
+  'Không có vị thế OCC để đóng thủ công.';
  const alerts=$('riskAlerts');alerts.replaceChildren();
  const warnings=(data.warnings||[]);
  // Keep critical exceptions visible but avoid long repeated messages in the status panel.
