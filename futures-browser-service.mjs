@@ -475,7 +475,7 @@ export class BrowserFutures{
   const managed=this.activeProtection||this.previousProtection;
   const intent=existsSync(this.intentPath)?JSON.parse(readFileSync(this.intentPath,'utf8')):null;
   if(!managed?.entry||intent?.phase!=='PROTECTED'||
-     (this.halted&&this.previousProtection?.phase!=='PROTECTED'))
+     (this.halted&&!this.activeProtection&&this.previousProtection?.phase!=='PROTECTED'))
    throw Error('Vị thế chưa được OCC xác minh PROTECTED; cần đối soát Binance trước');
   this.busy=true;
   let mutationStarted=false;
