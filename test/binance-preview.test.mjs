@@ -257,6 +257,25 @@ test('API, real Binance quote and minimized Auto config share a row without losi
  assert.ok(js);assert.doesNotThrow(()=>new Function(js));
 });
 
+test('7-day Binance Income is the primary PnL, with separate OCC closed-trade Net',()=>{
+ const html=read('BINANCE_UI_PREVIEW.html');
+ const top=html.slice(html.indexOf('<section class="kpis">'),html.indexOf('<section class="topgrid">'));
+ const history=html.slice(html.indexOf('<section class="below">'),html.indexOf('</section>',html.indexOf('<section class="below">')));
+ assert.match(top,/P&L Binance BTC · 7 ngày/);
+ assert.match(top,/id="binanceIncomeTotal"/);
+ assert.doesNotMatch(top,/id="realNet"/);
+ assert.match(history,/id="realNet"/);
+ assert.match(history,/id="occScopeWarning"/);
+ assert.match(history,/id="incomeReconcileSummary"/);
+ assert.match(html,/incomeLastCheckedAt=s\.lastIncomeSync\|\|null/);
+ assert.match(html,/syncAge<11\*60\*1000/);
+ assert.match(html,/ia\?\.available===true/);
+ assert.match(html,/matchedTradeIncomeUSDT/);
+ assert.match(html,/unmatchedTradeIncomeUSDT/);
+ assert.match(html,/không sử dụng Net OCC làm tổng P&L tài khoản/);
+ const js=html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
+ assert.ok(js);assert.doesNotThrow(()=>new Function(js));
+});
 test('BTC position is one full-width horizontal panel BELOW API and Auto settings, not the third top-grid column',()=>{
  const html=read('BINANCE_UI_PREVIEW.html');
  const top=html.indexOf('<section class="topgrid">');
