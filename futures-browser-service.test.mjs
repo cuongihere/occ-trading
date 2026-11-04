@@ -12,7 +12,7 @@ const fakeCrypt=(buf,mode)=>mode==='protect'
 const makeVault=dir=>new WindowsCredentialVault(join(dir,'futures-api.dpapi.json'),{crypt:fakeCrypt});
 const tmp=t=>{const p=mkdtempSync(join(tmpdir(),'occ-browser-live-'));t.after(()=>rmSync(p,{force:true,recursive:true}));return p;};
 function fake({flatRiskRows=false,brokenConfig=false,failStop=false,leverage=5,leverageAckMismatch=false}={}){
- const calls=[],algo=[],normal=[],position={qty:0},mode={dualSidePosition:false},leverageState={value:leverage};
+ const calls=[],algo=[],normal=[],position={qty:0,entryOrderId:100},mode={dualSidePosition:false},leverageState={value:leverage};
  const api={
   close(){calls.push('closed');},
   async syncClock(){calls.push('time');},
@@ -31,7 +31,7 @@ function fake({flatRiskRows=false,brokenConfig=false,failStop=false,leverage=5,l
    if(path==='/fapi/v1/order'){
     const entry=calls.filter(x=>x.method==='POST'&&x.path==='/fapi/v1/order'&&x.p.reduceOnly!=='true').at(-1)?.p;
     return {symbol:'BTCUSDT',side:entry?.side||'BUY',positionSide:'BOTH',
-     status:'FILLED',executedQty:'.032',avgPrice:'77000',orderId:100,
+     status:'FILLED',executedQty:'.032',avgPrice:'77000',orderId:position.entryOrderId,
      clientOrderId:entry?.newClientOrderId};
    }
    throw Error('Unexpected GET '+path);
@@ -45,7 +45,8 @@ function fake({flatRiskRows=false,brokenConfig=false,failStop=false,leverage=5,l
    }
    if(path==='/fapi/v1/order'){
     if(p.reduceOnly==='true'){position.qty=0;return {orderId:999,status:'FILLED'};}
-    position.qty=p.side==='BUY'?.032:-.032;return {orderId:100,status:'FILLED'};
+    position.entryOrderId=position.qty===0&&position.entryOrderId===100?100:position.entryOrderId+1;
+    position.qty=p.side==='BUY'?.032:-.032;return {orderId:position.entryOrderId,status:'FILLED'};
    }
    if(path==='/fapi/v1/algoOrder'){
     if(failStop&&p.type==='STOP_MARKET')throw Error('Simulated Binance STOP failure');
@@ -121,7 +122,7 @@ test('Live unfinished intent after restart blocks arming until exchange confirme
  const again=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
  assert.equal(again.snapshot().armed,false);assert.equal(again.snapshot().halted,true);
  await again.connect(creds);
- await assert.rejects(again.arm('CHAP NHAN BTC FUTURES',77000),/chưa đối soát/);
+ await assert.rejects(again.arm('CHAP NHAN BTC FUTURES',77000),/đối soát|còn vị thế/);
  await assert.rejects(again.reconcileFlat(),/còn vị thế/);
  fx.position.qty=0;fx.algo.splice(0);
  await again.reconcileFlat();await again.arm('CHAP NHAN BTC FUTURES',77000);
@@ -336,7 +337,7 @@ test('Startup automatically clears a previous PROTECTED checkpoint after Binance
  assert.equal(two.snapshot().armed,false);
  assert.equal(two.snapshot().recoveryStatus,'recovered');
  assert.equal(two.snapshot().error,null);
- assert.ok(two.snapshot().events.some(x=>x.type==='AUTO_RECONCILED'));
+ assert.ok(two.snapshot().events.some(x=>x.type==='STALE_ALGO_CLEARED'));
  assert.equal(JSON.parse(readFileSync(join(dir,'futures-live-intent.json'),'utf8')).phase,'CLEARED');
  assert.equal(JSON.parse(readFileSync(join(dir,'futures-live-protection.json'),'utf8')).phase,'IDLE');
  assert.equal(fx.calls.filter(x=>x.method==='POST').length,postsBefore); // read-only checks, no new orders
@@ -344,27 +345,25 @@ test('Startup automatically clears a previous PROTECTED checkpoint after Binance
  assert.equal(two.snapshot().armed,true);
 });
 
-test('Auto recovery refuses to clear HALTED if BTC position or any conditional order remains',async t=>{
+test('Restart never cancels SL/TP while BTCUSDT position remains open',async t=>{
  const dir=tmp(t),fx=fake();
  const one=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
  await one.connect(creds);one.saveConfig({marginUSDT:500,leverage:5});
  await one.arm('CHAP NHAN BTC FUTURES',77000);await one.signal({side:'LONG',barTime:900000},true);
- fx.position.qty=0; // sl/TP still hanging, cannot unlock
  const two=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
  await two.restoreSavedConnection();
  assert.equal(two.snapshot().halted,true);
- assert.equal(two.snapshot().recoveryStatus,'position_or_orders_open');
- await assert.rejects(two.checkBinanceAndReconcile(),/còn vị thế hoặc lệnh/);
+ assert.equal(fx.position.qty,.032);
+ assert.equal(fx.algo.length,4);
+ assert.equal(fx.calls.filter(x=>x.method==='DELETE').length,0);
+ await assert.rejects(two.checkBinanceAndReconcile(),/còn vị thế/);
  assert.equal(two.snapshot().halted,true);
- assert.equal(two.snapshot().armed,false);
  assert.notEqual(JSON.parse(readFileSync(join(dir,'futures-live-intent.json'),'utf8')).phase,'CLEARED');
- fx.algo.splice(0);fx.position.qty=.032;
- await assert.rejects(two.checkBinanceAndReconcile(),/còn vị thế hoặc lệnh/);
- assert.equal(two.snapshot().halted,true);
  fx.position.qty=0;
  await two.checkBinanceAndReconcile();
  assert.equal(two.snapshot().halted,false);
  assert.equal(two.snapshot().armed,false);
+ assert.equal(fx.algo.length,0);
 });
 
 test('Uncertain in-flight checkpoint stays HALTED on reconnect even when Binance appears flat; manual check can clear',async t=>{
