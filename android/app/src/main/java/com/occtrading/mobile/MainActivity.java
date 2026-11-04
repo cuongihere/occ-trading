@@ -181,9 +181,12 @@ public final class MainActivity extends Activity {
             SharedPreferences pref=getPreferences(MODE_PRIVATE);
             JSONObject state=new JSONObject(pref.getString("checkpoint","{}"));
             JSONObject intent=state.optJSONObject("intent");
-            if(intent==null||state.optBoolean("halted",false)||intent.optBoolean("sent",false))
+            String phase=state.optString("phase");
+            boolean approvedCleanup=method.equals("DELETE")&&"CLEANUP_SENDING".equals(phase);
+            if(intent==null||(state.optBoolean("halted",false)&&!approvedCleanup)||
+               intent.optBoolean("sent",false))
                 throw new SecurityException("Lệnh không có checkpoint hợp lệ hoặc đã gửi");
-            String phase=state.optString("phase"),kind=intent.optString("kind");
+            String kind=intent.optString("kind");
             if(!"BTCUSDT".equals(p.optString("symbol")))
                 throw new SecurityException("Chỉ giao dịch BTCUSDT");
             boolean valid=false;
