@@ -93,6 +93,13 @@ export async function syncBinanceIncome(api,ledger,{now=Date.now()}={}){
 }
 export async function syncOCCLiveHistory(api,ledger,inputs={}){
  const found=await discoverOCCOrderIds(api,ledger,inputs);
+ let incomeUpdated=false;
+ if(inputs.syncIncome===true){
+  try{
+   const audit=await syncBinanceIncome(api,ledger);
+   incomeUpdated=true;found.newIncome=audit.newIncome;
+  }catch(e){found.warnings.push('Binance Income chưa đối soát: '+e.message);}
+ }
  let synced={tracked:ledger.orders().length,newFills:0,report:ledger.report()};
  try{synced=await syncKnownOrderFills(api,ledger);}
  catch(e){found.warnings.push('Không đồng bộ đầy đủ được fill Binance: '+e.message);}
