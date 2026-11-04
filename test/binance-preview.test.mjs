@@ -233,3 +233,39 @@ test('Compact Binance configuration keeps every functional field while removing 
  const js=html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
  assert.ok(js);assert.doesNotThrow(()=>new Function(js));
 });
+
+test('BTC position is one full-width horizontal panel BELOW API and Auto settings, not the third top-grid column',()=>{
+ const html=read('BINANCE_UI_PREVIEW.html');
+ const top=html.indexOf('<section class="topgrid">');
+ const position=html.indexOf('<section class="positionSection"');
+ const history=html.indexOf('<section class="below">');
+ assert.ok(top>=0&&position>top&&history>position);
+ const upper=html.slice(top,position),section=html.slice(position,history);
+ assert.doesNotMatch(upper,/class="panel accountPanel"|id="positionAnalysis"/);
+ assert.match(upper,/class="panel apiPanel"/);
+ assert.match(upper,/class="panel configPanel"/);
+ assert.match(section,/class="panel accountPanel"/);
+ assert.match(section,/id="positionAnalysis"/);
+ assert.equal((html.match(/class="panel accountPanel"/g)||[]).length,1);
+ assert.equal((html.match(/class="positionSection"/g)||[]).length,1);
+ for(const id of ['riskHeadline','riskUpdated','riskSummary','positionAnalysis',
+  'entryPrice','markPrice','liqPrice','btcPnl','marginMode','accountLeverage',
+  'botState','autoHint','compactSLprice','compactTP1price','compactTP2price','compactTP3price',
+  'compactSLpnl','compactTP1pnl','compactTP2pnl','compactTP3pnl','manualTP1','manualTP2',
+  'manualTP3','manualCloseAll','manualActionStatus','riskAlerts'])
+  assert.match(section,new RegExp('id="'+id+'"'),'Missing full-width position element '+id);
+ assert.match(html,/grid-template-rows:48px 90px auto auto minmax\(180px,1fr\) 20px/);
+ assert.match(html,/\.topgrid\{grid-template-columns:minmax\(300px,\.82fr\) minmax\(500px,1\.53fr\)\}/);
+ assert.match(html,/\.positionSection>\.accountPanel\{\s*display:grid/);
+ assert.match(html,/\.positionSection \.positionGrid\{\s*grid-column:1\/-1;grid-row:4;\s*grid-template-columns:repeat\(6,minmax\(0,1fr\)\)/);
+ assert.match(html,/\.positionSection \.compactRows\{\s*display:grid;grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
+ assert.match(html,/@media\(max-width:1120px\)/);
+ assert.match(html,/@media\(max-width:900px\)/);
+ assert.match(html,/@media\(max-width:540px\)/);
+ // No change to trading actions or Binance data refresh cadence.
+ assert.match(html,/request\('manual-exit'/);
+ assert.match(html,/setInterval\(refreshPositionAnalysis,12000\)/);
+ assert.doesNotMatch(section,/overflow-y:auto|style="overflow:/);
+ const js=html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
+ assert.ok(js);assert.doesNotThrow(()=>new Function(js));
+});
