@@ -81,3 +81,27 @@ test('Prior SQLite ledgers without synced_at migrate without losing verified fil
  assert.equal(upgraded.report().summary.open,1);
  upgraded.close();
 });
+
+test('Crash before ACK registration can recover manual TP2 MARKET order from durable close client id',async t=>{
+ const ledger=new LiveStatsLedger(pathFor(t)),api=reader();
+ const savedGet=api.get.bind(api);
+ const client='OCCBTC-abcdef12345678';
+ api.get=async(path,params={})=>{
+  if(path==='/fapi/v1/order'&&params.origClientOrderId===client)
+   return {symbol:'BTCUSDT',orderId:809,clientOrderId:client,side:'SELL',
+    type:'MARKET',positionSide:'BOTH',reduceOnly:true,status:'FILLED',executedQty:'.001'};
+  if(path==='/fapi/v1/userTrades'&&String(params.orderId)==='809')
+   return [trade(9,809,'SELL',.001,1.2,.03,79200)];
+  return savedGet(path,params);
+ };
+ const out=await syncOCCLiveHistory(api,ledger,{
+  intent:{oldClientId:prefix,closeId:client,role:'TP2',phase:'MANUAL_MARKET_SENDING'}
+ });
+ assert.ok(out.discovered>=3);
+ const exit=ledger.orders().find(x=>x.order_id==='809');
+ assert.equal(exit.group_id,prefix);
+ assert.equal(exit.role,'TP2');
+ assert.equal(exit.side,'SELL');
+ assert.equal(out.newFills,3);
+ ledger.close();
+});

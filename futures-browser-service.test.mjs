@@ -5,6 +5,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {BrowserFutures} from './futures-browser-service.mjs';
 import {WindowsCredentialVault} from './futures-credential-vault.mjs';
+import {LiveStatsLedger} from './binance-live-stats.mjs';
 const PREFIX=Buffer.from('OCC_MOCK_ENCRYPTED_');
 const fakeCrypt=(buf,mode)=>mode==='protect'
  ?Buffer.concat([PREFIX,Buffer.from(buf).reverse()])
@@ -31,7 +32,7 @@ function fake({flatRiskRows=false,brokenConfig=false,failStop=false,leverage=5,l
    if(path==='/fapi/v1/order'){
     const entry=calls.filter(x=>x.method==='POST'&&x.path==='/fapi/v1/order'&&x.p.reduceOnly!=='true').at(-1)?.p;
     return {symbol:'BTCUSDT',side:entry?.side||'BUY',positionSide:'BOTH',
-     status:'FILLED',executedQty:'.032',avgPrice:'77000',orderId:position.entryOrderId,
+     status:'FILLED',type:'MARKET',executedQty:'.032',avgPrice:'77000',orderId:position.entryOrderId,
      clientOrderId:entry?.newClientOrderId};
    }
    throw Error('Unexpected GET '+path);
@@ -577,4 +578,181 @@ test('Unknown DELETE result remains HALTED; manual retry reconciles only remaini
  assert.equal(two.snapshot().halted,false);
  assert.equal(fx.algo.length,0);
  assert.equal(two.snapshot().armed,false);
+});
+
+function manualFake(){
+ const fx=fake(),manualOrders=new Map(),get=fx.api.get.bind(fx.api),
+  post=fx.api.post.bind(fx.api);
+ let nextManualOrderId=801;
+ fx.api.get=async(path,p={})=>{
+  if(path==='/fapi/v1/order'&&manualOrders.has(String(p.orderId)))
+   return manualOrders.get(String(p.orderId));
+  if(path==='/fapi/v3/positionRisk'){
+   const rows=await get(path,p);
+   return rows.map(o=>({...o,entryPrice:'77000',markPrice:'77500',
+    liquidationPrice:'65000',positionInitialMargin:'500',unRealizedProfit:'16'}));
+  }
+  return get(path,p);
+ };
+ fx.api.post=async(path,p)=>{
+  if(path==='/fapi/v1/order'&&p.reduceOnly==='true'){
+   fx.calls.push({method:'POST',path,p});
+   const signed=Math.sign(fx.position.qty),qty=Number(p.quantity);
+   if(qty>Math.abs(fx.position.qty)+1e-9)throw Error('over-reduce in mock');
+   fx.position.qty=Number((fx.position.qty-signed*qty).toFixed(10));
+   const id=nextManualOrderId++;
+   manualOrders.set(String(id),{symbol:'BTCUSDT',orderId:id,clientOrderId:p.newClientOrderId,
+    side:p.side,positionSide:'BOTH',reduceOnly:true,status:'FILLED',
+    type:'MARKET',executedQty:p.quantity,avgPrice:'77500'});
+   return {orderId:id,status:'FILLED',clientOrderId:p.newClientOrderId};
+  }
+  return post(path,p);
+ };
+ return fx;
+}
+test('TP1 manual MARKET cancels ONLY pending TP1, closes exact lot, leaves SL + TP2/TP3 and stores order ID',async t=>{
+ const dir=tmp(t),fx=manualFake();
+ const svc=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await svc.connect(creds);svc.saveConfig({marginUSDT:500,leverage:5});
+ await svc.arm('CHAP NHAN BTC FUTURES',77000);
+ await svc.signal({side:'LONG',barTime:900000},true);
+ const snapshot=await svc.positionAnalysis();
+ assert.equal(snapshot.status,'open');assert.equal(snapshot.manual.allowed,true);
+ assert.equal(snapshot.manual.TP1.quantityBTC,.01);
+ const before=fx.calls.length;
+ const result=await svc.manualMarketExit({role:'TP1',
+  confirmation:'XAC NHAN TP1 BTCUSDT',
+  expectedEntryOrderId:snapshot.manual.entryOrderId,
+  expectedRemainingBTC:snapshot.manual.remainingBTC});
+ assert.equal(result.closedBTC,.01);assert.equal(result.remainingBTC,.022);
+ assert.equal(fx.position.qty,.022);assert.equal(fx.algo.length,3);
+ assert.deepEqual(fx.algo.map(o=>o.clientAlgoId.endsWith('-SL')?'SL':o.clientAlgoId.slice(-3)),['SL','TP2','TP3']);
+ const performed=fx.calls.slice(before).filter(x=>x.method==='POST'||x.method==='DELETE');
+ assert.deepEqual(performed.map(x=>x.method),['DELETE','POST']);
+ assert.equal(String(performed[0].p.algoId),'201');
+ assert.equal(performed[1].p.reduceOnly,'true');
+ assert.equal(performed[1].p.quantity,'0.01');
+ assert.equal(svc.snapshot().armed,true);assert.equal(svc.snapshot().halted,false);
+ const after=await svc.positionAnalysis();
+ assert.equal(after.manual.TP1,null);
+ assert.equal(after.manual.TP2.quantityBTC,.01);
+ const ledger=new LiveStatsLedger(join(dir,'binance-live-stats.sqlite'));
+ assert.equal(ledger.orders().filter(x=>x.role==='TP1').length,1);
+ ledger.close();
+ const requests=fx.calls.filter(x=>x.method==='POST'&&x.path==='/fapi/v1/order');
+ await assert.rejects(svc.manualMarketExit({role:'TP1',confirmation:'XAC NHAN TP1 BTCUSDT',
+  expectedEntryOrderId:snapshot.manual.entryOrderId,expectedRemainingBTC:.022}),
+  /đã chốt|không còn/);
+ assert.equal(fx.calls.filter(x=>x.method==='POST'&&x.path==='/fapi/v1/order').length,requests.length);
+});
+
+test('Manual close ALL uses reduceOnly remaining BTC, verifies FLAT, cancels all OCC SL TP and preserves operator AUTO',async t=>{
+ const dir=tmp(t),fx=manualFake();
+ const svc=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await svc.connect(creds);svc.saveConfig({marginUSDT:500,leverage:5});
+ await svc.arm('CHAP NHAN BTC FUTURES',77000);await svc.signal({side:'LONG',barTime:900000},true);
+ const s=await svc.positionAnalysis();
+ const result=await svc.manualMarketExit({role:'ALL',confirmation:'XAC NHAN ALL BTCUSDT',
+  expectedEntryOrderId:s.manual.entryOrderId,expectedRemainingBTC:s.manual.remainingBTC});
+ assert.equal(result.closedBTC,.032);assert.equal(result.remainingBTC,0);
+ assert.equal(fx.position.qty,0);assert.equal(fx.algo.length,0);
+ assert.equal(fx.calls.filter(x=>x.method==='DELETE').length,4);
+ const reduced=fx.calls.filter(x=>x.method==='POST'&&x.path==='/fapi/v1/order'&&x.p.reduceOnly==='true');
+ assert.equal(reduced.length,1);
+ assert.equal(reduced[0].p.quantity,'0.032');
+ assert.equal(svc.snapshot().halted,false);assert.equal(svc.snapshot().armed,true);
+ assert.equal(svc.snapshot().protectedPosition,null);
+ assert.equal(JSON.parse(readFileSync(join(dir,'futures-live-protection.json'),'utf8')).phase,'IDLE');
+ assert.equal(JSON.parse(readFileSync(join(dir,'futures-live-intent.json'),'utf8')).phase,'CLEARED');
+ const ledger=new LiveStatsLedger(join(dir,'binance-live-stats.sqlite'));
+ assert.equal(ledger.orders().filter(x=>x.role==='CLOSE').length,1);
+ ledger.close();
+});
+
+test('Manual TP selected cancelled on Binance then MARKET response unknown: halt, do not retry, other TPs and STOP stay',async t=>{
+ const dir=tmp(t),fx=manualFake();
+ const svc=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await svc.connect(creds);svc.saveConfig({marginUSDT:500,leverage:5});
+ await svc.arm('CHAP NHAN BTC FUTURES',77000);await svc.signal({side:'LONG',barTime:900000},true);
+ const s=await svc.positionAnalysis();
+ const oldPost=fx.api.post.bind(fx.api);
+ fx.api.post=async(path,p)=>{
+  if(path==='/fapi/v1/order'&&p.reduceOnly==='true')throw Error('unknown MARKET result');
+  return oldPost(path,p);
+ };
+ await assert.rejects(svc.manualMarketExit({role:'TP2',confirmation:'XAC NHAN TP2 BTCUSDT',
+  expectedEntryOrderId:s.manual.entryOrderId,expectedRemainingBTC:s.manual.remainingBTC}),/unknown MARKET/);
+ assert.equal(svc.snapshot().halted,true);assert.equal(svc.snapshot().armed,true);
+ assert.equal(fx.position.qty,.032);
+ assert.equal(fx.algo.length,3);
+ assert.ok(fx.algo.some(x=>x.orderType==='STOP_MARKET'));
+ assert.ok(!fx.algo.some(x=>x.clientAlgoId.endsWith('-TP2')));
+ assert.equal(JSON.parse(readFileSync(join(dir,'futures-live-intent.json'),'utf8')).phase,'MANUAL_MARKET_SENDING');
+});
+
+test('Sequential manual TP2 and TP3 after TP1 never recalculate the original lots; TP3 can finish the position',async t=>{
+ const dir=tmp(t),fx=manualFake(),svc=new BrowserFutures({
+  dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await svc.connect(creds);svc.saveConfig({marginUSDT:500,leverage:5});
+ await svc.arm('CHAP NHAN BTC FUTURES',77000);
+ await svc.signal({side:'LONG',barTime:900000},true);
+ for(const [role,qty,remaining] of [['TP1',.01,.022],['TP2',.01,.012],['TP3',.012,0]]){
+  const p=await svc.positionAnalysis();
+  assert.equal(p.manual.allowed,true);
+  assert.equal(p.manual[role].quantityBTC,qty);
+  const result=await svc.manualMarketExit({role,confirmation:'XAC NHAN '+role+' BTCUSDT',
+   expectedEntryOrderId:p.manual.entryOrderId,
+   expectedRemainingBTC:p.manual.remainingBTC});
+  assert.equal(result.closedBTC,qty);
+  assert.equal(result.remainingBTC,remaining);
+  assert.equal(fx.position.qty,remaining);
+ }
+ assert.equal(fx.algo.length,0);
+ assert.equal(svc.snapshot().halted,false);
+ assert.equal(svc.snapshot().protectedPosition,null);
+ const ledger=new LiveStatsLedger(join(dir,'binance-live-stats.sqlite'));
+ assert.deepEqual(ledger.orders().filter(x=>/^TP[123]$/.test(x.role)).map(x=>x.role),
+  ['TP1','TP2','TP3']);
+ ledger.close();
+});
+
+test('Manual close ALL after restart still works for verified OCC PROTECTED checkpoint while AUTO is OFF',async t=>{
+ const dir=tmp(t),fx=manualFake();
+ const first=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await first.connect(creds);first.saveConfig({marginUSDT:500,leverage:5});
+ await first.arm('CHAP NHAN BTC FUTURES',77000);
+ await first.signal({side:'LONG',barTime:900000},true);
+ first.close();
+ const next=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ assert.equal(next.snapshot().halted,true);
+ await next.restoreSavedConnection();
+ const p=await next.positionAnalysis();
+ assert.equal(p.manual.allowed,true);
+ assert.equal(p.manual.ALL.quantityBTC,.032);
+ const result=await next.manualMarketExit({role:'ALL',confirmation:'XAC NHAN ALL BTCUSDT',
+  expectedEntryOrderId:p.manual.entryOrderId,expectedRemainingBTC:p.manual.remainingBTC});
+ assert.equal(result.remainingBTC,0);
+ assert.equal(next.snapshot().halted,false);
+ assert.equal(next.snapshot().armed,false);
+ assert.equal(fx.algo.length,0);
+});
+
+test('Market exit with a stale quantity or unknown external Algo never sends a close or cancellation',async t=>{
+ const dir=tmp(t),fx=manualFake();
+ const svc=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await svc.connect(creds);svc.saveConfig({marginUSDT:500,leverage:5});
+ await svc.arm('CHAP NHAN BTC FUTURES',77000);
+ await svc.signal({side:'LONG',barTime:900000},true);
+ const initial=await svc.positionAnalysis();
+ let before=fx.calls.filter(x=>x.method==='POST'||x.method==='DELETE').length;
+ await assert.rejects(svc.manualMarketExit({role:'TP1',confirmation:'XAC NHAN TP1 BTCUSDT',
+  expectedEntryOrderId:initial.manual.entryOrderId,expectedRemainingBTC:.031}),/Khối lượng BTC thay đổi/);
+ assert.equal(fx.calls.filter(x=>x.method==='POST'||x.method==='DELETE').length,before);
+ fx.algo.push({symbol:'BTCUSDT',positionSide:'BOTH',algoId:999999,
+  clientAlgoId:'manual-extra',algoStatus:'NEW',orderType:'TAKE_PROFIT_MARKET',
+  side:'SELL',reduceOnly:true,quantity:'.001'});
+ before=fx.calls.filter(x=>x.method==='POST'||x.method==='DELETE').length;
+ await assert.rejects(svc.manualMarketExit({role:'ALL',confirmation:'XAC NHAN ALL BTCUSDT',
+  expectedEntryOrderId:initial.manual.entryOrderId,expectedRemainingBTC:.032}),/không thuộc OCC/);
+ assert.equal(fx.calls.filter(x=>x.method==='POST'||x.method==='DELETE').length,before);
 });

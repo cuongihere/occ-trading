@@ -185,3 +185,25 @@ test('App safely clears only OCC checkpoint orphaned SL TP after FLAT and persis
  const js=html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
  assert.ok(js);assert.doesNotThrow(()=>new Function(js));
 });
+
+test('Operator BTCUSDT manual TP1 TP2 TP3 and close-all buttons require confirmation and exact Binance quantities',()=>{
+ const html=read('BINANCE_UI_PREVIEW.html'),server=read('server.mjs'),
+  service=read('futures-browser-service.mjs'),portable=read('BUILD_PORTABLE.ps1');
+ for(const id of ['manualTP1','manualTP2','manualTP3','manualCloseAll','manualActionStatus'])
+  assert.match(html,new RegExp('id="'+id+'"'));
+ assert.match(html,/function performManualExit\(role\)/);
+ assert.match(html,/request\('manual-exit'/);
+ assert.match(html,/expectedEntryOrderId:current\.entryOrderId/);
+ assert.match(html,/expectedRemainingBTC:current\.remainingBTC/);
+ assert.match(html,/manualSnapshot\?\.allowed/);
+ assert.match(html,/MANUAL\s?MARKET|MARKET KHÔNG chờ giá TP/);
+ assert.match(server,/control\/live\/manual-exit/);
+ assert.match(server,/await browserFutures\.manualMarketExit\(p\)/);
+ assert.match(service,/async manualMarketExit\(/);
+ assert.match(service,/MANUAL_TP_CANCEL_SENDING/);
+ assert.match(service,/reduceOnly:'true'/);
+ assert.match(service,/MANUAL_EXIT_HALTED/);
+ assert.match(portable,/'futures-manual-exit\.mjs'/);
+ const js=html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
+ assert.ok(js);assert.doesNotThrow(()=>new Function(js));
+});

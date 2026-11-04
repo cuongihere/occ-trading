@@ -122,6 +122,9 @@ const server=createServer(async(req,res)=>{
     await browserFutures.arm(p.acceptance,quote.lastPrice);
    }
    else if(req.url==='/control/live/off'){browserFutures.disarm();}
+   else if(req.url==='/control/live/manual-exit'){
+    return res.end(JSON.stringify(await browserFutures.manualMarketExit(p)));
+   }
    else if(req.url==='/control/live/reconcile'){await browserFutures.checkBinanceAndReconcile();}
    else if(req.url==='/control/live/history-refresh'){await browserFutures.refreshRealHistory({force:true});}
    else if(req.url==='/control/live/disconnect'){browserFutures.close();}
