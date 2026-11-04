@@ -215,6 +215,61 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
 .manualExitBar{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:8px}
 .manualClose{font-size:11px;background:#46252e;border-color:#b36e7c;color:#ffced0;white-space:nowrap}
 .manualExitBar .small{font-size:10px;flex:1;line-height:1.4}
+
+/* Compact workbench: content-sized cards and uniform editing controls. */
+.topgrid{align-items:start;gap:10px}
+.topgrid>.panel{align-self:start;min-width:0;padding:12px 13px;border-radius:12px}
+.topgrid>.panel h2{font-size:14px;margin-bottom:9px}
+.apiPanel{gap:0}
+.apiPanel .row{gap:7px}
+.apiPanel .credentials{margin-top:8px;border-radius:7px;padding:8px 10px}
+.apiPanel .credentials summary{font-size:11px}
+.apiPanel .apiActions{margin-top:7px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr) minmax(0,1.55fr);gap:6px}
+.apiPanel .apiActions button{padding:6px;font-size:10px;min-height:31px;line-height:1.25;white-space:normal}
+.apiPanel .message{max-height:none;overflow-wrap:anywhere;margin:6px 0;line-height:1.3}
+.apiPanel .message:empty{display:none}
+.apiPanel #lastSync{font-size:10px;margin-top:2px}
+.apiPanel .marketTicker{flex:0 0 auto;min-height:128px;max-height:143px;margin-top:9px;padding:12px 10px;gap:3px;border-radius:9px}
+.apiPanel .marketTicker .quoteHeading{font-size:10px;letter-spacing:.6px}
+.apiPanel .marketTicker .quoteValue{font-size:clamp(33px,2.7vw,47px);line-height:1.05;letter-spacing:-1px}
+.apiPanel .marketTicker .quoteMeta{font-size:11px}
+.configPanel .configVersion{font-size:11px;font-weight:500;color:#8baac7;margin-left:5px}
+.configPanel .configPrimary{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,.8fr) minmax(0,1.3fr) minmax(0,.8fr) minmax(0,1.2fr);gap:8px}
+.configPanel .configTargets{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin-top:9px}
+.configPanel label:not(.reverseMode){gap:4px;font-size:10px;white-space:nowrap}
+.configPanel input:not([type=checkbox]),.configPanel select{height:32px;padding:5px 8px;border-radius:6px;font-size:12px;min-width:0}
+.configPanel input:disabled{background:#192c3e;color:#abc3db;opacity:1}
+.configPanel .reverseMode{margin:9px 0 5px;padding:6px 9px;border-radius:7px;gap:9px;min-height:33px;flex-wrap:wrap}
+.configPanel .reverseMode span{font-size:11px}
+.configPanel .reverseMode small{font-size:10px;margin-left:auto}
+.configPanel .sizingAlert{font-size:10px;line-height:1.3;padding:5px 8px;margin:5px 0;border-radius:6px}
+.configPanel .settingActions{margin-top:7px;gap:7px;align-items:center}
+.configPanel .settingActions button{min-height:30px;padding:6px 10px;font-size:11px}
+.configPanel .settingActions .small{font-size:10px}
+@media(max-width:1400px){
+ .configPanel .configTargets{grid-template-columns:repeat(3,minmax(0,1fr))}
+ .configPanel .configPrimary{grid-template-columns:repeat(6,minmax(0,1fr))}
+ .configPanel .configPrimary>label:nth-child(1){grid-column:span 2}
+ .configPanel .configPrimary>label:nth-child(2){grid-column:span 1}
+ .configPanel .configPrimary>label:nth-child(3){grid-column:span 3}
+ .configPanel .configPrimary>label:nth-child(4){grid-column:span 2}
+ .configPanel .configPrimary>label:nth-child(5){grid-column:span 4}
+}
+@media(max-width:750px){
+ .topgrid>.panel{padding:11px 12px}
+ .apiPanel .marketTicker{min-height:112px;max-height:125px}
+ .configPanel .configPrimary{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .configPanel .configPrimary>label{grid-column:auto!important}
+ .configPanel .configPrimary>label:nth-child(3){grid-column:span 2!important}
+ .configPanel .configTargets{grid-template-columns:repeat(3,minmax(0,1fr))}
+ .configPanel .settingActions{flex-wrap:wrap}
+ .configPanel .settingActions .small{text-align:left}
+}
+@media(max-width:390px){
+ .configPanel .configTargets{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .apiPanel .apiActions{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .apiPanel #apiReconcile{grid-column:1/-1}
+}
 </style>
 </head>
 <body>
@@ -256,25 +311,27 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
   <div class="quoteMeta" id="btcPriceTime">Chưa nhận được giao dịch trực tiếp</div>
  </div>
  </div>
- <div class="panel">
-  <h2>Cấu hình Auto · Multi TP v5</h2>
-  <div class="formSection fields3"><label>Ký quỹ / lệnh (USDT)<input id="marginUSDT" type="number" step="any" min=".01"></label>
-   <label>Đòn bẩy (x)<input id="leverage" type="number" step="1" min="1" max="20"></label>
-   <label>Chiều<select id="side"><option value="BOTH">Long & Short</option><option value="LONG">Chỉ Long</option><option value="SHORT">Chỉ Short</option></select></label></div>
-  <div class="formSection fields2"><label>Stop Loss (%)<input id="sl" type="number" min=".1" max="10" step=".1"></label>
-   <label>Chế độ TP<select id="mode"><option value="Percent">Percent (%)</option><option value="Points">Points (USDT)</option></select></label></div>
-  <div class="formSection fields3">
+ <div class="panel configPanel">
+  <h2>Cấu hình Auto <span class="configVersion">Multi TP v5</span></h2>
+  <div class="configPrimary">
+   <label>Ký quỹ (USDT)<input id="marginUSDT" type="number" step="any" min=".01"></label>
+   <label>Đòn bẩy<input id="leverage" type="number" step="1" min="1" max="20"></label>
+   <label>Chiều<select id="side"><option value="BOTH">Long &amp; Short</option><option value="LONG">Chỉ Long</option><option value="SHORT">Chỉ Short</option></select></label>
+   <label>SL (%)<input id="sl" type="number" min=".1" max="10" step=".1"></label>
+   <label>Kiểu TP<select id="mode"><option value="Percent">Percent (%)</option><option value="Points">Points (USDT)</option></select></label>
+  </div>
+  <div class="configTargets">
    <label>TP1<input id="tp1" type="number" step="any" min=".001"></label>
    <label>TP2<input id="tp2" type="number" step="any" min=".001"></label>
    <label>TP3<input id="tp3" type="number" step="any" min=".001"></label>
+   <label>Chốt TP1 (%)<input id="q1" type="number" step="any" min="0" max="100"></label>
+   <label>Chốt TP2 (%)<input id="q2" type="number" step="any" min="0" max="100"></label>
+   <label>TP3 còn (%)<input id="q3" type="text" disabled></label>
   </div>
-  <div class="fields3"><label>Chốt TP1 (%)<input id="q1" type="number" step="any" min="0" max="100"></label>
-  <label>Chốt TP2 (%)<input id="q2" type="number" step="any" min="0" max="100"></label>
-  <label>TP3 còn lại (%)<input id="q3" type="text" disabled></label></div>
-  <label class="reverseMode" style="flex-direction:row" title="ON: tín hiệu OCC ngược đóng vị thế bằng reduceOnly, xác minh dọn SL/TP cũ rồi mở chiều mới. OFF: giữ đến SL/TP.">
+ <label class="reverseMode" style="flex-direction:row" title="ON: đóng vị thế cũ và đảo chiều theo tín hiệu OCC sau khi Binance xác minh an toàn. OFF: giữ đến SL/TP.">
    <input id="reverseToggle" type="checkbox">
-   <span>Đảo chiều theo OCC: <strong id="reverseState">OFF</strong></span>
-   <small>ON: theo tín hiệu · OFF: giữ đến SL/TP</small>
+   <span>Đảo chiều theo OCC <strong id="reverseState">OFF</strong></span>
+   <small>OFF: giữ đến SL/TP</small>
   </label>
   <div id="sizingAlert" class="sizingAlert unavailable" role="status" aria-live="polite">Đang kiểm tra khối lượng TP1/TP2/TP3 theo Binance…</div>
   <div class="settingActions"><div class="row"><button id="save" class="primary">Lưu cấu hình</button>
