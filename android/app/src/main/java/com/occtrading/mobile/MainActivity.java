@@ -188,7 +188,8 @@ public final class MainActivity extends Activity {
                 throw new SecurityException("Chỉ giao dịch BTCUSDT");
             boolean valid=false;
             if("POST".equals(method)&&"/fapi/v1/order".equals(path)&&
-                "MARKET".equals(p.optString("type"))&&"BOTH".equals(p.optString("positionSide"))){
+                "MARKET".equals(p.optString("type"))&&"BOTH".equals(p.optString("positionSide"))&&
+                "RESULT".equals(p.optString("newOrderRespType"))){
                 boolean entry="ENTRY_SENDING".equals(phase)&&"ENTRY".equals(kind)&&
                     p.optString("newClientOrderId").equals(intent.optString("clientId"))&&
                     p.optString("side").equals("LONG".equals(intent.optString("side"))?"BUY":"SELL")&&
