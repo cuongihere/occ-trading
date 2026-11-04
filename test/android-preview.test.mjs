@@ -22,7 +22,7 @@ test('Android credentials remain protected by Keystore and no order write is aut
  const java=src('android/app/src/main/java/com/occtrading/mobile/MainActivity.java');
  assert.match(java,/AndroidKeyStore/);
  assert.match(java,/AES\/GCM\/NoPadding/);
- assert.match(java,/DataProtectionScope/.replace('DataProtectionScope','KeyProperties'));
+ assert.match(java,/KeyProperties\.PURPOSE_ENCRYPT/);
  assert.match(java,/getPreferences\(MODE_PRIVATE\)/);
  assert.match(java,/return method\.equals\("GET"\) && SIGNED_GET\.contains\(path\);/);
  assert.match(java,/private static final Set<String> SIGNED_GET/);
