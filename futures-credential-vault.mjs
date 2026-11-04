@@ -20,7 +20,7 @@ function windowsDpapi(bytes,mode){
  if(process.platform!=='win32')throw Error('Lưu API yêu cầu Windows DPAPI. Không lưu plaintext.');
  const result=spawnSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',PS_SCRIPT],{
   input:Buffer.from(bytes).toString('base64'),encoding:'utf8',windowsHide:true,
-  env:{...process.env,OCC_DPAPI_MODE:mode},timeout:12000,maxBuffer:1024*1024
+  env:{...process.env,OCC_DPAPI_MODE:mode},timeout:45000,maxBuffer:1024*1024
  });
  if(result.error||result.status!==0||!result.stdout?.trim())
   throw Error('Windows DPAPI không thể '+(mode==='protect'?'mã hóa':'giải mã')+
