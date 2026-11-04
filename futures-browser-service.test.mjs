@@ -50,7 +50,7 @@ function fake({flatRiskRows=false,brokenConfig=false,failStop=false,leverage=5,l
    if(path==='/fapi/v1/algoOrder'){
     if(failStop&&p.type==='STOP_MARKET')throw Error('Simulated Binance STOP failure');
     const id=200+algo.length;
-    algo.push({algoId:id,symbol:'BTCUSDT',clientAlgoId:p.clientAlgoId,algoStatus:'NEW',
+    algo.push({algoId:id,symbol:'BTCUSDT',positionSide:'BOTH',clientAlgoId:p.clientAlgoId,algoStatus:'NEW',
      orderType:p.type,side:p.side,triggerPrice:p.triggerPrice,
      closePosition:p.closePosition==='true',reduceOnly:p.reduceOnly==='true',quantity:p.quantity});
     return {algoId:id,clientAlgoId:p.clientAlgoId};
@@ -503,4 +503,79 @@ test('If the reversed NEW Entry cannot place its STOP, bot emergency-closes only
  assert.equal(fx.position.qty,0);
  assert.equal(svc.snapshot().halted,true);
  assert.equal(svc.snapshot().armed,true); // operator ON is retained but trading is blocked
+});
+
+test('After app restart, FLAT BTCUSDT and three orphan OCC TPs are cancelled and AUTO can be armed again',async t=>{
+ const dir=tmp(t),fx=fake(),one=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await one.connect(creds);one.saveConfig({marginUSDT:500,leverage:5});
+ await one.arm('CHAP NHAN BTC FUTURES',77000);await one.signal({side:'LONG',barTime:900000},true);
+ assert.equal(fx.algo.length,4);
+ fx.position.qty=0;
+ fx.algo.splice(fx.algo.findIndex(o=>o.orderType==='STOP_MARKET'),1); // SL fired while app offline, TP1-3 remain.
+ const before=fx.calls.filter(x=>x.method==='POST').length;
+ const two=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ assert.equal(two.snapshot().halted,true);
+ await two.restoreSavedConnection();
+ assert.equal(two.snapshot().halted,false,two.snapshot().error);
+ assert.equal(two.snapshot().recoveryStatus,'recovered');
+ assert.equal(two.snapshot().armed,false);
+ assert.equal(fx.algo.length,0);
+ assert.equal(fx.calls.filter(x=>x.method==='DELETE').length,3);
+ assert.equal(fx.calls.filter(x=>x.method==='POST').length,before); // never creates new orders on startup
+ const intent=JSON.parse(readFileSync(join(dir,'futures-live-intent.json'),'utf8'));
+ assert.equal(intent.phase,'CLEARED');
+ const checkpoint=JSON.parse(readFileSync(join(dir,'futures-live-protection.json'),'utf8'));
+ assert.equal(checkpoint.phase,'IDLE');
+ await two.arm('CHAP NHAN BTC FUTURES',77000);
+ assert.equal(two.snapshot().armed,true);
+});
+
+test('Unknown third party Algo blocks auto and manual cleanup, without deleting any orders',async t=>{
+ const dir=tmp(t),fx=fake(),one=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await one.connect(creds);one.saveConfig({marginUSDT:500,leverage:5});
+ await one.arm('CHAP NHAN BTC FUTURES',77000);await one.signal({side:'LONG',barTime:900000},true);
+ fx.position.qty=0;
+ fx.algo.push({algoId:99999,symbol:'BTCUSDT',positionSide:'BOTH',
+  clientAlgoId:'manual-TP',algoStatus:'NEW',orderType:'TAKE_PROFIT_MARKET',
+  side:'SELL',reduceOnly:true,quantity:'0.001'});
+ const two=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await two.restoreSavedConnection();
+ assert.equal(two.snapshot().halted,true);
+ assert.equal(fx.calls.filter(x=>x.method==='DELETE').length,0);
+ await assert.rejects(two.checkBinanceAndReconcile(),/ngoài OCC|không tự hủy/);
+ assert.equal(fx.algo.length,5);
+ assert.equal(two.snapshot().armed,false);
+});
+
+test('When BTC is still open on restart, no Algo may be removed',async t=>{
+ const dir=tmp(t),fx=fake(),one=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await one.connect(creds);one.saveConfig({marginUSDT:500,leverage:5});
+ await one.arm('CHAP NHAN BTC FUTURES',77000);await one.signal({side:'LONG',barTime:900000},true);
+ const two=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await two.restoreSavedConnection();
+ assert.equal(two.snapshot().halted,true);
+ assert.equal(fx.algo.length,4);
+ assert.equal(fx.calls.filter(x=>x.method==='DELETE').length,0);
+});
+
+test('Unknown DELETE result remains HALTED; manual retry reconciles only remaining verified OCC Algo IDs',async t=>{
+ const dir=tmp(t),fx=fake(),one=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await one.connect(creds);one.saveConfig({marginUSDT:500,leverage:5});
+ await one.arm('CHAP NHAN BTC FUTURES',77000);await one.signal({side:'LONG',barTime:900000},true);
+ fx.position.qty=0;
+ let fail=true;
+ const del=fx.api.del.bind(fx.api);
+ fx.api.del=async(path,p)=>{
+  if(fail){fail=false;throw Error('uncertain DELETE response');}
+  return del(path,p);
+ };
+ const two=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await two.restoreSavedConnection();
+ assert.equal(two.snapshot().halted,true);
+ assert.equal(fx.algo.length,4);
+ assert.equal(JSON.parse(readFileSync(join(dir,'futures-live-intent.json'),'utf8')).phase,'STALE_ALGO_CANCEL_SENDING');
+ await two.checkBinanceAndReconcile();
+ assert.equal(two.snapshot().halted,false);
+ assert.equal(fx.algo.length,0);
+ assert.equal(two.snapshot().armed,false);
 });
