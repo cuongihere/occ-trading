@@ -11,6 +11,7 @@ import {ProtectionCheckpoint} from './futures-protection-checkpoint.mjs';
 import {WindowsCredentialVault} from './futures-credential-vault.mjs';
 import {analyzeFuturesPosition} from './futures-position-analysis.mjs';
 import {projectCompactSLTP} from './futures-compact-pnl.mjs';
+import {validateManagedExit,manualExitControls} from './futures-manual-exit.mjs';
 import {LiveStatsLedger} from './binance-live-stats.mjs';
 import {syncOCCLiveHistory} from './futures-live-history.mjs';
 
@@ -122,7 +123,11 @@ export class BrowserFutures{
    managed:!!this.activeProtection,leverage:this.account?.leverage,fetchedAt:Date.now()});
   const compact=projectCompactSLTP({position:analysis.position,config:this.config,filters:this.filters,
    referencePrice,availableUSDT:this.account?.availableUSDT});
-  return {...analysis,compact,halted:this.halted,armed:this.armed};
+  const protectedOrder=this.activeProtection||this.previousProtection;
+  const intent=existsSync(this.intentPath)?JSON.parse(readFileSync(this.intentPath,'utf8')):null;
+  const manual=manualExitControls(analysis,protectedOrder,{
+   halted:this.halted,intentPhase:intent?.phase,busy:this.busy});
+  return {...analysis,compact,manual,halted:this.halted,armed:this.armed};
  }
  async inspect(){
   if(!this.api)throw Error('Chưa kết nối API');
