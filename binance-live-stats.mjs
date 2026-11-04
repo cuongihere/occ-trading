@@ -6,7 +6,7 @@ const number=(v,k)=>{const x=Number(v);if(!Number.isFinite(x))throw Error('Inval
 const EPS=1e-8;
 const schema=[
 "PRAGMA journal_mode=WAL","PRAGMA foreign_keys=ON",
-"CREATE TABLE IF NOT EXISTS orders (order_id TEXT PRIMARY KEY,group_id TEXT NOT NULL,client_id TEXT NOT NULL,role TEXT NOT NULL,side TEXT NOT NULL)",
+"CREATE TABLE IF NOT EXISTS orders (order_id TEXT PRIMARY KEY,group_id TEXT NOT NULL,client_id TEXT NOT NULL,role TEXT NOT NULL,side TEXT NOT NULL,synced_at INTEGER NOT NULL DEFAULT 0)",
 "CREATE TABLE IF NOT EXISTS fills (fill_id TEXT PRIMARY KEY,order_id TEXT NOT NULL REFERENCES orders(order_id),side TEXT NOT NULL,qty REAL NOT NULL,price REAL NOT NULL,realized REAL NOT NULL,fee REAL NOT NULL,asset TEXT NOT NULL,filled_at INTEGER NOT NULL)"
 ].join(';')+';';
 export const emptyLiveReport=()=>({source:'BINANCE_VERIFIED_OCC_ONLY',asOf:null,registeredOrders:0,
@@ -18,7 +18,12 @@ export const emptyLiveReport=()=>({source:'BINANCE_VERIFIED_OCC_ONLY',asOf:null,
  'Hiện chưa có bộ thực thi lệnh thật; khi chỉ chạy Paper/Preview sẽ không có giao dịch thực.']});
 export class LiveStatsLedger{
  #db;
- constructor(path){this.#db=new DatabaseSync(path);this.#db.exec(schema);}
+ constructor(path){
+  this.#db=new DatabaseSync(path);this.#db.exec(schema);
+  // Upgrade any ledger file created by an older OCC release without losing fills.
+  if(!this.#db.prepare('PRAGMA table_info(orders)').all().some(x=>x.name==='synced_at'))
+   this.#db.exec('ALTER TABLE orders ADD COLUMN synced_at INTEGER NOT NULL DEFAULT 0');
+ }
  register({orderId,groupId,clientId,role,side}){
   if(!/^[0-9]{1,24}$/.test(String(orderId))||!/^OCCBTC-[A-Za-z0-9_-]{1,29}$/.test(clientId||'')||
      !/^[A-Za-z0-9_-]{1,55}$/.test(groupId||'')||
@@ -26,10 +31,16 @@ export class LiveStatsLedger{
      !['BUY','SELL'].includes(side))throw Error('Invalid OCCBTC order registration');
   const item=[String(orderId),groupId,clientId,role,side];
   const existing=this.#db.prepare('SELECT * FROM orders WHERE order_id=?').get(item[0]);
-  if(existing){if(Object.values(existing).some((v,i)=>v!==item[i]))throw Error('Conflicting order registration');return false;}
-  this.#db.prepare('INSERT INTO orders VALUES (?,?,?,?,?)').run(...item);return true;
+  if(existing){if(['order_id','group_id','client_id','role','side'].some((k,i)=>existing[k]!==item[i]))throw Error('Conflicting order registration');return false;}
+  this.#db.prepare('INSERT INTO orders(order_id,group_id,client_id,role,side) VALUES (?,?,?,?,?)').run(...item);return true;
  }
  orders(){return this.#db.prepare('SELECT * FROM orders ORDER BY rowid').all();}
+ dueOrders(limit=24){return this.#db.prepare(
+  'SELECT * FROM orders ORDER BY synced_at ASC,rowid DESC LIMIT ?'
+ ).all(limit);}
+ markChecked(orderId,at=Date.now()){
+  this.#db.prepare('UPDATE orders SET synced_at=? WHERE order_id=?').run(at,String(orderId));
+ }
  ingest(rows){
   if(!Array.isArray(rows))throw Error('Expected Binance userTrades array');
   const valid=new Map(this.orders().map(o=>[o.order_id,o]));
@@ -110,12 +121,12 @@ export function readLiveReport(path){
 }
 export async function syncKnownOrderFills(reader,ledger){
  const orders=ledger.orders();
- if(orders.length>80)throw Error('Over 80 registered orders: use batched sync');
  let added=0;
- for(const o of orders){
+ for(const o of (typeof ledger.dueOrders==='function'?ledger.dueOrders(24):orders.slice(-24))){
   const rows=await reader.get('/fapi/v1/userTrades',{symbol:'BTCUSDT',orderId:o.order_id,limit:1000});
   if(!Array.isArray(rows)||rows.length>=1000)throw Error('Binance fills incomplete; no partial total published');
   added+=ledger.ingest(rows);
+  ledger.markChecked?.(o.order_id);
  }
  return {tracked:orders.length,newFills:added,report:ledger.report()};
 }
