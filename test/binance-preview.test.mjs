@@ -109,7 +109,7 @@ test('Binance status shows only four compact SL/TP projections, without separate
   'compactSLshare','compactTP1share','compactTP2share','compactTP3share',
   'compactSLprice','compactTP1price','compactTP2price','compactTP3price',
   'compactSLpnl','compactTP1pnl','compactTP2pnl','compactTP3pnl',
-  'compactSLmeta','compactTP1meta','compactTP2meta','compactTP3meta','slTpRefresh'])
+  'compactSLmeta','compactTP1meta','compactTP2meta','compactTP3meta','compactUnverified','slTpRefresh'])
   assert.match(main,new RegExp('id="'+id+'"'),'Missing compact position element: '+id);
  assert.equal((main.match(/class="compactRow"/g)||[]).length,4);
  assert.doesNotMatch(html,/<section class="riskDashboard"/);
@@ -127,6 +127,7 @@ test('Binance status shows only four compact SL/TP projections, without separate
  assert.match(html,/\$\('slTpRefresh'\)\.onclick=async/);
  assert.match(html,/row\.hidden=false/);
  assert.match(html,/không phải lợi nhuận Binance/);
+ assert.match(html,/Lệnh Algo trên Binance chưa xác minh thuộc OCC/);
  assert.doesNotMatch(html,/plan\.basis==='illustration'/);
  assert.match(html,/setInterval\(refreshPositionAnalysis,12000\)/);
  assert.match(html,/fetch\('\/api\/binance\/position-analysis'/);
