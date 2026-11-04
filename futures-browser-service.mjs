@@ -205,6 +205,7 @@ export class BrowserFutures{
    if(remember===true)this.vault.save({apiKey,apiSecret});
    else if(remember===false&&this.vault.exists())this.vault.delete();
    this.log('CONNECTED','Đã xác minh Binance Futures thật; Auto mặc định OFF');
+   await this.refreshRealHistory({force:true});
    // Only a completed OCC-protected position that is now fully FLAT may
    // clear its stale restart checkpoint automatically. Never auto-arm.
    await this.reconcileClosedAfterReconnect();
@@ -441,6 +442,8 @@ export class BrowserFutures{
    side:from==='LONG'?'SELL':'BUY',type:'MARKET',reduceOnly:'true',quantity:String(qty),
    newClientOrderId:closeId,newOrderRespType:'RESULT'});
   if(!ack?.orderId||ack.status!=='FILLED')throw Error('Reduce-only close not confirmed FILLED');
+  this.registerRealOrder({orderId:ack.orderId,groupId:managed.entry.clientPrefix,
+   clientId:closeId,role:'REVERSE',side:from==='LONG'?'SELL':'BUY'});
   const flat=await this.inspect();
   if(flat.positionBTC!==0)throw Error('Binance did not confirm BTCUSDT FLAT');
   const remaining=await this.api.get('/fapi/v1/openAlgoOrders',{symbol:'BTCUSDT'});
@@ -497,6 +500,8 @@ this.saveIntent({phase:'ENTRY_SENDING',clientId,side:signal.side,barTime:signal.
     quantity:String(plan.qtyBTC),newClientOrderId:clientId,newOrderRespType:'RESULT'});
    if(!response?.orderId)throw Error('Binance không xác nhận orderId Entry');
    this.saveIntent({phase:'ENTRY_ACK',clientId,orderId:String(response.orderId),side:signal.side});
+   this.registerRealOrder({orderId:response.orderId,groupId:clientId,clientId,
+    role:'ENTRY',side:signal.side==='LONG'?'BUY':'SELL'});
    const coordinator=new ProtectionCoordinator({api:this.api,
     checkpoint:new ProtectionCheckpoint(this.protectionPath),settings:this.config,
     notify:note=>this.log('CRITICAL',note.reason)});
