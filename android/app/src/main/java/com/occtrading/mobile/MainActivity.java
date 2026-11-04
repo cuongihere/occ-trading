@@ -167,9 +167,8 @@ public final class MainActivity extends Activity {
         "/fapi/v1/order","/fapi/v1/algoOrder","/fapi/v1/allOrders",
         "/fapi/v1/allAlgoOrders","/fapi/v1/userTrades","/fapi/v1/income"));
     private static boolean allowSigned(String method,String path) {
-        return method.equals("GET") && SIGNED_GET.contains(path) ||
-            method.equals("POST") && (path.equals("/fapi/v1/order") || path.equals("/fapi/v1/algoOrder") || path.equals("/fapi/v1/leverage")) ||
-            method.equals("DELETE") && path.equals("/fapi/v1/algoOrder");
+        // Trading writes remain blocked until the Android execution/checkpoint flow is fully tested.
+        return method.equals("GET") && SIGNED_GET.contains(path);
     }
     private static boolean publicAllowed(String path) {
         return path.equals("/fapi/v1/time") || path.equals("/fapi/v1/exchangeInfo") ||
