@@ -5,7 +5,7 @@
 
     <application
         android:allowBackup="false"
-        android:label="OCC Trading (Preview)"
+        android:label="OCC Trading"
         android:usesCleartextTraffic="false"
         android:theme="@android:style/Theme.Material.NoActionBar"
         android:icon="@android:drawable/ic_menu_compass">
