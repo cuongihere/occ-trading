@@ -148,7 +148,12 @@ const server=createServer(async(req,res)=>{
 if(req.url==='/api/binance/live-status'){res.setHeader('Content-Type','application/json;charset=utf-8');return res.end(JSON.stringify({...browserFutures.snapshot(),marketHealthy:feed.healthy(),marketState:feed.state}));}
  if(req.url==='/api/binance/position-analysis'){
   res.setHeader('Content-Type','application/json;charset=utf-8');
-  try{return res.end(JSON.stringify(await browserFutures.positionAnalysis()));}
+  try{
+   const quote=btcMarketQuote.snapshot({healthy:feed.healthy(),state:feed.state});
+   return res.end(JSON.stringify(await browserFutures.positionAnalysis({
+    referencePrice:quote.live===true?quote.lastPrice:null
+   })));
+  }
   catch(e){res.writeHead(503);return res.end(JSON.stringify({status:'unavailable',message:e.message}));}
  }
  if(req.url==='/api/binance/live-report'){res.setHeader('Content-Type','application/json;charset=utf-8');return res.end(JSON.stringify(readLiveReport(resolve(dir,'binance-live-stats.sqlite'))));}
