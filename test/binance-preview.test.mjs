@@ -139,7 +139,7 @@ test('Binance status shows only four compact SL/TP projections, without separate
  assert.match(html,/id="incomeAuditSummary"/);
  assert.match(html,/t\.netBinanceUSDT===null/);
  assert.match(html,/s\.binanceAuditedClosed/);
- assert.match(html,/nhóm chưa ghép đủ fill/);
+ assert.match(html,/nhóm (OCC )?chưa ghép đủ fill/);
  assert.match(read('futures-transport.mjs'),/'\/fapi\/v1\/income'/);
  const js=html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
  assert.ok(js);assert.doesNotThrow(()=>new Function(js));
