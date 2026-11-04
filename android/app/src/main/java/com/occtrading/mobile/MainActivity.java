@@ -46,6 +46,7 @@ public final class MainActivity extends Activity {
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService network = Executors.newSingleThreadExecutor();
     private final SecureRandom random = new SecureRandom();
+    private final Object checkpointGuard = new Object();
     private WebView browser;
     private volatile boolean destroyed = false;
     private volatile String apiKey = null, apiSecret = null;
@@ -109,7 +110,7 @@ public final class MainActivity extends Activity {
     }
     private static String requestNetwork(String method,String path,String parameters,String key) throws Exception {
         if(!path.startsWith("/fapi/v") || path.contains("..") || path.contains("://")) throw new SecurityException("Invalid path");
-        String url=API+path+(method.equals("GET")&&parameters.length()>0?"?"+parameters:"");
+        String url=API+path+((method.equals("GET")||method.equals("DELETE"))&&parameters.length()>0?"?"+parameters:"");
         HttpURLConnection conn=(HttpURLConnection)new URL(url).openConnection();
         try {
             conn.setConnectTimeout(7000);conn.setReadTimeout(10000);
@@ -117,7 +118,7 @@ public final class MainActivity extends Activity {
             conn.setRequestMethod(method);
             conn.setRequestProperty("Accept","application/json");
             if(key!=null)conn.setRequestProperty("X-MBX-APIKEY",key);
-            if(!method.equals("GET")){
+            if(method.equals("POST")){
                 conn.setDoOutput(true);
                 conn.setRequestProperty("Content-Type","application/x-www-form-urlencoded");
                 byte[] bytes=parameters.getBytes(StandardCharsets.UTF_8);
@@ -155,6 +156,7 @@ public final class MainActivity extends Activity {
         if(apiKey==null || apiSecret==null)throw new SecurityException("API chưa kết nối");
         if(!allowSigned(method,path))throw new SecurityException("Endpoint không được phép");
         clockSync();
+        if(!method.equals("GET")) acquireMutationLease(method,path,args);
         JSONObject p=new JSONObject(args.toString());
         p.put("timestamp",System.currentTimeMillis()+serverOffset);
         p.put("recvWindow",5000);
@@ -167,9 +169,71 @@ public final class MainActivity extends Activity {
         "/fapi/v1/order","/fapi/v1/algoOrder","/fapi/v1/allOrders",
         "/fapi/v1/allAlgoOrders","/fapi/v1/userTrades","/fapi/v1/income"));
     private static boolean allowSigned(String method,String path) {
-        // Trading writes remain blocked until the Android execution/checkpoint flow is fully tested.
-        return method.equals("GET") && SIGNED_GET.contains(path);
+        if(method.equals("GET"))return SIGNED_GET.contains(path);
+        if(method.equals("POST"))return path.equals("/fapi/v1/order")||
+            path.equals("/fapi/v1/algoOrder")||path.equals("/fapi/v1/leverage");
+        return method.equals("DELETE")&&path.equals("/fapi/v1/algoOrder");
     }
+    // Native checkpoint lease: permit exactly one mutation per durable intent.
+    // An unknown Binance ACK must never cause an automatic duplicate POST/DELETE.
+    private void acquireMutationLease(String method,String path,JSONObject p) throws Exception {
+        synchronized(checkpointGuard){
+            SharedPreferences pref=getPreferences(MODE_PRIVATE);
+            JSONObject state=new JSONObject(pref.getString("checkpoint","{}"));
+            JSONObject intent=state.optJSONObject("intent");
+            if(intent==null||state.optBoolean("halted",false)||intent.optBoolean("sent",false))
+                throw new SecurityException("Lệnh không có checkpoint hợp lệ hoặc đã gửi");
+            String phase=state.optString("phase"),kind=intent.optString("kind");
+            if(!"BTCUSDT".equals(p.optString("symbol")))
+                throw new SecurityException("Chỉ giao dịch BTCUSDT");
+            boolean valid=false;
+            if("POST".equals(method)&&"/fapi/v1/order".equals(path)&&
+                "MARKET".equals(p.optString("type"))&&"BOTH".equals(p.optString("positionSide"))){
+                boolean entry="ENTRY_SENDING".equals(phase)&&"ENTRY".equals(kind)&&
+                    p.optString("newClientOrderId").equals(intent.optString("clientId"))&&
+                    p.optString("side").equals("LONG".equals(intent.optString("side"))?"BUY":"SELL")&&
+                    !p.optBoolean("reduceOnly",false)&&
+                    Math.abs(p.optDouble("quantity")-intent.optDouble("qty"))<1e-8;
+                boolean close="MANUAL_SENDING".equals(phase)&&"CLOSE".equals(kind)&&
+                    p.optString("newClientOrderId").equals(intent.optString("clientId"))&&
+                    "true".equals(p.optString("reduceOnly"))&&
+                    Math.abs(p.optDouble("quantity")-intent.optDouble("qty"))<1e-8;
+                JSONObject e=state.optJSONObject("entry");
+                if(close)close=e!=null&&
+                    p.optString("side").equals("LONG".equals(e.optString("side"))?"SELL":"BUY");
+                valid=entry||close;
+            }else if("POST".equals(method)&&"/fapi/v1/algoOrder".equals(path)&&
+                 "PROTECTION_SENDING".equals(phase)&&"ALGO".equals(kind)&&
+                 "BOTH".equals(p.optString("positionSide"))&&
+                 "CONDITIONAL".equals(p.optString("algoType"))&&
+                 "CONTRACT_PRICE".equals(p.optString("workingType"))&&
+                 p.optString("clientAlgoId").equals(intent.optString("clientId"))){
+                JSONObject e=state.optJSONObject("entry");
+                String role=intent.optString("role");
+                valid=e!=null&&
+                    p.optString("side").equals("LONG".equals(e.optString("side"))?"SELL":"BUY")&&
+                    p.optString("clientAlgoId").equals(e.optString("clientId")+"-"+role)&&
+                    (("SL".equals(role)&&"STOP_MARKET".equals(p.optString("type"))&&
+                        "true".equals(p.optString("closePosition")))||
+                     (role.matches("TP[123]")&&"TAKE_PROFIT_MARKET".equals(p.optString("type"))&&
+                        "true".equals(p.optString("reduceOnly"))&&p.optDouble("quantity")>0));
+            }else if("DELETE".equals(method)&&"/fapi/v1/algoOrder".equals(path)){
+                valid="CANCEL".equals(kind)&&
+                    ("TP_CANCEL_SENDING".equals(phase)||"CLEANUP_SENDING".equals(phase))&&
+                    p.optString("algoId").equals(intent.optString("algoId"));
+            }else if("POST".equals(method)&&"/fapi/v1/leverage".equals(path)){
+                valid="LEVERAGE_SENDING".equals(phase)&&
+                    p.optInt("leverage")==intent.optInt("value")&&
+                    intent.optInt("value")>=1&&intent.optInt("value")<=20;
+            }
+            if(!valid)throw new SecurityException("Lệnh không khớp checkpoint OCC");
+            intent.put("sent",true);
+            state.put("intent",intent);
+            if(!pref.edit().putString("checkpoint",state.toString()).commit())
+                throw new SecurityException("Lỗi ghi trạng thái lệnh trước Binance");
+        }
+    }
+
     private static boolean publicAllowed(String path) {
         return path.equals("/fapi/v1/time") || path.equals("/fapi/v1/exchangeInfo") ||
            path.equals("/fapi/v1/klines?symbol=BTCUSDT&interval=4h&limit=500") ||
@@ -222,7 +286,9 @@ public final class MainActivity extends Activity {
             try {
                 JSONObject test=new JSONObject(json);
                 if(!test.has("phase") || !test.has("config"))return false;
-                return getPreferences(MODE_PRIVATE).edit().putString("checkpoint",json).commit();
+                synchronized(checkpointGuard){
+                    return getPreferences(MODE_PRIVATE).edit().putString("checkpoint",json).commit();
+                }
             }catch(Exception e){return false;}
         }
         @JavascriptInterface public String newPrefix() {
