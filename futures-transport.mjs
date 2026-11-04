@@ -4,7 +4,7 @@ const HOSTS=Object.freeze({demo:'https://demo-fapi.binance.com',production:'http
 const GETS=new Set(['/fapi/v1/time','/fapi/v1/exchangeInfo','/fapi/v1/ticker/price','/fapi/v2/account',
  '/fapi/v3/positionRisk','/fapi/v1/positionSide/dual','/fapi/v1/symbolConfig',
  '/fapi/v1/openOrders','/fapi/v1/openAlgoOrders','/fapi/v1/allOrders','/fapi/v1/allAlgoOrders',
- '/fapi/v1/order','/fapi/v1/algoOrder','/fapi/v1/userTrades']);
+ '/fapi/v1/order','/fapi/v1/algoOrder','/fapi/v1/userTrades','/fapi/v1/income']);
 const POSTS=new Set(['/fapi/v1/order','/fapi/v1/algoOrder','/fapi/v1/leverage']);
 const DELETES=new Set(['/fapi/v1/algoOrder']);
 export class FuturesTransport{

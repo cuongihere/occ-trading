@@ -115,9 +115,12 @@ test('Binance status shows only four compact SL/TP projections, without separate
  assert.doesNotMatch(html,/<div class="panel riskLevelsPanel"|<div class="panel riskScenariosPanel"/);
  assert.doesNotMatch(html,/id="riskLevels"|id="riskScenarios"/);
  assert.match(html,/function showPositionAnalysis\(data\)/);
- assert.match(html,/plan\.basis==='illustration'/);
- assert.match(html,/row\.effectiveSharePercent/);
- assert.match(html,/row\.configuredSharePercent/);
+ assert.match(html,/\$\('positionAnalysis'\)\.hidden=!positionOpen/);
+ assert.match(html,/\.compactRow\[hidden\]\{display:none!important\}/);
+ assert.match(html,/x\.active&&x\.confirmed/);
+ assert.match(html,/x\.origin!=='CHƯA_XÁC_MINH'/);
+ assert.match(html,/x\.clientId\?\.endsWith\('-'\+role\)/);
+ assert.doesNotMatch(html,/plan\.basis==='illustration'/);
  assert.match(html,/setInterval\(refreshPositionAnalysis,12000\)/);
  assert.match(html,/fetch\('\/api\/binance\/position-analysis'/);
  assert.match(server,/req\.url==='\/api\/binance\/position-analysis'/);
@@ -125,6 +128,11 @@ test('Binance status shows only four compact SL/TP projections, without separate
  assert.match(service,/projectCompactSLTP/);
  assert.match(build,/'futures-compact-pnl\.mjs'/);
  assert.doesNotMatch(html,/innerHTML\s*=/);
+ assert.match(html,/id="incomeAuditSummary"/);
+ assert.match(html,/t\.netBinanceUSDT===null/);
+ assert.match(html,/s\.binanceAuditedClosed/);
+ assert.match(html,/nhóm chưa ghép đủ fill/);
+ assert.match(read('futures-transport.mjs'),/'\/fapi\/v1\/income'/);
  const js=html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
  assert.ok(js);assert.doesNotThrow(()=>new Function(js));
 });

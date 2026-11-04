@@ -81,10 +81,27 @@ export async function discoverOCCOrderIds(api,ledger,{checkpoint=null,intent=nul
  }
  return {discovered,warnings};
 }
+export async function syncBinanceIncome(api,ledger,{now=Date.now()}={}){
+ // Binance Income is account-level, unlike trade-specific userTrades.
+ // Use one bounded seven-day window; do not claim exhaustive data if truncated.
+ const rows=await api.get('/fapi/v1/income',{
+  symbol:'BTCUSDT',startTime:now-7*86400000,endTime:now,limit:1000
+ });
+ if(!Array.isArray(rows)||rows.length>=1000)
+  throw Error('Binance Income có thể chưa đầy đủ; từ chối kết quả phân trang thiếu.');
+ return {newIncome:ledger.ingestIncome(rows),incomeCheckedAt:now};
+}
 export async function syncOCCLiveHistory(api,ledger,inputs={}){
  const found=await discoverOCCOrderIds(api,ledger,inputs);
+ let incomeUpdated=false;
+ if(inputs.syncIncome===true){
+  try{
+   const audit=await syncBinanceIncome(api,ledger);
+   incomeUpdated=true;found.newIncome=audit.newIncome;
+  }catch(e){found.warnings.push('Binance Income chưa đối soát: '+e.message);}
+ }
  let synced={tracked:ledger.orders().length,newFills:0,report:ledger.report()};
  try{synced=await syncKnownOrderFills(api,ledger);}
  catch(e){found.warnings.push('Không đồng bộ đầy đủ được fill Binance: '+e.message);}
- return {...found,...synced};
+ return {...found,...synced,report:ledger.report(),incomeUpdated};
 }

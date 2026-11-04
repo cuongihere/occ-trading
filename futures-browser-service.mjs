@@ -30,7 +30,7 @@ export class BrowserFutures{
   this.api=null;this.environment=null;this.account=null;this.filters=null;
   this.armed=false;this.busy=false;this.halted=false;this.error=null;this.events=[];this.activeProtection=null;
   this.recoveryStatus='idle';this.lastRecoveryCheck=null;this.restoreTask=null;
-  this.historySyncTask=null;this.lastHistorySync=0;this.historyError=null;this.historyCount=0;
+  this.historySyncTask=null;this.lastHistorySync=0;this.lastIncomeSync=0;this.historyError=null;this.historyCount=0;
   const unresolved=existsSync(this.intentPath)?JSON.parse(readFileSync(this.intentPath,'utf8')):null;
   const prior=existsSync(this.protectionPath)?new ProtectionCheckpoint(this.protectionPath).load():null;
   this.previousProtection=prior&&prior.phase!=='IDLE'?prior:null; // ID reference only, never resume order management.
@@ -57,7 +57,11 @@ export class BrowserFutures{
    try{
     const intent=existsSync(this.intentPath)?JSON.parse(readFileSync(this.intentPath,'utf8')):null;
     const checkpoint=this.activeProtection||this.previousProtection;
-    const result=await syncOCCLiveHistory(this.api,ledger,{checkpoint,intent});
+    // Income endpoint has a high Binance request weight; only sample every
+    // five minutes, or at an explicit manual refresh/reconnect.
+    const syncIncome=force||Date.now()-this.lastIncomeSync>=300000;
+    const result=await syncOCCLiveHistory(this.api,ledger,{checkpoint,intent,syncIncome});
+    if(result.incomeUpdated)this.lastIncomeSync=Date.now();
     this.historyCount=result.report.summary.closed;
     this.historyError=result.warnings.length?result.warnings.slice(0,2).join(' | '):null;
     this.lastHistorySync=Date.now();
@@ -102,7 +106,8 @@ export class BrowserFutures{
   return {connected:!!this.api&&!!this.account,environment:this.environment,armed:this.armed,
    realFuturesOnly:true,halted:this.halted,busy:this.busy,error:this.error,
    recoveryStatus:this.recoveryStatus,lastRecoveryCheck:this.lastRecoveryCheck,
-   lastHistorySync:this.lastHistorySync,historyError:this.historyError,historyCount:this.historyCount,
+   lastHistorySync:this.lastHistorySync,lastIncomeSync:this.lastIncomeSync,
+   historyError:this.historyError,historyCount:this.historyCount,
    protectedPosition:this.activeProtection?{entry:this.activeProtection.entry,stop:this.activeProtection.stop,tps:this.activeProtection.tps}:null,
    config:this.config,account:this.account,credentialSaved:this.vault.exists(),lastAccountSync:this.lastAccountSync,
    events:this.events.slice(-20),
