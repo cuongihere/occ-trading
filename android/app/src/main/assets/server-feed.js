@@ -2,7 +2,7 @@
 // Official migration: https://developers.binance.com/en/docs/products/derivatives-trading-usds-futures/websocket-market-streams/Important-WebSocket-Change-Notice
 const REST = 'https://fapi.binance.com';
 const STREAM = 'wss://fstream.binance.com/market/stream?streams=btcusdt@aggTrade/btcusdt@markPrice@1s/btcusdt@kline_15m';
-const M15 = 900000;
+const FEED_M15 = 900000;
 class BinanceFeed {
   constructor(callbacks = {}) {
     this.cb = callbacks; this.generation = 0; this.state = 'disconnected'; this.offset = 0;
@@ -58,8 +58,8 @@ class BinanceFeed {
       const priceFilter = symbol.filters.find(f=>f.filterType==='PRICE_FILTER');
       if (!lot || !(Number(lot.stepSize)>0) || !priceFilter || !(Number(priceFilter.tickSize)>0)) throw new Error('Thiếu quy tắc khối lượng hoặc bước giá hợp đồng.');
       const now = this.now(); const closed = m15.filter(b=>Number(b[6]) < now);
-      for(let i=1;i<closed.length;i++) if(Number(closed[i][0])-Number(closed[i-1][0])!==M15) throw new Error('Lịch sử M15 có khoảng trống.');
-      if (!closed.length || now - Number(closed.at(-1)[6]) > M15 + 10000) throw new Error('Lịch sử M15 chưa cập nhật.');
+      for(let i=1;i<closed.length;i++) if(Number(closed[i][0])-Number(closed[i-1][0])!==FEED_M15) throw new Error('Lịch sử FEED_M15 có khoảng trống.');
+      if (!closed.length || now - Number(closed.at(-1)[6]) > FEED_M15 + 10000) throw new Error('Lịch sử FEED_M15 chưa cập nhật.');
       this.lastClosed = Number(closed.at(-1)[0]);
       this.cb.onReady?.({h4,m15,now,stepSize:Number(lot.stepSize),minQty:Number(lot.minQty),minNotional:Number(notional?.notional || 0),tickSize:Number(priceFilter.tickSize)});
       // Catch-up affects indicators only: never replay buffered history as live profit.
@@ -101,7 +101,7 @@ class BinanceFeed {
       this.lastMarketTime=eventTime;
       const k=d.k; if (!k || k.i!=='15m' || !k.x) return;
       const time=Number(k.t); if(time<=this.lastClosed) return;
-      if(time!==this.lastClosed+M15) { this.reconnect('Phát hiện thiếu nến M15.'); return; }
+      if(time!==this.lastClosed+FEED_M15) { this.reconnect('Phát hiện thiếu nến FEED_M15.'); return; }
       if(Number(k.T)>=this.now()) return;
       this.lastClosed=time;
       this.cb.onCandle?.({time,open:Number(k.o),close:Number(k.c),closeTime:Number(k.T)},{live:live && this.healthy(),observedAt:this.now(),receivedAt,exchangeAt:eventTime});
