@@ -10,7 +10,7 @@ const managed={entry:{side:'LONG',orderId:'100',clientPrefix:prefix,qty:.032},
 const acct={canTrade:true,dualSidePosition:false,marginType:'ISOLATED',
  hasOtherPositions:false,openOrders:0,positionBTC:.032};
 const entryOrder={orderId:100,symbol:'BTCUSDT',side:'BUY',
- positionSide:'BOTH',clientOrderId:prefix,status:'FILLED',executedQty:'.032'};
+ positionSide:'BOTH',clientOrderId:prefix,status:'FILLED',type:'MARKET',executedQty:'.032'};
 const algos=[
  {symbol:'BTCUSDT',positionSide:'BOTH',algoId:200,clientAlgoId:prefix+'-SL',
   side:'SELL',orderType:'STOP_MARKET',closePosition:true,algoStatus:'NEW'},
