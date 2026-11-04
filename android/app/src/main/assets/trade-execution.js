@@ -45,6 +45,36 @@ p.sendAlgo=async function(request,record){
  this.cp.intent=null;this.persist();
  return record;
 };
+p.emergencyClose=async function(){
+ const entry=this.cp.entry;
+ if(!entry||this.cp.stop)throw Error('Không xác minh được vị thế thiếu STOP');
+ await this.verifyOwnership();
+ const first=await this.getSnapshot(),second=await this.getSnapshot();
+ for(const s of [first,second]){
+  if(s.side!==entry.side||!plus(s.qty,entry.qty)||s.openOrders.length||
+     s.otherPositions.length||s.algos.length)
+    throw Error('Có STOP/lệnh khác hoặc vị thế đổi; không tự đóng mù');
+ }
+ const clientId=this.newId();
+ if(!occValidId(clientId))throw Error('Không tạo được mã emergency');
+ this.cp.phase='EMERGENCY_SENDING';
+ this.cp.intent={kind:'CLOSE',clientId,qty:entry.qty,role:'EMERGENCY',sent:false};
+ this.persist();
+ const ack=await this.signed('POST','/fapi/v1/order',{
+  symbol:'BTCUSDT',positionSide:'BOTH',side:closeSide(entry.side),type:'MARKET',
+  reduceOnly:'true',quantity:String(entry.qty),newClientOrderId:clientId,newOrderRespType:'RESULT'
+ });
+ if(!ack?.orderId||ack.status!=='FILLED')throw Error('Emergency MARKET chưa xác nhận FILLED');
+ const read=await this.signed('GET','/fapi/v1/order',{symbol:'BTCUSDT',orderId:ack.orderId});
+ if(read.clientOrderId!==clientId||read.status!=='FILLED'||!read.reduceOnly||
+    !plus(Number(read.executedQty),entry.qty))
+  throw Error('Không xác nhận được emergency reduceOnly');
+ const flat=await this.getSnapshot();
+ if(flat.side||flat.algos.length||flat.openOrders.length)throw Error('Emergency chưa FLAT');
+ this.cp.phase='IDLE';this.cp.entry=null;this.cp.intent=null;this.cp.stop=null;
+ this.cp.tps=[];this.persist();
+ this.event('EMERGENCY: đã đóng BTC không có STOP, cần kiểm tra Binance');
+};
 p.enter=async function(side,price,signalId){
  return this.locked(async()=>{
   if(!this.auto||this.cp.halted||this.cp.phase!=='IDLE'||
@@ -96,8 +126,14 @@ p.enter=async function(side,price,signalId){
    this.event('Đã xác nhận '+side+' '+qty+' BTC, SL và TP1/TP2/TP3');
    return true;
   }catch(e){
-   if(started)this.halt(e.message+' · KIỂM TRA BINANCE NGAY');
-   else this.event('Bỏ qua tín hiệu: '+e.message);
+   if(started){
+    let extra='';
+    if(this.cp.entry&&!this.cp.stop){
+     try{await this.emergencyClose();extra=' · emergency MARKET đã FLAT';}
+     catch(err){extra=' · emergency không xác minh: '+err.message;}
+    }
+    this.halt(e.message+extra+' · KIỂM TRA BINANCE');
+   }else this.event('Bỏ qua tín hiệu: '+e.message);
    throw e;
   }
  });
