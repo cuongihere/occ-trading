@@ -232,40 +232,85 @@ export class BrowserFutures{
   try{return await this.restoreTask;}
   finally{this.restoreTask=null;}
  }
- // A PROTECTED entry can close through its exchange SL/TP while the app is off.
- // Re-check flat + zero orders independently; only then clear the stale checkpoint.
- // Any ambiguous/in-flight checkpoint stays HALTED for manual review.
+ // Only a previously verified OCC PROTECTED trade may have its orphaned
+ // conditional orders removed. Any foreign order remains untouched and HALTED.
+ async reconcileVerifiedClosedPosition(){
+  if(!this.api||this.environment!=='production'||this.armed||this.busy||
+    this.activeProtection||this.previousProtection?.phase!=='PROTECTED')
+   throw Error('Không thể tự dọn SL/TP khi chưa xác minh checkpoint OCC hoặc AUTO còn ON');
+  const saved=this.previousProtection,entry=saved.entry;
+  const intent=existsSync(this.intentPath)?JSON.parse(readFileSync(this.intentPath,'utf8')):null;
+  if(!entry||!saved.stop||!Array.isArray(saved.tps)||!saved.tps.length||
+     saved.inFlight||!/^OCCBTC-[a-f0-9]{14}$/.test(String(entry.clientPrefix||''))||
+     !['PROTECTED','STALE_ALGO_CANCEL_SENDING'].includes(intent?.phase))
+   throw Error('Checkpoint/intent chưa rõ nguồn gốc; không tự hủy lệnh');
+  this.busy=true;this.recoveryStatus='checking';this.lastRecoveryCheck=Date.now();
+  try{
+   // Two independent signed account snapshots before any cancellation.
+   for(let i=0;i<2;i++){
+    const a=await this.inspect();
+    if(a.positionBTC!==0||a.openOrders!==0)
+     throw Error('BTCUSDT còn vị thế hoặc lệnh thường; KHÔNG hủy SL/TP');
+   }
+   const expected=new Map();
+   for(const x of [saved.stop,...saved.tps]){
+    if(!x?.id||!x.clientId||!['SL','TP1','TP2','TP3'].includes(x.role)||
+       x.clientId!==entry.clientPrefix+'-'+x.role||
+       expected.has(String(x.id)))
+     throw Error('ID Algo không khớp checkpoint OCC; không hủy');
+    expected.set(String(x.id),x);
+   }
+   const algos=await this.api.get('/fapi/v1/openAlgoOrders',{symbol:'BTCUSDT'});
+   if(!Array.isArray(algos))throw Error('Không đọc được SL/TP đang treo');
+   const active=new Set(['NEW','ACCEPTED','PENDING_NEW']);
+   const closeSide=entry.side==='LONG'?'SELL':'BUY';
+   const toCancel=[];
+   for(const algo of algos){
+    const old=expected.get(String(algo.algoId));
+    const isStop=old?.role==='SL';
+    if(!old||algo.symbol!=='BTCUSDT'||algo.clientAlgoId!==old.clientId||
+      algo.side!==closeSide||algo.positionSide!=='BOTH'||
+      !active.has(String(algo.algoStatus))||
+      (isStop?(algo.orderType!=='STOP_MARKET'||algo.closePosition!==true):
+       (algo.orderType!=='TAKE_PROFIT_MARKET'||algo.reduceOnly!==true)))
+     throw Error('Có SL/TP ngoài OCC hoặc trạng thái không rõ; không tự hủy');
+    toCancel.push({...algo});
+   }
+   for(const algo of toCancel){
+    // Re-verify FLAT before every delete, because Binance is the authority.
+    const a=await this.inspect();
+    if(a.positionBTC!==0||a.openOrders!==0)
+     throw Error('Vị thế mới xuất hiện trong lúc đối soát; dừng hủy SL/TP');
+    this.saveIntent({phase:'STALE_ALGO_CANCEL_SENDING',
+     oldClientId:entry.clientPrefix,removingAlgoId:String(algo.algoId),at:Date.now()});
+    await this.api.del('/fapi/v1/algoOrder',{symbol:'BTCUSDT',algoId:algo.algoId});
+    this.log('STALE_ALGO_CANCELLED','Đã yêu cầu hủy SL/TP cũ #'+algo.algoId+' khi BTCUSDT FLAT.');
+   }
+   const result=await this.inspect();
+   if(result.positionBTC!==0||result.openOrders!==0||result.openAlgos!==0)
+    throw Error('Binance còn vị thế hoặc lệnh sau hủy; vẫn khóa an toàn');
+   // Only after signed Binance confirms FLAT and zero outstanding orders.
+   new ProtectionCheckpoint(this.protectionPath).save({
+    phase:'IDLE',entry:null,stop:null,tps:[],inFlight:null,halted:false
+   });
+   this.saveIntent({phase:'CLEARED',at:Date.now()});
+   this.activeProtection=null;this.previousProtection=null;this.halted=false;
+   this.error=null;this.recoveryStatus='recovered';this.lastRecoveryCheck=Date.now();
+   this.log('STALE_ALGO_CLEARED','Binance FLAT, đã dọn '+toCancel.length+
+    ' SL/TP OCC còn treo. AUTO vẫn OFF; chờ người dùng bật lại.');
+   return true;
+  }finally{this.busy=false;}
+ }
  async reconcileClosedAfterReconnect(){
   if(!this.api||this.armed||!this.halted||this.activeProtection)return false;
-  const intent=existsSync(this.intentPath)?JSON.parse(readFileSync(this.intentPath,'utf8')):null;
-  if(intent?.phase!=='PROTECTED'||this.previousProtection?.phase!=='PROTECTED'||
-     !this.previousProtection?.entry||!this.previousProtection?.stop||
-     !Array.isArray(this.previousProtection?.tps)||!this.previousProtection.tps.length||
-     this.previousProtection.inFlight){
-   this.recoveryStatus='manual_required';
-   this.log('RECONCILE_REVIEW','Chỉ tự đối soát lệnh đã xác nhận PROTECTED; các trạng thái khác cần kiểm tra thủ công.');
-   return false;
-  }
   this.recoveryStatus='checking';this.lastRecoveryCheck=Date.now();
   try{
-   // First verification comes from connect() -> inspect(); read back again.
-   const first=this.account;
-   if(!first||first.positionBTC!==0||first.openOrders!==0||first.openAlgos!==0){
-    this.recoveryStatus='position_or_orders_open';return false;
-   }
-   const second=await this.inspect();
-   if(second.positionBTC!==0||second.openOrders!==0||second.openAlgos!==0){
-    this.recoveryStatus='position_or_orders_open';return false;
-   }
-   await this.reconcileFlat(); // final fresh inspection and durable IDLE/CLEARED writes
-   this.recoveryStatus='recovered';
-   this.lastRecoveryCheck=Date.now();
-   this.log('AUTO_RECONCILED','Binance xác nhận BTCUSDT đã FLAT và không còn SL/TP; đã mở khóa. AUTO vẫn OFF.');
+   await this.reconcileVerifiedClosedPosition();
    return true;
   }catch(e){
-   this.recoveryStatus='failed';
+   this.recoveryStatus='manual_required';
    this.error='Chưa thể tự đối soát: '+e.message;
-   this.log('RECONCILE_FAILED',this.error);
+   this.log('RECONCILE_REVIEW',this.error);
    return false;
   }
  }
@@ -277,7 +322,10 @@ export class BrowserFutures{
   if(!this.api||!this.account)throw Error(this.error||'Không kết nối được Binance API; nhập lại API Key hoặc thử lại');
   this.recoveryStatus='checking';this.lastRecoveryCheck=Date.now();
   try{
-   await this.reconcileFlat();
+   if(this.halted&&this.previousProtection?.phase==='PROTECTED')
+    await this.reconcileVerifiedClosedPosition();
+   else await this.reconcileFlat();
+   await this.refreshRealHistory({force:true});
    this.recoveryStatus='recovered';this.lastRecoveryCheck=Date.now();
    return this.snapshot();
   }catch(e){
