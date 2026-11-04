@@ -348,6 +348,50 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
  .positionSection .compactRow:last-child{border-bottom:0!important}
  .positionSection .riskSummary{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+/* Independent API, Binance quote and minimized Auto setup on one desktop row. */
+.topgrid{display:grid;grid-template-columns:minmax(285px,1fr) minmax(245px,.76fr) minmax(370px,1.55fr);align-items:start;gap:10px}
+.topgrid>.panel{align-self:start}
+.pricePanel{display:flex;flex-direction:column;justify-content:center}
+.pricePanel .marketTicker{flex:1 1 auto;margin:0;width:100%;min-height:148px;max-height:none;padding:12px 10px;gap:4px;border-radius:9px}
+.pricePanel .marketTicker .quoteHeading{font-size:10px;letter-spacing:.7px}
+.pricePanel .marketTicker .quoteValue{font-size:clamp(30px,3.1vw,50px);line-height:1.05}
+.pricePanel .marketTicker .quoteMeta{font-size:10px}
+.configPanel{padding:0!important;overflow:visible!important}
+.autoConfigDetails{min-width:0}
+.autoConfigSummary{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 9px;align-items:center;padding:12px 13px;cursor:pointer;list-style:none}
+.autoConfigSummary::-webkit-details-marker{display:none}
+.autoConfigSummary::marker{content:""}
+.autoConfigHeading{font-size:14px;font-weight:750}
+.autoConfigSnapshot{grid-column:1/-1;font-size:11px;line-height:1.5;color:#9ebbd4;overflow-wrap:anywhere}
+.autoConfigControl{grid-row:1;grid-column:2;border:1px solid #405e76;border-radius:7px;background:#20364c;color:#b8dafa;padding:5px 9px;font-size:11px;white-space:nowrap}
+.autoConfigDetails[open] .autoConfigSummary{border-bottom:1px solid #334a61}
+.autoConfigBody{padding:11px 13px 12px}
+.configPanel .configPrimary{grid-template-columns:minmax(0,1.25fr) minmax(0,.75fr) minmax(0,1.25fr) minmax(0,.8fr) minmax(0,1fr)}
+.configPanel .configTargets{grid-template-columns:repeat(6,minmax(0,1fr))}
+@media(max-width:1400px){
+ .configPanel .configPrimary{grid-template-columns:repeat(6,minmax(0,1fr))}
+ .configPanel .configPrimary>label:nth-child(1){grid-column:span 2}
+ .configPanel .configPrimary>label:nth-child(2){grid-column:span 1}
+ .configPanel .configPrimary>label:nth-child(3){grid-column:span 3}
+ .configPanel .configPrimary>label:nth-child(4){grid-column:span 2}
+ .configPanel .configPrimary>label:nth-child(5){grid-column:span 4}
+ .configPanel .configTargets{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(max-width:1220px){
+ .topgrid{grid-template-columns:minmax(0,1fr) minmax(0,.95fr)}
+ .topgrid>.configPanel{grid-column:1/-1}
+}
+@media(max-width:900px){
+ .topgrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .topgrid>.configPanel{grid-column:1/-1}
+}
+@media(max-width:750px){
+ .topgrid{grid-template-columns:1fr}
+ .topgrid>.configPanel{grid-column:auto}
+ .pricePanel .marketTicker{min-height:130px}
+ .autoConfigSummary{padding:11px 12px}
+}
 </style>
 </head>
 <body>
@@ -382,6 +426,9 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
   <button id="apiReconcile" class="minor">Kiểm tra & dọn SL/TP cũ</button></div>
   <div id="apiError" class="message" role="status"></div>
   <div class="small" id="lastSync">Dữ liệu tài khoản sẽ tự cập nhật.</div>
+ 
+ </div>
+ <div class="panel pricePanel" aria-label="Giá BTCUSDT Futures trực tiếp">
  <div class="marketTicker stale" id="btcMarketTicker" aria-live="off" title="Giá khớp gần nhất BTCUSDT Perpetual từ Binance Futures, không phải giá Paper">
   <div class="quoteHeading">BTCUSDT FUTURES · LAST</div>
   <div id="btcLastPrice" class="quoteValue">—</div>
@@ -390,7 +437,13 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
  </div>
  </div>
  <div class="panel configPanel">
-  <h2>Cấu hình Auto <span class="configVersion">Multi TP v5</span></h2>
+  <details id="autoConfigDetails" class="autoConfigDetails">
+   <summary class="autoConfigSummary">
+    <span class="autoConfigHeading">Cấu hình Auto <span class="configVersion">Multi TP v5</span></span>
+    <span id="autoConfigSnapshot" class="autoConfigSnapshot">Đang đọc cấu hình...</span>
+    <span class="autoConfigControl">Chỉnh sửa ▾</span>
+   </summary>
+   <div class="autoConfigBody">
   <div class="configPrimary">
    <label>Ký quỹ (USDT)<input id="marginUSDT" type="number" step="any" min=".01"></label>
    <label>Đòn bẩy<input id="leverage" type="number" step="1" min="1" max="20"></label>
@@ -415,6 +468,8 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
   <div class="settingActions"><div class="row"><button id="save" class="primary">Lưu cấu hình</button>
 <button id="applyLeverage" class="minor" disabled>Áp dụng đòn bẩy lên Binance</button></div>
 <span id="settingStatus" class="small">Tự lưu · Auto OFF khi sửa</span></div>
+   </div>
+  </details>
  </div>
 </section>
 <section class="positionSection" aria-label="Vị thế BTCUSDT và quản lý chốt lời">
@@ -501,9 +556,20 @@ function applyConfig(c){
  $('reverseState').textContent=c.reverseOnSignal===true?'ON':'OFF';
  quantities();
 }
+function updateAutoConfigSnapshot(){
+ const display=(v,d=2)=>Number.isFinite(v)?fmt(v,d):'—';
+ const direction={BOTH:'Long & Short',LONG:'Long',SHORT:'Short'}[$('side').value]||'—';
+ const unit=$('mode').value==='Points'?' USD':'%';
+ $('autoConfigSnapshot').textContent=
+  display(val('marginUSDT'))+' USDT · '+display(val('leverage'),0)+'x · '+direction+
+  ' · SL '+display(val('sl'))+'% · TP '+
+  [val('tp1'),val('tp2'),val('tp3')].map(v=>display(v)).join('/')+unit+
+  ' · Đảo chiều '+($('reverseToggle').checked?'ON':'OFF');
+}
 function quantities(){
  const x=val('q1'),y=val('q2');
  $('q3').value=Number.isFinite(x)&&Number.isFinite(y)&&x+y<=100?fmt(100-x-y,4):'—';
+ updateAutoConfigSnapshot();
 }
 async function request(name,data={}){
  const response=await fetch('/control/live/'+name,{method:'POST',
@@ -650,6 +716,7 @@ async function refreshLive(){
   if(!reverseBusy&&s.config){
    $('reverseToggle').checked=s.config.reverseOnSignal===true;
    $('reverseState').textContent=s.config.reverseOnSignal===true?'ON':'OFF';
+   updateAutoConfigSnapshot();
   }
   $('reverseToggle').disabled=reverseBusy||s.busy;
   const desiredLeverage=Number(s.config?.leverage);
