@@ -18,9 +18,11 @@ export function analyzeFuturesPosition({riskRows,algoOrders,openOrders,checkpoin
   direction=amt>0?1:-1,entry=positive(p?.entryPrice),mark=positive(p?.markPrice),
   liq=positive(p?.liquidationPrice);
  if(side&&!entry)throw Error('Không có giá vào lệnh hợp lệ từ Binance');
- const warnings=[],known=new Set();
- if(checkpoint?.stop?.id!=null)known.add(String(checkpoint.stop.id));
- for(const x of checkpoint?.tps||[])if(x?.id!=null)known.add(String(x.id));
+ const warnings=[],known=new Map();
+ // An algoId alone does not prove ownership: verify the exchange clientAlgoId
+ // against the exact SL/TP record previously acknowledged and checkpointed.
+ for(const x of [checkpoint?.stop,...(checkpoint?.tps||[])])
+  if(x?.id!=null&&x?.clientId)known.set(String(x.id),String(x.clientId));
  const orders=algoOrders.filter(o=>o?.symbol==='BTCUSDT').map(o=>{
   const kind=String(o.orderType||o.type||'UNKNOWN').toUpperCase();
   const price=positive(o.triggerPrice),quantity=positive(o.quantity);
@@ -37,7 +39,8 @@ export function analyzeFuturesPosition({riskRows,algoOrders,openOrders,checkpoin
   return {id,clientId:String(o.clientAlgoId||''),role,status,active,side:String(o.side||''),
    price,quantity:effectiveQty,closeAll:isTrue(o.closePosition),
    reduceOnly:isTrue(o.reduceOnly),workingType:String(o.workingType||''),
-   origin:id&&known.has(id)?(managed?'BOT_ĐANG_QUẢN_LÝ':'KHỚP_CHECKPOINT'):'CHƯA_XÁC_MINH',
+   origin:id&&known.get(id)===String(o.clientAlgoId||'')?
+    (managed?'BOT_ĐANG_QUẢN_LÝ':'KHỚP_CHECKPOINT'):'CHƯA_XÁC_MINH',
    validStop:!!validStop,validTp:!!validTp};
  });
  const normalCount=openOrders.filter(o=>o?.symbol==='BTCUSDT').length;
@@ -83,7 +86,7 @@ export function analyzeFuturesPosition({riskRows,algoOrders,openOrders,checkpoin
   return direction*((a.price??0)-(b.price??0));
  });
  if(orders.some(o=>o.origin==='CHƯA_XÁC_MINH'))
-  warnings.push('Một số lệnh đang mở không khớp ID quản lý bot/checkpoint. Giá và khối lượng được đọc từ sàn nhưng chưa xác định chủ sở hữu.');
+  warnings.push('Một số lệnh Binance không khớp cả Algo ID và Client Algo ID trong checkpoint OCC; không xác nhận thuộc bot.');
  if(stops.some(o=>o.origin==='CHƯA_XÁC_MINH'))
   warnings.push('SL đang hiện trên Binance nhưng chưa khớp ID của OCC; cần đối soát thủ công.');
  const totalTpQty=tps.reduce((a,o)=>a+(o.quantity||0),0);
