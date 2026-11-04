@@ -556,7 +556,7 @@ function renderBinanceIncomeKpi(){
  const syncAge=incomeLastCheckedAt==null?Infinity:Date.now()-Number(incomeLastCheckedAt);
  const fresh=incomeIsConnected&&syncAge>=0&&syncAge<11*60*1000&&
   ia?.available===true&&Number.isFinite(Number(ia.totalUSDT));
- $('binanceIncomeTotal').textContent=fresh?fmt(ia.totalUSDT,2):'—';
+ $('binanceIncomeTotal').textContent=fresh?fmt(ia.totalUSDT,3):'—';
  color($('binanceIncomeTotal'),fresh?ia.totalUSDT:null);
  $('incomeKpiDetail').textContent=fresh?
   'USDT · Realized + phí + funding':
