@@ -29,7 +29,7 @@ export function validateManagedExit({managed,account,algos,entryOrder,filters,ro
     !(Number(entryOrder.executedQty)>=qty-1e-9))
   throw Error('Không xác minh được Entry do OCC đặt trên Binance');
  const step=positive(filters?.stepSize),minQty=positive(filters?.minQty);
- if(!step||!minQty||Math.abs(floorStep(qty,step)-qty)>1e-9)
+ if(!step||!minQty||qty<minQty||Math.abs(floorStep(qty,step)-qty)>1e-9)
   throw Error('Khối lượng vị thế không hợp lệ theo LOT_SIZE Binance');
  if(!Array.isArray(algos))throw Error('Không đọc được các lệnh SL/TP trên Binance');
  const expected=new Map();
