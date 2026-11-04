@@ -226,7 +226,7 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
    <button class="primary" id="apiConnect">Kết nối & lưu API</button>
   </details>
   <div class="apiActions"><button id="apiDisconnect">Ngắt kết nối</button><button id="apiForget" class="minor">Xóa API đã lưu</button>
-  <button id="apiReconcile" class="minor">Kiểm tra / mở khóa</button></div>
+  <button id="apiReconcile" class="minor">Kiểm tra & dọn SL/TP cũ</button></div>
   <div id="apiError" class="message" role="status"></div>
   <div class="small" id="lastSync">Dữ liệu tài khoản sẽ tự cập nhật.</div>
  <div class="marketTicker stale" id="btcMarketTicker" aria-live="off" title="Giá khớp gần nhất BTCUSDT Perpetual từ Binance Futures, không phải giá Paper">
@@ -315,7 +315,7 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
  </div>
  <div class="panel">
   <div class="historyHead"><h2>Lịch sử lệnh OCC trên Binance</h2><div class="row"><button class="minor" id="statsRefresh">Làm mới</button><button class="minor" id="statsCsv">Xuất CSV</button></div></div>
-  <div class="small" id="realOpen" style="margin-bottom:8px"></div>
+  <div class="small" id="realOpen" style="margin-bottom:8px"></div><div class="small" id="historySyncStatus" role="status"></div>
   <div class="tableScroll"><table>
    <thead><tr><th>Vào / Ra (VN)</th><th>Chiều</th><th>BTC</th><th>Entry → Exit</th><th>TP/SL</th><th>Gross</th><th>Phí</th><th>Net USDT</th><th>Kết quả</th></tr></thead>
    <tbody id="realHistory"><tr><td colspan="9">Chưa có lệnh OCC đã xác minh.</td></tr></tbody>
@@ -458,7 +458,7 @@ $('apiReconcile').onclick=async()=>{
  $('apiError').textContent='Đang kết nối/đọc lại vị thế và SL/TP từ Binance…';
  try{
   await request('reconcile');
-  $('apiError').textContent='Binance xác nhận BTCUSDT không còn vị thế/lệnh. Đã mở khóa; bạn có thể bật lại AUTO sau khi đồng bộ.';
+  $('apiError').textContent='Đã xác minh BTCUSDT FLAT và không còn SL/TP OCC treo; AUTO vẫn OFF.';
  }catch(e){
   $('apiError').textContent='Không mở khóa: '+e.message;
  }
@@ -532,12 +532,16 @@ $('autoHint').textContent=s.halted?'Auto vẫn ON nhưng đang khóa lệnh đ�
   $('apiReconcile').disabled=s.armed||s.busy||(!s.connected&&!s.credentialSaved);
   if(!s.halted&&s.recoveryStatus==='recovered'&&!s.armed){
    $('apiReconcile').textContent='Đã đối soát · Kiểm tra lại';
-  }else $('apiReconcile').textContent=s.connected?'Kiểm tra / mở khóa':'Kết nối lại / kiểm tra';
+  }else $('apiReconcile').textContent=s.connected?'Kiểm tra & dọn SL/TP OCC':'Kết nối lại / kiểm tra';
   if(s.recoveryStatus==='checking')$('apiError').textContent='Đang xác minh vị thế và các lệnh SL/TP thực tế trên Binance…';
   else if(s.recoveryStatus==='recovered'&&!s.halted){
-   $('apiError').textContent='Đã xác minh BTCUSDT FLAT, không còn lệnh treo. Đã mở khóa; AUTO vẫn OFF.';
+   $('apiError').textContent='Đã xác minh BTCUSDT FLAT, dọn lệnh OCC còn treo và mở khóa; AUTO vẫn OFF.';
   }
   $('lastSync').textContent=s.lastAccountSync?'Đồng bộ tài khoản: '+vn(s.lastAccountSync):'Chưa có đồng bộ tài khoản.';
+  $('historySyncStatus').textContent=s.historyError?
+   'Lịch sử còn thiếu dữ liệu: '+s.historyError:
+   s.lastHistorySync?'Đã đồng bộ OCC lúc '+vn(s.lastHistorySync):
+   'Lịch sử OCC chưa đồng bộ với Binance.';
   $('lastUpdate').textContent=s.connected?'Binance thật · Cập nhật '+vn(s.lastAccountSync):'Binance thật · Offline';
  }catch(e){$('connection').textContent='MẤT KẾT NỐI APP';$('connection').className='status bad';$('apiError').textContent=e.message;$('enabled').disabled=true;}
 }
@@ -582,7 +586,13 @@ async function refreshReport(){
   }
  }catch(e){$('statsStatus').textContent='Lỗi báo cáo: '+e.message;}
 }
-$('statsRefresh').onclick=refreshReport;
+$('statsRefresh').onclick=async()=>{
+ $('statsRefresh').disabled=true;
+ $('historySyncStatus').textContent='Đang đồng bộ fill lịch sử OCC từ Binance…';
+ try{await request('history-refresh');}
+ catch(e){$('historySyncStatus').textContent='Không thể làm mới: '+e.message;}
+ finally{await refreshReport();$('statsRefresh').disabled=false;}
+};
 $('statsCsv').onclick=()=>{
  if(!liveReport?.positions?.length){$('statsStatus').textContent='Chưa có lệnh để xuất';return;}
  const cols=['id','side','qty','entryAt','exitAt','entryPrice','exitPrice','grossRealizedUSDT','usdtFees','netExFundingUSDT','result'];

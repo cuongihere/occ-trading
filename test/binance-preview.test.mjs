@@ -185,3 +185,25 @@ test('Futures reversal switch is visible and persisted separately from AUTO and 
  const js=html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
  assert.ok(js);assert.doesNotThrow(()=>new Function(js));
 });
+
+test('App safely clears only OCC checkpoint orphaned SL TP after FLAT and persists verified history',()=>{
+ const html=read('BINANCE_UI_PREVIEW.html'),server=read('server.mjs'),
+  svc=read('futures-browser-service.mjs'),build=read('BUILD_PORTABLE.ps1'),
+  transport=read('futures-transport.mjs');
+ assert.match(html,/Kiểm tra & dọn SL\/TP cũ/);
+ assert.match(html,/id="historySyncStatus"/);
+ assert.match(html,/request\('history-refresh'\)/);
+ assert.match(server,/control\/live\/history-refresh/);
+ assert.match(server,/const liveHistoryRefresh=setInterval/);
+ assert.match(svc,/async reconcileVerifiedClosedPosition\(\)/);
+ assert.match(svc,/STALE_ALGO_CANCEL_SENDING/);
+ assert.match(svc,/algo\.clientAlgoId!==old\.clientId/);
+ assert.match(svc,/positionBTC!==0/);
+ assert.match(svc,/registerRealOrder\(/);
+ assert.match(svc,/refreshRealHistory\(/);
+ assert.match(build,/'futures-live-history\.mjs'/);
+ assert.match(transport,/'\/fapi\/v1\/allOrders'/);
+ assert.match(transport,/'\/fapi\/v1\/allAlgoOrders'/);
+ const js=html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
+ assert.ok(js);assert.doesNotThrow(()=>new Function(js));
+});
