@@ -12,7 +12,7 @@ const fakeCrypt=(buf,mode)=>mode==='protect'
 const makeVault=dir=>new WindowsCredentialVault(join(dir,'futures-api.dpapi.json'),{crypt:fakeCrypt});
 const tmp=t=>{const p=mkdtempSync(join(tmpdir(),'occ-browser-live-'));t.after(()=>rmSync(p,{force:true,recursive:true}));return p;};
 function fake({flatRiskRows=false,brokenConfig=false,failStop=false,leverage=5,leverageAckMismatch=false}={}){
- const calls=[],algo=[],normal=[],position={qty:0,entryOrderId:100},mode={dualSidePosition:false},leverageState={value:leverage};
+ const calls=[],algo=[],normal=[],position={qty:0,entryOrderId:100,nextEntryOrderId:100},mode={dualSidePosition:false},leverageState={value:leverage};
  const api={
   close(){calls.push('closed');},
   async syncClock(){calls.push('time');},
@@ -45,7 +45,7 @@ function fake({flatRiskRows=false,brokenConfig=false,failStop=false,leverage=5,l
    }
    if(path==='/fapi/v1/order'){
     if(p.reduceOnly==='true'){position.qty=0;return {orderId:999,status:'FILLED'};}
-    position.entryOrderId=position.qty===0&&position.entryOrderId===100?100:position.entryOrderId+1;
+    position.entryOrderId=position.nextEntryOrderId++;
     position.qty=p.side==='BUY'?.032:-.032;return {orderId:position.entryOrderId,status:'FILLED'};
    }
    if(path==='/fapi/v1/algoOrder'){
