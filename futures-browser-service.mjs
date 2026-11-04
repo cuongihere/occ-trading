@@ -10,6 +10,7 @@ import {ProtectionCoordinator} from './futures-protection-orchestrator.mjs';
 import {ProtectionCheckpoint} from './futures-protection-checkpoint.mjs';
 import {WindowsCredentialVault} from './futures-credential-vault.mjs';
 import {analyzeFuturesPosition} from './futures-position-analysis.mjs';
+import {projectCompactSLTP} from './futures-compact-pnl.mjs';
 import {LiveStatsLedger} from './binance-live-stats.mjs';
 import {syncOCCLiveHistory} from './futures-live-history.mjs';
 
@@ -108,7 +109,7 @@ export class BrowserFutures{
  }
  // Read-only exchange inspection works while AUTO is halted after restart.
  // No checkpoint mutation, order placement or inferred fills.
- async positionAnalysis(){
+ async positionAnalysis({referencePrice=null}={}){
   if(!this.api)throw Error('Chưa kết nối Binance Futures API');
   if(this.busy)return {status:'syncing',fetchedAt:Date.now(),warnings:['Đang thực hiện giao dịch/đối soát; chờ dữ liệu Binance ổn định.']};
   const [riskRows,algoOrders,openOrders]=await Promise.all([
@@ -119,7 +120,9 @@ export class BrowserFutures{
   const analysis=analyzeFuturesPosition({riskRows,algoOrders,openOrders,
    checkpoint:this.activeProtection||this.previousProtection,
    managed:!!this.activeProtection,leverage:this.account?.leverage,fetchedAt:Date.now()});
-  return {...analysis,halted:this.halted,armed:this.armed};
+  const compact=projectCompactSLTP({position:analysis.position,config:this.config,filters:this.filters,
+   referencePrice,availableUSDT:this.account?.availableUSDT});
+  return {...analysis,compact,halted:this.halted,armed:this.armed};
  }
  async inspect(){
   if(!this.api)throw Error('Chưa kết nối API');
