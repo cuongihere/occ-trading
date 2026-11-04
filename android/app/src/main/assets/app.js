@@ -74,10 +74,12 @@ async function authenticate(op){
   const result=await callNative('auth',op,$('apiKey').value,$('apiSecret').value,$('remember').checked);
   $('apiKey').value='';$('apiSecret').value='';
   connected=!!result.connected;connectionStatus();
-  if(connected){$('apiEditor').open=false;await refresh();await refreshHistory();}
-  else{clearAccount();}msg(connected?'Đã kết nối Binance Futures':'Đã ngắt kết nối');
- }catch(e){connected=false;connectionStatus();msg(e)}
+  if(connected)$('apiEditor').open=false;
+  else clearAccount();
+  if(op!=='restore')msg(connected?'Đã kết nối Binance Futures':'Đã ngắt kết nối');
+ }catch(e){connected=false;connectionStatus();if(op!=='restore')msg(e)}
  finally{busy=false}
+ if(connected){await refresh();await refreshHistory()}
 }
 $('connect').onclick=()=>authenticate('connect');
 $('restore').onclick=()=>authenticate('restore');
