@@ -16,7 +16,9 @@ const tp=(id,price,quantity,side='SELL')=>({
 });
 const algos=()=>[sl(),tp(2,79170,.001),tp(3,80340,.001),tp(4,81900,.002)];
 const analyze=(overrides={})=>analyzeFuturesPosition({riskRows:risk(),algoOrders:algos(),openOrders:[],
- checkpoint:{stop:{id:'1'},tps:[{id:'2'},{id:'3'},{id:'4'}]},managed:true,fetchedAt:1000,leverage:5,
+ checkpoint:{stop:{id:'1',clientId:'OCCBTC-test-SL'},tps:[{id:'2',clientId:'OCCBTC-test-TP2'},
+  {id:'3',clientId:'OCCBTC-test-TP3'},{id:'4',clientId:'OCCBTC-test-TP4'}]},
+ managed:true,fetchedAt:1000,leverage:5,
  ...overrides});
 const nearly=(a,b)=>assert.ok(Math.abs(a-b)<1e-8,'Expected '+a+' close to '+b);
 
@@ -72,6 +74,17 @@ test('Unverified external Algo orders show price but are never labeled OCC verif
  assert.ok(x.warnings.some(w=>w.includes('chưa khớp ID')));
 });
 
+test('Algo ID match without matching Binance clientAlgoId is never treated as confirmed OCC order',()=>{
+ const x=analyze({algoOrders:[{...sl(),clientAlgoId:'external-SL'},...algos().slice(1)]});
+ const stop=x.levels.find(l=>l.role==='SL');
+ assert.equal(stop.origin,'CHƯA_XÁC_MINH');
+ assert.equal(x.ownershipVerified,false);
+ assert.ok(x.warnings.some(w=>w.includes('Client Algo ID')));
+});
+test('Checkpoint missing clientAlgoId must fail closed, not certify an algo by ID alone',()=>{
+ const x=analyze({checkpoint:{stop:{id:'1'},tps:[{id:'2'},{id:'3'},{id:'4'}]}});
+ assert.ok(x.levels.every(l=>l.origin==='CHƯA_XÁC_MINH'));
+});
 test('Flat position still shows orphaned algo protection as warning, never PnL scenario',()=>{
  const x=analyze({riskRows:[],checkpoint:null});
  assert.equal(x.status,'flat');assert.equal(x.position,null);assert.equal(x.scenarios.length,0);
