@@ -222,25 +222,64 @@ function setFeed(status,message){
  indicator.setHealthy(healthy);
  indicator.setRunning(healthy&&indicator.ready);
  if(message)log(message);
+ showAuto();
 }
 function connectFeed(){
  if(feed)feed.disconnect();
  feed=new BinanceFeed({
   onStatus:({state,message})=>setFeed(state,message),
   onReady:({h4,m15,now})=>{indicator.warmup(h4,m15,now);indicator.setRunning(false);indicator.setHealthy(false)},
-  onTrade:({price,receivedAt})=>{lastTrade=receivedAt;$('last').textContent=fmtValue(price,1);$('priceTime').textContent=stamp(receivedAt)},
+  onTrade:({price,receivedAt})=>{lastTrade=receivedAt;lastTradePrice=Number(price);$('last').textContent=fmtValue(price,1);$('priceTime').textContent=stamp(receivedAt)},
   onMark:({price})=>{if(Number(price)>0){lastMark=Number(price);$('mark').textContent=fmtValue(price,2)}},
   onCandle:(bar,opts)=>{
    const signal=indicator.onCandle(bar,opts);indicator.pending=null;
-   if(signal?.eligible&&opts.live){$('signal').textContent=signal.side;$('signal').className=signal.side==='LONG'?'positive':'negative';$('signalAt').textContent=stamp(signal.time)}
+   if(signal?.eligible&&opts.live){
+    $('signal').textContent=signal.side;
+    $('signal').className=signal.side==='LONG'?'positive':'negative';
+    $('signalAt').textContent=stamp(signal.time);
+    if(trade.auto&&healthy&&feed.healthy()&&Date.now()-lastTrade<10000&&lastTradePrice>0)
+     trade.onSignal(signal,lastTradePrice,true).then(()=>{showAuto();refresh()})
+      .catch(e=>{msg(e);showAuto()});
+   }
   }
  });
  feed.connect().catch(msg);
 }
-displayConfig();connectionStatus();connectFeed();
+async function performManual(role){
+ if(!confirm('Chốt '+role+' BTCUSDT bằng MARKET tiền thật?'))return;
+ try{const result=await trade.manualClose(role);
+  msg('Đã chốt '+result.qty+' BTC · còn '+result.remaining+' BTC');
+  await refresh();await refreshHistory();
+ }catch(e){msg(e)}finally{showAuto()}
+}
+$('autoToggle').onclick=async()=>{
+ if(trade.auto){trade.disarm();showAuto();return;}
+ if(!confirm('BẬT AUTO BTCUSDT FUTURES BẰNG TIỀN THẬT?'))return;
+ const confirmation=prompt('Nhập CHAP NHAN BTC FUTURES:');
+ try{await trade.arm({price:lastTradePrice,healthy:healthy&&feed?.healthy()&&
+     Date.now()-lastTrade<10000,confirmation});}
+ catch(e){msg(e)}finally{showAuto()}
+};
+$('closeAll').onclick=()=>performManual('ALL');
+$('reconcile').onclick=async()=>{
+ if(!confirm('Kiểm tra vị thế và SL/TP trên Binance? AUTO vẫn OFF.'))return;
+ try{await trade.reconcile();msg('Đã đối soát Binance');await refresh();}
+ catch(e){msg(e)}finally{showAuto()}
+};
+$('applyLeverage').onclick=async()=>{
+ try{
+  const value=Number($('leverage').value);
+  if(!confirm('Đặt đòn bẩy BTCUSDT '+value+'x trên Binance?'))return;
+  await trade.setLeverage(value);msg('Đòn bẩy đã xác minh');await refresh();
+ }catch(e){msg(e)}finally{showAuto()}
+};
+displayConfig();connectionStatus();showAuto();connectFeed();
 setInterval(()=>{
  if(lastTrade&&Date.now()-lastTrade>10000){$('last').textContent='—';$('priceTime').textContent='Giá quá hạn'}
 },1000);
-setInterval(()=>{if(connected)refresh();},15000);
+setInterval(async()=>{
+ if(!connected)return;
+ await trade.monitor();await refresh();showAuto();
+},20000);
 setInterval(()=>{if(connected&&Date.now()-lastIncome>300000)refreshHistory();},60000);
 authenticate('restore');
