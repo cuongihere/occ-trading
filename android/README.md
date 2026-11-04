@@ -1,32 +1,37 @@
-# OCC Trading Android (v0.2)
+# OCC Trading Android · v0.3
 
-APK độc lập, không cần PC hoặc VPS. Ứng dụng giữ màn hình sáng khi mở (FLAG_KEEP_SCREEN_ON), dùng WebView chứa toàn bộ giao diện HTML/JS đóng gói trong APK.
+APK Android độc lập: không cần PC/VPS, chạy trong lúc ứng dụng đang mở. Màn hình được giữ sáng bằng FLAG_KEEP_SCREEN_ON.
 
-## Đã hoạt động
+## Chức năng
 
-- Giá BTCUSDT Futures LAST, Mark qua WebSocket Binance.
-- Bộ chỉ báo OCC SMMA8 theo H4/M15 nguyên bản của desktop, chỉ nhận tín hiệu từ nến LIVE đóng hợp lệ.
-- Kết nối API Binance Futures để **đọc** ví, Equity, ký quỹ, vị thế BTC, giá thanh lý, mức SL/TP đang mở.
-- API Key/Secret chỉ gửi qua native Java và được mã hóa bằng Android Keystore (AES-GCM) nếu chọn lưu trên máy; không đưa vào tệp mã nguồn/JavaScript localStorage.
-- Đối chiếu BTCUSDT Income 7 ngày và lịch sử `userTrades`, hiển thị Realized + phí + funding; xuất CSV qua Android Share sheet.
-- Lưu cấu hình SL/TP vào bộ nhớ riêng của ứng dụng, giao diện gọn không có các đoạn hướng dẫn.
+- OCC SMMA8 H4/M15 nguyên bản; chỉ nhận tín hiệu nến LIVE và không phát lại tín hiệu cũ.
+- Binance USD-M BTCUSDT: ví, Equity, P&L, vị thế, giá Entry/Mark/Thanh lý.
+- API Key/Secret mã hóa AES-GCM bằng Android Keystore; không lưu localStorage.
+- Cấu hình ký quỹ, leverage (đặt lên Binance sau xác nhận), LONG/SHORT, SL và TP1–TP3 theo % hoặc Points, tỷ lệ chốt.
+- Bật/tắt Auto với xác nhận tiền thật; khi có tín hiệu mới vào MARKET, xác minh Binance Entry, đặt STOP close-all trước và TP1/2/3 reduceOnly sau.
+- Chế độ đảo chiều OCC: đóng MARKET reduceOnly và chỉ xét Entry mới khi Binance xác nhận đã FLAT, không mở vị thế chồng.
+- Manual chốt riêng TP1/TP2/TP3: xác minh Algo, hủy TP mục tiêu trước, gửi MARKET giảm lượng chính xác và xác minh lại.
+- Manual đóng toàn bộ MARKET: xác minh vị thế OCC, close reduceOnly, sau đó chỉ dọn Algo được OCC xác minh.
+- Đồng bộ và phát hiện TP đã khớp dựa vào Binance Algo FINISHED + actualOrderId + child order FILLED; không suy đoán TP khớp chỉ vì lệnh biến mất.
+- Checkpoint bền vững trước POST/DELETE, native Android giới hạn mỗi intent một lần gửi; nếu ACK không chắc chắn, HALT và không thử lại lệnh.
+- Khi STOP đầu tiên không thiết lập được, thử đóng emergency reduceOnly **một lần** chỉ khi hai lần Binance readback xác minh vị thế thuộc OCC, không có lệnh thường và không có Algo.
+- Tự giám sát vị thế đang mở, dọn Algo OCC khi FLAT; khi mở app trở lại Auto luôn OFF và khóa checkpoint chưa đối soát.
+- Income BTCUSDT 7 ngày (Realized, commission, funding), userTrades, xuất CSV.
 
-## CHƯA hoạt động
+## An toàn và giới hạn
 
-**Đây chưa phải bản tương đương Auto Trade Windows. AUTO trên Android bị KHÓA.**
-
-Các tính năng chưa được chuyển: gửi lệnh MARKET tự động, đặt/cập nhật SL/TP, đảo chiều theo tín hiệu OCC, chốt thủ công và đối soát checkpoint sau đứt kết nối với lệnh thật. Lớp native cố tình chặn toàn bộ POST/DELETE của signed Binance Futures; chỉ cho phép GET. Các giá SL/TP hiện trên Android là lệnh được đọc từ Binance, không phải lệnh Android đặt.
-
-Bộ máy đặt lệnh Futures phải được port và kiểm thử độc lập, gồm readback-verified ACK, SQLite/checkpoint durable, tránh duplicate order, phát hiện vị thế lạ, xử lý lệnh khớp một phần, manual reduceOnly và đối soát tất cả lệnh Algo. Không kích hoạt nút Auto tiền thật khi chưa có các điều kiện này.
+- Không có chế độ chạy nền 24/7; màn hình sáng **không bảo đảm** app không bị Android hay mạng ngắt.
+- Bản mới được kiểm thử tự động bằng Binance giả lập và biên dịch APK. **Chưa xác nhận hoạt động end-to-end với tài khoản Binance Futures Production và chưa thử trên điện thoại thật.**
+- API chỉ giao dịch BTCUSDT và điều kiện One-way, ISOLATED, leverage đúng cấu hình; không sử dụng để vượt hạn chế dịch vụ theo khu vực.
+- Khi lệnh hoặc checkpoint chưa chắc chắn: kiểm tra Binance và bấm **Kiểm tra OCC**. Không tự mở Auto lại. Nếu đang có vị thế không có SL thực tế, xử lý ngay trên Binance.
+- Không chạy Auto đồng thời trên PC và Android với cùng tài khoản BTCUSDT.
+- API Key nên giới hạn quyền Futures, không cấp quyền rút tiền; dùng IP whitelist khi khả thi.
+- Các lệnh Market, Stop và Take Profit có thể trượt giá, bị từ chối hoặc không khớp toàn bộ, dẫn đến mất vốn.
 
 ## Build
 
-GitHub Actions: `.github/workflows/android-apk.yml` → artifact `OCC_Android_Standalone_Preview_APK` → `app-debug.apk`.
+Workflow GitHub Actions `.github/workflows/android-apk.yml` biên dịch APK với Android Gradle Plugin 8.13.2, Android SDK 35, JDK 17. Đầu ra: `android/app/build/outputs/apk/debug/app-debug.apk`.
 
-Android SDK 35 + JDK 17 + AGP 8.13.2 + Gradle 8.13. Tích hợp sẵn các assets:
-- `android/app/src/main/assets/engine.js` từ `engine.mjs`.
-- `android/app/src/main/assets/server-feed.js` phiên bản dùng native public REST.
-- `android/app/src/main/assets/app.js` UI và các API đọc.
-- `android/app/src/main/java/com/occtrading/mobile/MainActivity.java` Android Keystore, HTTPS REST signing (signed GET allowlist).
+Mã: `android/app/src/main/assets/{engine.js,server-feed.js,trade-core.js,trade-execution.js,trade-recovery.js,app.js}`, Java bridge `android/app/src/main/java/com/occtrading/mobile/MainActivity.java`.
 
-**Hạn chế hoạt động:** Màn hình sáng giảm nguy cơ bị Android dừng trong foreground nhưng không bảo đảm uptime 24/7 khi mất mạng, máy nóng, pin cạn, reboot, hạn chế Binance theo vùng.
+APK v0.3 dùng package `com.occtrading.mobile`, cập nhật trực tiếp từ v0.2 nếu Android cho phép cùng chữ ký debug; nếu chữ ký thay đổi do GitHub runner khác nhau, phải gỡ bản trước rồi cài mới, sao lưu cấu hình trước khi gỡ.
