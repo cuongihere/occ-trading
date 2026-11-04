@@ -1,36 +1,32 @@
-# OCC Trading Android — bản chạy trực tiếp trên điện thoại
+# OCC Trading Android (v0.2)
 
-## Trạng thái hiện tại
+APK độc lập, không cần PC hoặc VPS. Ứng dụng giữ màn hình sáng khi mở (FLAG_KEEP_SCREEN_ON), dùng WebView chứa toàn bộ giao diện HTML/JS đóng gói trong APK.
 
-Đây là **Android APK Preview v0.1**: ứng dụng độc lập (không cần PC/VPS/Termux), đọc giá Binance USD-M Futures BTCUSDT và chạy bộ nhận diện tín hiệu OCC SMMA8 H4/M15 **gốc** được copy từ `engine.mjs` (chỉ phần tín hiệu). Native Java làm cầu nối chỉ đọc REST công khai; WebSocket theo dõi giá, Mark Price và nến 15m. Khi app ở foreground, Android dùng `FLAG_KEEP_SCREEN_ON` để màn hình không tự tắt.
+## Đã hoạt động
 
-**KHÔNG giao dịch tiền thật; KHÔNG có chức năng nhập/lưu API Key; KHÔNG có nút Auto đặt lệnh.** Không nhầm bản Preview với OCC Trading Futures desktop đã có thực thi Binance.
+- Giá BTCUSDT Futures LAST, Mark qua WebSocket Binance.
+- Bộ chỉ báo OCC SMMA8 theo H4/M15 nguyên bản của desktop, chỉ nhận tín hiệu từ nến LIVE đóng hợp lệ.
+- Kết nối API Binance Futures để **đọc** ví, Equity, ký quỹ, vị thế BTC, giá thanh lý, mức SL/TP đang mở.
+- API Key/Secret chỉ gửi qua native Java và được mã hóa bằng Android Keystore (AES-GCM) nếu chọn lưu trên máy; không đưa vào tệp mã nguồn/JavaScript localStorage.
+- Đối chiếu BTCUSDT Income 7 ngày và lịch sử `userTrades`, hiển thị Realized + phí + funding; xuất CSV qua Android Share sheet.
+- Lưu cấu hình SL/TP vào bộ nhớ riêng của ứng dụng, giao diện gọn không có các đoạn hướng dẫn.
 
-Mở app + giữ màn hình sáng làm giảm gián đoạn nhưng không bảo đảm uptime: có thể mất Wi‑Fi/4G, dịch vụ Binance bị giới hạn theo vùng, pin cạn, Android kill app, reboot... Không nên dùng điện thoại như một máy chủ giao dịch thật mà không có fail-safe.
+## CHƯA hoạt động
 
-## Build APK
+**Đây chưa phải bản tương đương Auto Trade Windows. AUTO trên Android bị KHÓA.**
 
-1. GitHub Actions → **Android standalone preview APK** → workflow run gần nhất **Success**.
-2. Tải artifact **OCC_Android_Standalone_Preview_APK**, giải nén lấy `app-debug.apk`.
-3. Cài APK trên Android. Đây là APK debug, có thể bị cảnh báo vì cài từ nguồn ngoài.
-4. Để máy có Internet, mở app; giao diện báo trạng thái Binance và tín hiệu LIVE mới.
+Các tính năng chưa được chuyển: gửi lệnh MARKET tự động, đặt/cập nhật SL/TP, đảo chiều theo tín hiệu OCC, chốt thủ công và đối soát checkpoint sau đứt kết nối với lệnh thật. Lớp native cố tình chặn toàn bộ POST/DELETE của signed Binance Futures; chỉ cho phép GET. Các giá SL/TP hiện trên Android là lệnh được đọc từ Binance, không phải lệnh Android đặt.
 
-Workflow: `.github/workflows/android-apk.yml`. Code: `android/app/src/main/`. Yêu cầu build: JDK 17, Android SDK 35, Gradle 8.13, Android Gradle Plugin 8.13.2. Có thể build bằng Android Studio qua thư mục `android/`.
+Bộ máy đặt lệnh Futures phải được port và kiểm thử độc lập, gồm readback-verified ACK, SQLite/checkpoint durable, tránh duplicate order, phát hiện vị thế lạ, xử lý lệnh khớp một phần, manual reduceOnly và đối soát tất cả lệnh Algo. Không kích hoạt nút Auto tiền thật khi chưa có các điều kiện này.
 
-## Bước cần làm trước khi cho phép Auto giao dịch thật
+## Build
 
-- Port toàn bộ quản lý lệnh, checkpoint, stop loss, TP1/2/3 và xác minh readback Binance Futures sang Android (không thể dùng Windows DPAPI / Node `node:sqlite` trực tiếp).
-- Android Keystore để mã hóa khóa giao dịch, không lưu plaintext; không cấp quyền rút tiền; whitelist IP nếu vận hành được.
-- Cơ chế đảm bảo chỉ một thiết bị/tiến trình điều khiển giao dịch; không đồng thời chạy Auto trên Windows và Android.
-- Khởi động lại, mất mạng, lệnh khớp một phần, SL thất bại, lệnh không rõ kết quả phải chuyển HALT và đối soát Binance trước khi cho phép đặt lệnh mới.
-- Kiểm thử giả lập Binance đầy đủ và paper-mode trước, rồi thử với số vốn nhỏ khi đã tự đánh giá rủi ro.
-- App mở với màn sáng không ngăn OS/mạng gián đoạn. Nếu muốn chạy nền cần thiết kế Foreground Service, nhưng nó cũng không bảo đảm 100% uptime.
+GitHub Actions: `.github/workflows/android-apk.yml` → artifact `OCC_Android_Standalone_Preview_APK` → `app-debug.apk`.
 
-## Kiến trúc Preview
+Android SDK 35 + JDK 17 + AGP 8.13.2 + Gradle 8.13. Tích hợp sẵn các assets:
+- `android/app/src/main/assets/engine.js` từ `engine.mjs`.
+- `android/app/src/main/assets/server-feed.js` phiên bản dùng native public REST.
+- `android/app/src/main/assets/app.js` UI và các API đọc.
+- `android/app/src/main/java/com/occtrading/mobile/MainActivity.java` Android Keystore, HTTPS REST signing (signed GET allowlist).
 
-- `engine.js`: bản trình duyệt của `engine.mjs`, giữ nguyên thuật toán OCC đã duyệt; không đặt lệnh.
-- `server-feed.js`: logic nến, đồng bộ và WebSocket gốc; REST công khai được gọi qua native allowlist.
-- `MainActivity.java`: WebView offline-hosted và kết nối Binance REST **chỉ đọc** bằng native `HttpsURLConnection`.
-- `app.js`: truyền dữ liệu cho bộ chỉ báo, hiển thị tín hiệu; không có API giao dịch/ghi.
-
-Ứng dụng không tự động tạo lệnh Futures. Đây là bước nền để port an toàn sang Android, không phải bản Auto Trade hoàn chỉnh.
+**Hạn chế hoạt động:** Màn hình sáng giảm nguy cơ bị Android dừng trong foreground nhưng không bảo đảm uptime 24/7 khi mất mạng, máy nóng, pin cạn, reboot, hạn chế Binance theo vùng.
