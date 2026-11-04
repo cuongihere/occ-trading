@@ -57,3 +57,10 @@ test('Buttons only enable actual verified pending TP and a managed BTC position'
  assert.equal(manualExitControls({...data,status:'flat'},managed).allowed,false);
  assert.equal(manualExitControls({...data,normalOrderCount:1},managed).allowed,false);
 });
+
+test('Full MARKET exit refuses BTC below exchange minimum quantity before sending any order',()=>{
+ assert.throws(()=>validateManagedExit({
+  ...opts,role:'ALL',account:{...acct,positionBTC:.0005},
+  expectedRemainingBTC:.0005,filters:{stepSize:.0001,minQty:.001}
+ }),/LOT_SIZE/);
+});
