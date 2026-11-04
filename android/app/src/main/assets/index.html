@@ -1,58 +1,90 @@
 <!doctype html>
-<html lang="vi">
-<head>
- <meta charset="utf-8">
- <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
- <title>OCC Android · BTCUSDT</title>
- <style>
- :root{color-scheme:dark;font-family:system-ui,Roboto,Arial,sans-serif;background:#0a1423;color:#ebf3ff}
- *{box-sizing:border-box}body{margin:0;padding:16px 14px 24px}
- h1{font-size:23px;letter-spacing:-.7px;margin:0}h2{font-size:14px;margin:0 0 10px}
- small,.sub{color:#94abc6;font-size:11px}.sub{margin:5px 0}
- .tag{display:inline-block;padding:4px 9px;font-size:10px;font-weight:800;color:#ffd0a5;border:1px solid #987252;background:#3d2c28;border-radius:7px;margin:14px 0}
- .card{border:1px solid #314a67;background:#18283b;border-radius:12px;padding:14px;margin-bottom:10px}
- .title{font-size:11px;color:#96b9df;text-transform:uppercase;letter-spacing:.5px}
- #last{font-size:clamp(39px,12vw,62px);color:#ffdb77;font-weight:850;line-height:1.15;margin:6px 0}
- .meta{color:#a9c6df;font-size:12px}
- .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-bottom:10px}
- .grid .card{margin:0;padding:11px}
- .metric{font-size:19px;font-weight:750;margin:7px 0 0;overflow-wrap:anywhere}
- .ok{color:#94f0bb}.error{color:#ffa6a6}.muted{color:#96acc3}.watch{color:#ffd0a0}
- #signal{font-size:26px;font-weight:800;margin:7px 0}
- #health{font-weight:700;font-size:13px}
- .banner{color:#f5d4a3;background:#322a29;border:1px solid #785a4a;border-radius:10px;padding:12px;font-size:12px;line-height:1.5;margin-bottom:12px}
- button{font:inherit;background:#244565;border:1px solid #5683a9;color:white;border-radius:9px;padding:10px 14px;font-weight:700}
- button:disabled{opacity:.6}
- .row{display:flex;justify-content:space-between;align-items:center;gap:9px;flex-wrap:wrap}
- #events{font-size:11px;color:#a7b8cf;line-height:1.6;white-space:pre-line;max-height:180px;overflow:auto}
- #time{font-size:11px;color:#a3bfd7}
- </style>
-</head>
-<body>
-<header class="row"><div><h1>OCC / BTCUSDT</h1><p class="sub">Android độc lập · Binance Futures USDⓈ-M</p></div><span id="clock" class="sub">—</span></header>
-<div class="tag">BẢN THỬ NGHIỆM · CHỈ ĐỌC · KHÔNG GIAO DỊCH THẬT</div>
-<section class="card" aria-label="Giá Binance">
- <div class="title">BTCUSDT Futures · LAST</div><div id="last">—</div>
- <div class="meta">Mark: <strong id="mark">—</strong> · <span id="time">Đang đồng bộ...</span></div>
+<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>OCC Trading</title>
+<style>
+:root{color-scheme:dark;background:#0a1423;color:#eaf3ff;font-family:system-ui,Roboto,Arial,sans-serif;font-size:13px}
+*{box-sizing:border-box}body{margin:0;padding:12px;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0}h2{font-size:14px;margin:0 0 9px}
+p{margin:0}small,.muted{color:#91abc6;font-size:11px}
+header{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.top{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-bottom:10px}
+.card{background:#17283c;border:1px solid #304962;border-radius:11px;padding:12px;margin-bottom:10px;min-width:0}
+.top .card{margin:0;padding:9px}
+.label{font-size:10px;color:#99b4d0}
+.value{font-weight:800;font-size:20px;margin-top:5px;overflow-wrap:anywhere}
+.positive{color:#95eeb5}.negative{color:#ffa0a5}.warning{color:#ffca8f}
+.meta{font-size:10px;color:#9cb9d6}
+#last{color:#ffda77;font-weight:850;font-size:clamp(35px,9vw,60px);letter-spacing:-1px;margin:8px 0}
+.panelrow{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+button{border:1px solid #56748f;background:#24415e;color:#eef5ff;border-radius:7px;padding:9px 10px;font:inherit;font-weight:700;cursor:pointer}
+button.primary{background:#9eebbd;color:#0b2a20;border:0}
+button.danger{background:#452932;color:#ffd5dc}
+button:disabled{opacity:.5}
+.row{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+label{font-size:11px;color:#b8cee8;display:flex;flex-direction:column;gap:3px;min-width:0}
+input,select{color:#f2f7ff;background:#0e1c2e;border:1px solid #415b74;border-radius:6px;padding:8px;font:inherit;width:100%;min-width:0}
+.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:8px 0}
+details>summary{cursor:pointer;font-size:13px;font-weight:750;list-style:none}
+details>summary::-webkit-details-marker{display:none}
+section.card>h2{margin-bottom:8px}
+#status{font-size:12px;font-weight:800}
+#connection{font-weight:750}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stats strong{display:block;font-size:17px;margin:4px 0}
+table{border-collapse:collapse;min-width:650px;width:100%;font-size:11px}
+td,th{padding:8px 6px;text-align:left;border-bottom:1px solid #304960;white-space:nowrap}
+th{background:#22364d;color:#c8def1} .scroll{overflow-x:auto}
+#levels{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.level{background:#101f30;border:1px solid #334b61;padding:8px;border-radius:7px;min-width:0}
+.level strong{display:block;margin:7px 0;font-size:15px}
+.level small{overflow-wrap:anywhere}
+#events{white-space:pre-line;font-size:11px;color:#aec2d5;line-height:1.55;max-height:90px;overflow:auto}
+#message{font-size:11px;min-height:15px;margin:6px 0;color:#ffc49a}
+@media(max-width:720px){.panelrow{grid-template-columns:1fr}#levels{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:380px){.top{grid-template-columns:repeat(2,1fr)}.stats{grid-template-columns:repeat(2,1fr)}}
+</style></head><body>
+<header><div><h1>OCC Trading</h1><small>BTCUSDT Futures · Android</small></div>
+ <div class="row"><strong id="status" class="warning">CHỜ BINANCE</strong><strong id="autoState" class="muted">AUTO OFF</strong></div>
+</header>
+<section class="top">
+ <div class="card"><div class="label">Ví Futures</div><div id="wallet" class="value">—</div></div>
+ <div class="card"><div class="label">Khả dụng</div><div id="available" class="value">—</div></div>
+ <div class="card"><div class="label">Equity</div><div id="equity" class="value">—</div></div>
+ <div class="card"><div class="label">P&L chưa chốt</div><div id="unrealized" class="value">—</div></div>
+ <div class="card"><div class="label">Vị thế BTC</div><div id="btcPosition" class="value">—</div></div>
+ <div class="card"><div class="label">Net BTC 7 ngày</div><div id="realNet" class="value">—</div></div>
 </section>
-<section class="grid">
- <div class="card"><div class="title">Trạng thái dữ liệu</div><div class="metric" id="health">ĐANG KẾT NỐI</div></div>
- <div class="card"><div class="title">Đồng bộ chỉ báo</div><div class="metric" id="warmup">CHỜ NẾN</div></div>
- <div class="card"><div class="title">Nến M15 cuối</div><div class="metric" id="m15">—</div></div>
- <div class="card"><div class="title">OCC SMMA8 chênh lệch</div><div class="metric" id="smma">—</div></div>
-</section>
-<section class="card">
- <div class="title">Tín hiệu OCC mới nhất</div><div id="signal">CHƯA CÓ</div>
- <div class="sub" id="signalTime">Chỉ ghi nhận giao cắt LIVE hợp lệ; không phát lại tín hiệu khi mất mạng.</div>
-</section>
-<div class="banner">
- Màn hình được giữ sáng khi app đang mở. Mất mạng, hết pin, hệ điều hành đóng app hoặc Binance hạn chế kết nối vẫn có thể ngắt hoạt động. Bản này <b>không có API Key và không gửi lệnh Futures</b> — cần kiểm chứng hệ thống đặt SL/TP trước khi cho phép tiền thật.
+<div class="panelrow">
+ <section class="card"><h2>Binance API <span id="connection" class="muted">CHƯA KẾT NỐI</span></h2>
+  <details id="apiEditor"><summary>API Key / Secret ▾</summary>
+  <div class="fields"><label>API Key<input id="apiKey" type="password" autocomplete="off"></label><label>API Secret<input id="apiSecret" type="password" autocomplete="off"></label></div>
+  <label class="row" style="flex-direction:row"><input id="remember" type="checkbox" style="width:auto" checked>Lưu mã hóa trên máy</label>
+  <button class="primary" id="connect">Kết nối</button>
+  </details><div class="row" style="margin-top:8px"><button id="restore">Kết nối lại</button><button id="disconnect">Ngắt</button><button id="forget" class="danger">Xóa API</button></div>
+ </section>
+ <section class="card"><h2>BTCUSDT FUTURES · LAST</h2><div id="last">—</div><div class="meta">MARK <strong id="mark">—</strong> · <span id="priceTime">—</span></div></section>
 </div>
-<section class="card">
- <div class="row"><h2>Nhật ký kết nối</h2><button id="reconnect" type="button">Kết nối lại</button></div>
- <div id="events">Đang khởi động...</div>
-</section>
-<script src="engine.js"></script>
-<script src="server-feed.js"></script>
-<script src="app.js"></script>
+<section class="card"><details id="configDetails"><summary>Cấu hình Auto · <span id="summary">—</span> ▾</summary>
+ <div class="fields">
+ <label>Ký quỹ (USDT)<input id="marginUSDT" type="number" min="1" step="1"></label>
+ <label>Đòn bẩy<input id="leverage" type="number" min="1" max="20"></label>
+ <label>Chiều<select id="side"><option value="BOTH">Long &amp; Short</option><option value="LONG">Long</option><option value="SHORT">Short</option></select></label>
+ <label>SL (%)<input id="sl" type="number" step=".1"></label>
+ <label>Kiểu TP<select id="mode"><option value="Percent">%</option><option value="Points">USDT</option></select></label>
+ <label>TP1<input id="tp1" type="number" step=".01"></label><label>TP2<input id="tp2" type="number" step=".01"></label>
+ <label>TP3<input id="tp3" type="number" step=".01"></label>
+ <label>TP1 BTC (%)<input id="q1" type="number" step="1"></label><label>TP2 BTC (%)<input id="q2" type="number" step="1"></label>
+ </div><label class="row" style="flex-direction:row"><input type="checkbox" id="reverse" style="width:auto">Đảo chiều theo OCC</label>
+ <div class="row" style="margin-top:9px"><button id="saveConfig" class="primary">Lưu cấu hình</button></div>
+ </details></section>
+<section class="card"><div class="row" style="justify-content:space-between"><h2>Vị thế & SL/TP trên Binance</h2><button id="refresh">Đồng bộ</button></div>
+<div class="stats"><div>Entry<strong id="entry">—</strong></div><div>Mark<strong id="positionMark">—</strong></div>
+<div>Liq.<strong id="liq">—</strong></div><div>P&L BTC<strong id="btcPnl">—</strong></div><div>Margin<strong id="marginMode">—</strong></div><div>Leverage<strong id="actualLeverage">—</strong></div></div>
+<div id="levels" style="margin-top:12px"></div></section>
+<section class="card"><div class="row" style="justify-content:space-between"><h2>Lịch sử Binance</h2><div class="row"><button id="historyRefresh">Làm mới</button><button id="csv">CSV</button></div></div>
+<div id="incomeSummary" class="meta"></div><div class="scroll"><table><thead><tr><th>Thời gian</th><th>Chiều</th><th>Khối lượng</th><th>Giá</th><th>Realized</th><th>Phí</th></tr></thead><tbody id="historyBody"></tbody></table></div></section>
+<section class="card"><div class="row" style="justify-content:space-between"><h2>Tín hiệu OCC</h2><strong id="signal">—</strong></div><div class="meta" id="signalAt">—</div></section>
+<div id="message" role="status"></div>
+<div id="events"></div>
+<script src="engine.js"></script><script src="server-feed.js"></script><script src="app.js"></script>
 </body></html>
