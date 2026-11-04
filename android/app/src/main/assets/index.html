@@ -20,6 +20,10 @@ button{border:1px solid #56748f;background:#24415e;color:#eef5ff;border-radius:7
 button.primary{background:#9eebbd;color:#0b2a20;border:0}
 button.danger{background:#452932;color:#ffd5dc}
 button:disabled{opacity:.5}
+#autoToggle{min-width:88px}
+.level button{display:block;width:100%;margin-top:7px;padding:6px 7px;font-size:11px}
+#safetyLine{min-height:0;font-size:11px;color:#ffcf99;margin-bottom:6px}
+
 .row{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
 label{font-size:11px;color:#b8cee8;display:flex;flex-direction:column;gap:3px;min-width:0}
 input,select{color:#f2f7ff;background:#0e1c2e;border:1px solid #415b74;border-radius:6px;padding:8px;font:inherit;width:100%;min-width:0}
@@ -44,7 +48,7 @@ th{background:#22364d;color:#c8def1} .scroll{overflow-x:auto}
 @media(max-width:380px){.top{grid-template-columns:repeat(2,1fr)}.stats{grid-template-columns:repeat(2,1fr)}}
 </style></head><body>
 <header><div><h1>OCC Trading</h1><small>BTCUSDT Futures · Android</small></div>
- <div class="row"><strong id="status" class="warning">CHỜ BINANCE</strong><strong id="autoState" class="warning">AUTO KHÓA</strong></div>
+ <div class="row"><strong id="status" class="warning">CHỜ BINANCE</strong><strong id="autoState" class="muted">AUTO OFF</strong><button id="autoToggle" class="primary" disabled>Bật Auto</button></div>
 </header>
 <section class="top">
  <div class="card"><div class="label">Ví Futures</div><div id="wallet" class="value">—</div></div>
@@ -75,16 +79,16 @@ th{background:#22364d;color:#c8def1} .scroll{overflow-x:auto}
  <label>TP3<input id="tp3" type="number" step=".01"></label>
  <label>TP1 BTC (%)<input id="q1" type="number" step="1"></label><label>TP2 BTC (%)<input id="q2" type="number" step="1"></label>
  </div><label class="row" style="flex-direction:row"><input type="checkbox" id="reverse" style="width:auto">Đảo chiều theo OCC</label>
- <div class="row" style="margin-top:9px"><button id="saveConfig" class="primary">Lưu cấu hình</button></div>
+ <div class="row" style="margin-top:9px"><button id="saveConfig" class="primary">Lưu cấu hình</button><button id="applyLeverage" disabled>Đặt leverage Binance</button></div>
  </details></section>
-<section class="card"><div class="row" style="justify-content:space-between"><h2>Vị thế & SL/TP trên Binance</h2><button id="refresh">Đồng bộ</button></div>
+<section class="card"><div class="row" style="justify-content:space-between"><h2>Vị thế & SL/TP trên Binance</h2><button id="refresh">Đồng bộ</button><button id="reconcile">Kiểm tra OCC</button><button id="closeAll" class="danger" disabled>Đóng MARKET</button></div>
 <div class="stats"><div>Entry<strong id="entry">—</strong></div><div>Mark<strong id="positionMark">—</strong></div>
 <div>Liq.<strong id="liq">—</strong></div><div>P&L BTC<strong id="btcPnl">—</strong></div><div>Margin<strong id="marginMode">—</strong></div><div>Leverage<strong id="actualLeverage">—</strong></div></div>
 <div id="levels" style="margin-top:12px"></div></section>
 <section class="card"><div class="row" style="justify-content:space-between"><h2>Lịch sử Binance</h2><div class="row"><button id="historyRefresh">Làm mới</button><button id="csv">CSV</button></div></div>
 <div id="incomeSummary" class="meta"></div><div class="scroll"><table><thead><tr><th>Thời gian</th><th>Chiều</th><th>Khối lượng</th><th>Giá</th><th>Realized</th><th>Phí</th></tr></thead><tbody id="historyBody"></tbody></table></div></section>
 <section class="card"><div class="row" style="justify-content:space-between"><h2>Tín hiệu OCC</h2><strong id="signal">—</strong></div><div class="meta" id="signalAt">—</div></section>
-<div id="message" role="status"></div>
+<div id="safetyLine"></div><div id="message" role="status"></div>
 <div id="events"></div>
-<script src="engine.js"></script><script src="server-feed.js"></script><script src="app.js"></script>
+<script src="engine.js"></script><script src="server-feed.js"></script><script src="trade-core.js"></script><script src="trade-execution.js"></script><script src="trade-recovery.js"></script><script src="app.js"></script>
 </body></html>
