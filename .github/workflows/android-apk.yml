@@ -1,4 +1,4 @@
-name: Android standalone preview APK
+name: Android standalone OCC Trading APK
 
 on:
   push:
@@ -31,12 +31,12 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
-      - name: Build offline-hosted OCC Android preview
+      - name: Build OCC Android standalone APK
         run: gradle -p android --no-daemon :app:assembleDebug
       - name: Publish installable debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: OCC_Android_Standalone_Preview_APK
+          name: OCC_Android_Standalone_v0_3_APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
