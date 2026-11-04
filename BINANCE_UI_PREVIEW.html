@@ -5,7 +5,7 @@
 <style>
 :root{color-scheme:dark;font-family:system-ui,"Segoe UI",Arial,sans-serif;background:#0b1422;color:#e9f3ff;font-size:13px}
 *{box-sizing:border-box}body{margin:0}button,input,select{font:inherit}button{cursor:pointer}a{color:#c7dbf4}
-.app{max-width:1780px;min-height:100dvh;height:auto;margin:0 auto;padding:10px 16px 16px;display:grid;grid-template-rows:48px 90px auto minmax(180px,1fr) 20px;gap:10px}
+.app{max-width:1780px;min-height:100dvh;height:auto;margin:0 auto;padding:10px 16px 16px;display:grid;grid-template-rows:48px 90px auto auto minmax(180px,1fr) 20px;gap:10px}
 .topbar{display:flex;justify-content:space-between;align-items:center;gap:16px}
 .brand{font-weight:800;font-size:21px;letter-spacing:-.6px;white-space:nowrap}
 .small{font-size:11px;color:#99adc6}.muted{color:#a6bad0}
@@ -136,7 +136,7 @@ td,th{text-align:left;padding:8px 7px;border-bottom:1px solid #2f4155;white-spac
 th{position:sticky;top:0;background:#1c2d43;color:#a9c3df;z-index:1}
 footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;overflow:hidden}
 #apiStatusText{font-weight:700;color:#a6c0d8}
-@media(max-height:780px) and (min-width:1000px){.app{grid-template-rows:44px 78px auto minmax(160px,1fr) 18px;gap:8px;padding:8px 12px}.kpi .value{font-size:22px}.panel{padding:10px 12px}.fields2,.fields3{gap:5px}input:not([type=checkbox]),select{height:30px}}
+@media(max-height:780px) and (min-width:1000px){.app{grid-template-rows:44px 78px auto auto minmax(160px,1fr) 18px;gap:8px;padding:8px 12px}.kpi .value{font-size:22px}.panel{padding:10px 12px}.fields2,.fields3{gap:5px}input:not([type=checkbox]),select{height:30px}}
 @media(max-width:1100px){.app{height:auto;min-height:100vh;display:block}.topbar,.kpis,.topgrid,.riskDashboard,.below{margin-bottom:12px}.kpis{grid-template-columns:repeat(3,1fr)}.topgrid{grid-template-columns:1fr 1fr}.topgrid .accountPanel{grid-column:1/-1}.riskDashboard{grid-template-columns:repeat(2,minmax(0,1fr))}.riskDashboard .riskOverview{grid-column:1/-1}.riskDashboard .riskSummary{grid-template-columns:repeat(4,minmax(0,1fr))}.below{grid-template-columns:1fr}.panel{overflow:visible}#realCurve{height:190px}.tableScroll{height:270px}footer{padding-bottom:14px}}
 @media(max-width:650px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.topgrid,.riskDashboard{grid-template-columns:1fr}.topgrid .accountPanel,.riskDashboard .riskOverview{grid-column:auto}.riskDashboard .riskSummary{grid-template-columns:repeat(2,minmax(0,1fr))}.topbar{flex-wrap:wrap}.statLine{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
@@ -270,6 +270,79 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
  .apiPanel .apiActions{grid-template-columns:repeat(2,minmax(0,1fr))}
  .apiPanel #apiReconcile{grid-column:1/-1}
 }
+
+/* One full-width horizontal position workspace, independent of API and Auto settings. */
+.topgrid{grid-template-columns:minmax(300px,.82fr) minmax(500px,1.53fr)}
+.positionSection{width:100%;min-width:0}
+.positionSection>.accountPanel{
+ display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,.85fr);
+ column-gap:18px;row-gap:7px;padding:12px 16px;overflow:visible;
+}
+.positionSection>.accountPanel>h2{grid-column:1/-1;margin:0 0 2px;font-size:15px}
+.positionSection .riskHeadline{grid-column:1;grid-row:2;margin:0}
+.positionSection .riskUpdated{grid-column:1;grid-row:3;margin:0}
+.positionSection .positionGrid{
+ grid-column:1/-1;grid-row:4;
+ grid-template-columns:repeat(6,minmax(0,1fr));gap:8px 12px;
+ padding:9px 0;border-top:1px solid #31465f;
+}
+.positionSection .positionGrid>div{min-width:0}
+.positionSection .positionGrid strong{font-size:15px;margin-top:2px;overflow-wrap:anywhere;white-space:normal}
+.positionSection .riskSummary{grid-column:1/-1;grid-template-columns:repeat(3,minmax(0,1fr));margin:0 0 2px;gap:7px}
+.positionSection .botState{
+ grid-column:2;grid-row:2/span 2;align-self:stretch;
+ border-top:0;border-left:1px solid #344963;margin:0;padding:0 0 0 15px;
+ font-size:11px;line-height:1.45;
+}
+.positionSection .botState .small{font-size:10px}
+.positionSection .compactOutcomes{grid-column:1/-1;margin:0;padding:9px 0 0}
+.positionSection .compactTitle{margin-bottom:3px}
+.positionSection .compactRows{
+ display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
+ gap:0;margin:7px 0 6px;border:1px solid #34485d;border-radius:8px;background:#102033;overflow:hidden;
+}
+.positionSection .compactRow{
+ display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto auto auto;
+ gap:5px 8px;align-content:start;align-items:center;
+ min-width:0;min-height:105px;padding:9px 12px;
+ border-bottom:0;border-right:1px solid #34485d;
+}
+.positionSection .compactRow:last-child{border-right:0}
+.positionSection .compactName{grid-column:1/-1;font-size:12px}
+.positionSection .compactName small{font-size:10px}
+.positionSection .compactRow>span:nth-child(2){
+ grid-column:1;grid-row:2;text-align:left;font-weight:750;font-size:12px;overflow-wrap:anywhere;
+}
+.positionSection .compactRow>strong{grid-column:2;grid-row:2;font-size:13px;text-align:right}
+.positionSection .compactRow>.manualTp{grid-column:1/-1;grid-row:3;justify-self:start;padding:5px 9px}
+.positionSection .manualExitBar{margin-top:6px}
+.positionSection .riskAlerts{grid-column:1/-1;margin:2px 0 0;max-width:none}
+.positionSection .riskAlerts div{border-bottom:0;padding:3px 0}
+@media(max-width:1120px){
+ .topgrid{grid-template-columns:1fr 1.3fr}
+ .positionSection .positionGrid{grid-template-columns:repeat(3,minmax(0,1fr))}
+ .positionSection .compactRows{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .positionSection .compactRow{border-bottom:1px solid #34485d}
+ .positionSection .compactRow:nth-child(2){border-right:0}
+ .positionSection .compactRow:nth-child(n+3){border-bottom:0}
+}
+@media(max-width:900px){
+ .topgrid{grid-template-columns:1fr}
+ .positionSection>.accountPanel{grid-template-columns:1fr}
+ .positionSection .riskHeadline{grid-row:auto}
+ .positionSection .riskUpdated{grid-row:auto}
+ .positionSection .positionGrid{grid-row:auto}
+ .positionSection .botState{grid-column:1;grid-row:auto;border-left:0;border-top:1px solid #31465f;padding:7px 0 0}
+ .positionSection .compactOutcomes{grid-column:1}
+}
+@media(max-width:540px){
+ .positionSection>.accountPanel{padding:11px 12px}
+ .positionSection .positionGrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .positionSection .compactRows{grid-template-columns:1fr}
+ .positionSection .compactRow{border-right:0;border-bottom:1px solid #34485d!important;min-height:88px}
+ .positionSection .compactRow:last-child{border-bottom:0!important}
+ .positionSection .riskSummary{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
 </style>
 </head>
 <body>
@@ -338,6 +411,8 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
 <button id="applyLeverage" class="minor" disabled>Áp dụng đòn bẩy lên Binance</button></div>
 <span id="settingStatus" class="small">Tự lưu · Auto OFF khi sửa</span></div>
  </div>
+</section>
+<section class="positionSection" aria-label="Vị thế BTCUSDT và quản lý chốt lời">
  <div class="panel accountPanel">
   <h2>Vị thế BTCUSDT & trạng thái bot</h2>
   <div class="riskHeadline" id="riskHeadline">Đang đọc vị thế từ Binance…</div>
