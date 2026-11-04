@@ -18,7 +18,7 @@ test('Android app keeps screen on and only loads offline bundled UI',()=>{
  assert.match(ui,/id="levels"/);
  assert.match(ui,/id="historyBody"/);
 });
-test('Android credentials remain protected by Keystore and no order write is authorized',()=>{
+test('Android native Keystore signs only allowlisted checkpoint-leased mutations',()=>{
  const java=src('android/app/src/main/java/com/occtrading/mobile/MainActivity.java');
  assert.match(java,/AndroidKeyStore/);
  assert.match(java,/AES\/GCM\/NoPadding/);
@@ -27,6 +27,12 @@ test('Android credentials remain protected by Keystore and no order write is aut
  assert.match(java,/if\(method\.equals\("GET"\)\)return SIGNED_GET\.contains\(path\);/);
  assert.match(java,/acquireMutationLease\(method,path,args\)/);
  assert.match(java,/intent\.put\("sent",true\)/);
+ assert.match(java,/EMERGENCY_SENDING/);
+ assert.match(java,/TP_CANCEL_SENDING/);
+ assert.match(java,/LEVERAGE_SENDING/);
+ assert.match(java,/newOrderRespType/);
+ assert.match(java,/CLOSE".equals\(kind\)/);
+
  assert.match(java,/private static final Set<String> SIGNED_GET/);
  assert.match(java,/API = "https:\/\/fapi\.binance\.com"/);
 });
@@ -37,7 +43,7 @@ test('OCC M15/H4 indicator is byte-identical to original engine aside from modul
   .replace(/^export class OCCEngine/m,'class OCCEngine')+'\nwindow.OCCEngine = OCCEngine;\n';
  assert.equal(src('android/app/src/main/assets/engine.js').replace(/\r\n/g,'\n'),expected.replace(/\r\n/g,'\n'));
 });
-test('Android code reads real Futures account, position, conditional orders and Income without placing trades',()=>{
+test('Android reads account and Income, drives verified Auto execution and manual exits',()=>{
  const feed=src('android/app/src/main/assets/server-feed.js');
  const js=src('android/app/src/main/assets/app.js');
  assert.match(feed,/window\.occPublicGet\(path\)/);
@@ -51,6 +57,12 @@ test('Android code reads real Futures account, position, conditional orders and 
  assert.match(js,/signal\?\.eligible&&opts\.live/);
  assert.match(js,/trade\.onSignal\(signal,lastTradePrice,true\)/);
  assert.match(js,/trade\.manualClose\(role\)/);
+ assert.match(js,/trade\.arm\(/);
+ assert.match(js,/trade\.reconcile\(/);
+ assert.match(js,/trade\.setLeverage\(/);
+ for(const filename of ['trade-core.js','trade-execution.js','trade-recovery.js'])
+  assert.doesNotThrow(()=>new Function(src('android/app/src/main/assets/'+filename)));
+
  for(const code of [src('android/app/src/main/assets/engine.js'),feed,js])
   assert.doesNotThrow(()=>new Function(code));
 });
