@@ -137,8 +137,8 @@ export function computeLiveReport(orders,fills,incomes=[],now=Date.now()){
    const pnlEvents=matches.filter(x=>x.trade_id===String(f.fill_id)&&x.income_type==='REALIZED_PNL');
    if((f.asset==='USDT'&&f.fee>EPS&&!feeEvents.length)||
       (Math.abs(f.realized)>EPS&&!pnlEvents.length))incomeMissing=true;
-   if(feeEvents.length&&Math.abs(amountFor(f.fill_id,'COMMISSION')+f.fee)>.02||
-      pnlEvents.length&&Math.abs(amountFor(f.fill_id,'REALIZED_PNL')-f.realized)>.02)
+   if(feeEvents.length&&Math.abs(amountFor(f.fill_id,'COMMISSION')+f.fee)>1e-6||
+      pnlEvents.length&&Math.abs(amountFor(f.fill_id,'REALIZED_PNL')-f.realized)>1e-6)
     incomeMismatch=true;
   }
   const auditStatus=incomeMismatch?'MISMATCH':incomeMissing||!matches.length?'PENDING':'MATCHED';
