@@ -44,7 +44,11 @@ public final class MainActivity extends Activity {
     private static final String API = "https://fapi.binance.com";
     private static final String VAULT = "occ_mobile_secrets_v1";
     private final Handler main = new Handler(Looper.getMainLooper());
-    private final ExecutorService network = Executors.newSingleThreadExecutor();
+    // Market warmup must not queue behind 6 account readbacks or a confirmed trade.
+    // Exchange mutations and auth changes remain serialized on a separate executor.
+    private final ExecutorService publicNetwork = Executors.newFixedThreadPool(2);
+    private final ExecutorService readNetwork = Executors.newFixedThreadPool(4);
+    private final ExecutorService tradeNetwork = Executors.newSingleThreadExecutor();
     private final SecureRandom random = new SecureRandom();
     private final Object checkpointGuard = new Object();
     private WebView browser;
@@ -83,6 +87,7 @@ public final class MainActivity extends Activity {
     }
 
     private static String readLimited(InputStream input) throws Exception {
+        if(input==null)return "";
         try(InputStream stream=input; ByteArrayOutputStream out=new ByteArrayOutputStream()) {
             byte[] block=new byte[8192]; int n,total=0;
             while((n=stream.read(block))!=-1) {
@@ -304,14 +309,14 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void publicGet(String path,String requestId) {
             if(!validId(requestId))return;
             if(path==null||!publicAllowed(path)){respond(requestId,false,"Public REST not allowed",403);return;}
-            network.execute(()->{
+            publicNetwork.execute(()->{
                 try {respond(requestId,true,requestNetwork("GET",path,"",null),200);}
                 catch(Exception e){respond(requestId,false,e.getMessage(),e instanceof BinanceError?((BinanceError)e).status:0);}
             });
         }
         @JavascriptInterface public void auth(String operation,String key,String secret,boolean remember,String id) {
             if(!validId(id))return;
-            network.execute(()->{
+            tradeNetwork.execute(()->{
                 try{
                     if("connect".equals(operation)){
                         if(key==null||secret==null||key.length()<8||secret.length()<8)throw new SecurityException("API Key/Secret không hợp lệ");
@@ -331,7 +336,7 @@ public final class MainActivity extends Activity {
         }
         @JavascriptInterface public void signed(String method,String path,String paramsJson,String id) {
             if(!validId(id))return;
-            network.execute(()->{
+            (method.equals("GET") ? readNetwork : tradeNetwork).execute(()->{
                 try{respond(id,true,signedRequest(method,path,new JSONObject(paramsJson)),200);}
                 catch(Exception e){respond(id,false,e.getMessage(),e instanceof BinanceError?((BinanceError)e).status:0);}
             });
@@ -348,7 +353,10 @@ public final class MainActivity extends Activity {
     }
     private static boolean validId(String id){return id!=null&&id.matches("[0-9]{1,12}");}
     @Override protected void onDestroy(){
-        destroyed=true;network.shutdownNow();
+        destroyed=true;
+        publicNetwork.shutdownNow();
+        readNetwork.shutdownNow();
+        tradeNetwork.shutdownNow();
         apiKey=null;apiSecret=null;
         if(browser!=null){browser.loadUrl("about:blank");browser.destroy();browser=null;}
         super.onDestroy();
