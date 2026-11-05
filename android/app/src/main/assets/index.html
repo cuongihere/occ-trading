@@ -43,13 +43,18 @@ th{background:#22364d;color:#c8def1} .scroll{overflow-x:auto}
 .level strong{display:block;margin:7px 0;font-size:15px}
 .level small{overflow-wrap:anywhere}
 #events{white-space:pre-line;font-size:11px;color:#aec2d5;line-height:1.55;max-height:90px;overflow:auto}
-#message{font-size:11px;min-height:15px;margin:6px 0;color:#ffc49a}
+#message{font-size:12px;line-height:1.4;margin:0 0 8px;color:#ffd0a2;font-weight:650}
+#message:empty{display:none}
+#safetyLine{font-size:11px;line-height:1.4;color:#b8d4ea;margin:0 0 9px}
+#safetyLine:empty{display:none}
 @media(max-width:720px){.panelrow{grid-template-columns:1fr}#levels{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:380px){.top{grid-template-columns:repeat(2,1fr)}.stats{grid-template-columns:repeat(2,1fr)}}
 </style></head><body>
 <header><div><h1>OCC Trading</h1><small>BTCUSDT Futures · Android</small></div>
- <div class="row"><strong id="status" class="warning">CHỜ BINANCE</strong><strong id="autoState" class="muted">AUTO OFF</strong><button id="autoToggle" class="primary" disabled>Bật Auto</button></div>
+ <div class="row"><strong id="status" class="warning">CHỜ BINANCE</strong><strong id="autoState" class="muted">AUTO OFF</strong><button id="autoToggle" class="primary" type="button">Bật Auto</button></div>
 </header>
+<div id="safetyLine" role="status" aria-live="polite"></div>
+<div id="message" role="alert" aria-live="assertive"></div>
 <section class="top">
  <div class="card"><div class="label">Ví Futures</div><div id="wallet" class="value">—</div></div>
  <div class="card"><div class="label">Khả dụng</div><div id="available" class="value">—</div></div>
@@ -88,7 +93,6 @@ th{background:#22364d;color:#c8def1} .scroll{overflow-x:auto}
 <section class="card"><div class="row" style="justify-content:space-between"><h2>Lịch sử Binance</h2><div class="row"><button id="historyRefresh">Làm mới</button><button id="csv">CSV</button></div></div>
 <div id="incomeSummary" class="meta"></div><div class="scroll"><table><thead><tr><th>Thời gian</th><th>Chiều</th><th>Khối lượng</th><th>Giá</th><th>Realized</th><th>Phí</th></tr></thead><tbody id="historyBody"></tbody></table></div></section>
 <section class="card"><div class="row" style="justify-content:space-between"><h2>Tín hiệu OCC</h2><strong id="signal">—</strong></div><div class="meta" id="signalAt">—</div></section>
-<div id="safetyLine"></div><div id="message" role="status"></div>
 <div id="events"></div>
 <script src="engine.js"></script><script src="server-feed.js"></script><script src="trade-core.js"></script><script src="trade-execution.js"></script><script src="trade-recovery.js"></script><script src="app.js"></script>
 </body></html>
