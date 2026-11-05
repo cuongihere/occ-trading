@@ -36,7 +36,7 @@ jobs:
       - name: Publish installable debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: OCC_Android_Standalone_v0_3_2_APK
+          name: OCC_Android_Standalone_v0_3_3_APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
