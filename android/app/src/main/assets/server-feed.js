@@ -7,11 +7,21 @@ class BinanceFeed {
   constructor(callbacks = {}) {
     this.cb = callbacks; this.generation = 0; this.state = 'disconnected'; this.offset = 0;
     this.lastTradeId = -1; this.lastClosed = 0; this.manual = true;
+    this.lastDeliveredTradeAt = 0;
     this.failures = 0; this.clock = callbacks.clock || (() => Date.now());
   }
   status(state, message) { this.state = state; this.cb.onStatus?.({state, message}); }
   now() { return Math.round(this.clock() + this.offset); }
-  healthy() { return this.state === 'live' && this.now() - this.lastTradeTime <= 10000 && this.clock() - this.lastReceive <= 10000 && this.now() - this.lastMarketTime <= 10000; }
+  healthy() {
+    const localNow=this.clock();
+    // Same unique live trade supplies the visible LAST and Auto preflight.
+    // Mark-only events or duplicate trade IDs must not certify live pricing.
+    return this.state==='live' && this.lastDeliveredTradeAt>0 &&
+      localNow>=this.lastDeliveredTradeAt && localNow-this.lastDeliveredTradeAt<=10000 &&
+      this.now()-this.lastTradeTime>=0 && this.now()-this.lastTradeTime<=10000 &&
+      localNow-this.lastReceive<=10000 && this.now()-this.lastMarketTime<=10000;
+  }
+  tradeAgeMs(){return this.lastDeliveredTradeAt?Math.max(0,this.clock()-this.lastDeliveredTradeAt):null;}
   async request(path, signal) {
     if (signal?.aborted) throw Error('Đã hủy yêu cầu.');
     return await window.occPublicGet(path);
@@ -31,6 +41,7 @@ class BinanceFeed {
     this.clear(); this.manual = false; this.reconnecting = false;
     const gen = ++this.generation; this.status('connecting', 'Đang tải nến thật từ Binance USD-M Futures…');
     this.lastReceive = 0; this.lastTradeTime = 0; this.lastMarketTime = 0;
+    this.lastDeliveredTradeAt = 0;
     this.controller = new AbortController(); this.bootTimeout = setTimeout(() => this.controller.abort(), 20000);
     let booting = true; const queue = [];
     try {
@@ -92,11 +103,18 @@ class BinanceFeed {
     if(d.e==='aggTrade') {
       const id=Number(d.a), time=Number(d.T), price=Number(d.p);
       if (!(price>0) || !Number.isFinite(time) || this.now()-time>10000 || time>this.now()+5000) return;
+      if(!Number.isSafeInteger(id)||id<=this.lastTradeId)return;
+      this.lastTradeId=id;
       this.lastTradeTime=time;
-      if(id<=this.lastTradeId) return; this.lastTradeId=id;
-      if(live && this.lastMarketTime && this.now()-this.lastMarketTime<=10000 && this.state!=='live') { this.failures=0; this.status('live','Dữ liệu trực tiếp Binance USD-M • BTCUSDT perpetual'); }
-      // Historical buffer is never a fill event.
-      if(live) this.cb.onTrade?.({price,time,id,receivedAt,exchangeAt:eventTime});
+      // Warmup buffer does not count as live market data.
+      if(live){
+        this.lastDeliveredTradeAt=receivedAt;
+        if(this.lastMarketTime && this.now()-this.lastMarketTime<=10000 && this.state!=='live'){
+          this.failures=0;
+          this.status('live','Dữ liệu trực tiếp Binance USD-M • BTCUSDT perpetual');
+        }
+        this.cb.onTrade?.({price,time,id,receivedAt,exchangeAt:eventTime});
+      }
     } else if(d.e==='kline') {
       this.lastMarketTime=eventTime;
       const k=d.k; if (!k || k.i!=='15m' || !k.x) return;
