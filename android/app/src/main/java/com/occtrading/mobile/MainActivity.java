@@ -1,6 +1,9 @@
 package com.occtrading.mobile;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.widget.EditText;
+import android.text.InputType;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -12,6 +15,9 @@ import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.webkit.WebChromeClient;
+import android.webkit.JsResult;
+import android.webkit.JsPromptResult;
 import android.webkit.WebSettings;
 import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyProperties;
@@ -72,6 +78,48 @@ public final class MainActivity extends Activity {
         browser.setWebViewClient(new WebViewClient() {
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 return !("file:///android_asset/index.html".equals(request.getUrl().toString()));
+            }
+        });
+        // Android suppresses confirm() and prompt() when WebChromeClient is absent.
+        // Handle consent dialogs only for the bundled app page, never remote content.
+        browser.setWebChromeClient(new WebChromeClient() {
+            @Override public boolean onJsConfirm(WebView view, String url,
+                                                   String message, JsResult result) {
+                if(destroyed || !"file:///android_asset/index.html".equals(url)) {
+                    result.cancel();return true;
+                }
+                new AlertDialog.Builder(MainActivity.this)
+                    .setTitle("Xác nhận OCC Trading")
+                    .setMessage(message)
+                    .setPositiveButton("Xác nhận", (dialog,which) -> {
+                        if(destroyed)result.cancel();else result.confirm();
+                    })
+                    .setNegativeButton("Hủy", (dialog,which) -> result.cancel())
+                    .setOnCancelListener(dialog -> result.cancel())
+                    .show();
+                return true;
+            }
+            @Override public boolean onJsPrompt(WebView view, String url, String message,
+                                                  String defaultValue, JsPromptResult result) {
+                if(destroyed || !"file:///android_asset/index.html".equals(url)) {
+                    result.cancel();return true;
+                }
+                final EditText input=new EditText(MainActivity.this);
+                input.setSingleLine(true);
+                input.setInputType(InputType.TYPE_CLASS_TEXT);
+                input.setHint("CHAP NHAN BTC FUTURES");
+                new AlertDialog.Builder(MainActivity.this)
+                    .setTitle("Xác nhận Binance Futures")
+                    .setMessage(message)
+                    .setView(input)
+                    .setPositiveButton("Xác nhận", (dialog,which) -> {
+                        if(destroyed)result.cancel();
+                        else result.confirm(input.getText().toString());
+                    })
+                    .setNegativeButton("Hủy", (dialog,which) -> result.cancel())
+                    .setOnCancelListener(dialog -> result.cancel())
+                    .show();
+                return true;
             }
         });
         browser.addJavascriptInterface(new NativeBridge(), "OCCAndroid");
