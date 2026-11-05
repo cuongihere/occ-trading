@@ -143,3 +143,32 @@ test('TP1 exchange execution is verified before remaining BTC is recognized',asy
  assert.equal(h.bot.cp.fills[0].role,'TP1');
  assert.equal(h.bot.cp.fills[0].qty,leg.qty);
 });
+
+test('Auto preflight reports correct BTC legs without sending any order',async()=>{
+ const h=harness();
+ const checked=await h.bot.preflight({price:78000,healthy:true});
+ assert.equal(checked.quantityBTC,.004);
+ assert.deepEqual(Array.from(checked.legsBTC),[.001,.001,.002]);
+ assert.equal(h.calls.filter(x=>x.method!=='GET').length,0);
+ assert.equal(h.bot.auto,false);
+});
+test('Auto preflight reports Binance minimum margin instead of silently arming under-sized 3 TP',async()=>{
+ const h=harness();
+ h.bot.setConfig({marginUSDT:20});
+ await assert.rejects(h.bot.preflight({price:78000,healthy:true}),/không đủ chia 3 TP.*cần khoảng/);
+ assert.equal(h.bot.auto,false);
+ assert.equal(h.calls.filter(x=>x.method!=='GET').length,0);
+});
+test('Auto preflight explains existing BTC position, without placing another entry',async()=>{
+ const h=harness();
+ h.pos.qty=.004;h.pos.side='LONG';
+ await assert.rejects(h.bot.preflight({price:78000,healthy:true}),/đang có vị thế BTCUSDT/);
+ assert.equal(h.bot.auto,false);
+ assert.equal(h.calls.filter(x=>x.method!=='GET').length,0);
+});
+test('Auto preflight gives actionable leverage mismatch without mutating Binance',async()=>{
+ const h=harness();
+ h.bot.setConfig({leverage:6});
+ await assert.rejects(h.bot.preflight({price:78000,healthy:true}),/Binance 5x, Auto 6x/);
+ assert.equal(h.calls.filter(x=>x.method!=='GET').length,0);
+});
