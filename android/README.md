@@ -1,4 +1,13 @@
-# OCC Trading Android · v0.3.2
+# OCC Trading Android · v0.3.3
+
+## Sửa giá LAST và Auto (v0.3.3)
+
+- Mã nguồn phát hiện trường hợp WebSocket báo LIVE nhờ Mark/candle hoặc giao dịch trùng, nhưng giá LAST không nhận cập nhật mới.
+- Điều kiện LIVE/Auto dùng cùng một giao dịch BTCUSDT `aggTrade` duy nhất và thời gian nhận trực tiếp trong 10 giây gần nhất. Không nới lỏng xác minh để cho phép giao dịch khi giá cũ.
+- Khi giá LAST quá hạn, giao diện hiện `GIÁ CŨ`, thay LAST bằng `—`, ghi giờ nhận cuối và có nút `Nối lại giá`.
+- Không sử dụng giá cũ khi bật Auto hoặc vào lệnh; sau khi khôi phục cần chờ nến/tín hiệu OCC LIVE mới.
+
+
 
 APK Android độc lập: không cần PC/VPS, chạy trong lúc ứng dụng đang mở. Màn hình được giữ sáng bằng FLAG_KEEP_SCREEN_ON.
 
