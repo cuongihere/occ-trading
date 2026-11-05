@@ -57,6 +57,7 @@ function createUi(){
   async preflight({price,healthy}){
    assert.equal(price,78000);
    assert.equal(healthy,true);
+   if(this.cp.config.marginUSDT<70)throw Error('Ký quỹ 20 USDT không đủ 3 TP; cần khoảng 63.65 USDT');
    return {quantityBTC:.004,legsBTC:[.001,.001,.002],
     marginUSDT:this.cp.config.marginUSDT,leverage:this.cp.config.leverage};
   }
@@ -117,4 +118,16 @@ test('Auto preflight button reports verified BTC legs without enabling live orde
  assert.equal(ui.current.trade.auto,false);
  assert.match(ui.node('safetyLine').textContent,/BINANCE ĐÃ XÁC MINH/);
  assert.match(ui.node('safetyLine').textContent,/0\.004 BTC/);
+});
+
+test('Under-sized Auto margin is visible at the top and cannot turn on live trading',async()=>{
+ const ui=createUi();
+ runInNewContext(`connected=true;trade.connected=true;indicator.ready=true;healthy=true;
+  lastTrade=Date.now();lastTradePrice=78000;feed.healthy=()=>true;showAuto();`,ui.context);
+ ui.node('marginUSDT').value='20';
+ await ui.node('autoToggle').onclick();
+ assert.equal(ui.current.trade.auto,false);
+ assert.match(ui.node('safetyLine').textContent,/CHƯA THỂ BẬT AUTO/);
+ assert.match(ui.node('safetyLine').textContent,/cần khoảng 63.65 USDT/);
+ assert.equal(ui.node('configDetails').open,true);
 });
