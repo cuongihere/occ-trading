@@ -1,8 +1,14 @@
-# OCC Trading Android · v0.3.1
+# OCC Trading Android · v0.3.2
 
 APK Android độc lập: không cần PC/VPS, chạy trong lúc ứng dụng đang mở. Màn hình được giữ sáng bằng FLAG_KEEP_SCREEN_ON.
 
-## Sửa lỗi nút Bật Auto (v0.3.1)
+## Kiểm tra Auto (v0.3.2)
+
+- Nút **Kiểm tra Auto** nằm cạnh **Bật Auto**: đọc trực tiếp tài khoản và filter Binance, hiển thị ngay kết quả trước khi xác nhận tiền thật.
+- Tách rõ nguyên nhân không bật: API chưa kết nối, giá chưa LIVE, còn vị thế BTCUSDT, lệnh thường/Algo, sai ISOLATED, sai leverage, không đủ ký quỹ chia 3 TP.
+- Ước lượng ký quỹ tối thiểu theo giá Binance và tỷ lệ TP, không tự tăng số tiền giao dịch. Bật Auto sẽ luôn kiểm tra lại một lần nữa sau xác nhận.
+
+## Các sửa lỗi trước đó (v0.3.1)
 
 - Đăng ký Android WebChromeClient để `confirm()` và `prompt()` hiển thị hộp thoại xác nhận tiền thật; trước đó WebView bỏ qua, dẫn đến nhấn nút nhưng không có phản hồi.
 - Nút Bật Auto có thể nhấn ngay cả khi thiếu điều kiện, nhưng sẽ chỉ báo nguyên nhân và **không gửi lệnh** nếu API, giá LIVE, checkpoint hoặc cấu hình chưa hợp lệ.
