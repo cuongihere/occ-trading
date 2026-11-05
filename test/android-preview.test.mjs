@@ -73,6 +73,6 @@ test('Android reads account and Income, drives verified Auto execution and manua
 test('Android workflow publishes installable debug APK',()=>{
  const yml=src('.github/workflows/android-apk.yml');
  assert.match(yml,/gradle -p android --no-daemon :app:assembleDebug/);
- assert.match(yml,/OCC_Android_Standalone_v0_3_APK/);
+ assert.match(yml,/OCC_Android_Standalone_v0_3_2_APK/);
  assert.match(yml,/app-debug\.apk/);
 });
