@@ -64,9 +64,9 @@ function createUi(){
  const window={};
  const api={
   loadState:()=> '{}',saveState:()=>true,newPrefix:()=> 'OCCBTC-1234567890abcd',
-  auth:(op,key,secret,remember,id)=>{
-   Promise.resolve().then(()=>window.occNativeResponse(id,false,'No stored credentials',401));
-  },
+  // Leave automatic restore pending in this isolated UI test; readiness is set
+  // explicitly by the individual test to avoid asynchronous auth state races.
+  auth:(op,key,secret,remember,id)=>{},
   publicGet(){},signed(){},shareCsv(){}
  };
  const context={window,document:{getElementById:node,createElement:()=>({
