@@ -54,6 +54,12 @@ function createUi(){
   }
   setConfig(c){this.cp.config=c}
   persist(){}
+  async preflight({price,healthy}){
+   assert.equal(price,78000);
+   assert.equal(healthy,true);
+   return {quantityBTC:.004,legsBTC:[.001,.001,.002],
+    marginUSDT:this.cp.config.marginUSDT,leverage:this.cp.config.leverage};
+  }
   async arm({confirmation,healthy}){
    assert.equal(confirmation,'CHAP NHAN BTC FUTURES');
    assert.equal(healthy,true);
@@ -101,4 +107,14 @@ test('Tapping Auto after feed/API readiness enters ON and explicitly waits for f
  await ui.node('autoToggle').onclick();
  assert.equal(ui.current.trade.auto,false);
  assert.equal(ui.node('autoState').textContent,'AUTO OFF');
+});
+
+test('Auto preflight button reports verified BTC legs without enabling live orders',async()=>{
+ const ui=createUi();
+ runInNewContext(`connected=true;trade.connected=true;indicator.ready=true;healthy=true;
+  lastTrade=Date.now();lastTradePrice=78000;feed.healthy=()=>true;showAuto();`,ui.context);
+ await ui.node('autoCheck').onclick();
+ assert.equal(ui.current.trade.auto,false);
+ assert.match(ui.node('safetyLine').textContent,/BINANCE ĐÃ XÁC MINH/);
+ assert.match(ui.node('safetyLine').textContent,/0\.004 BTC/);
 });
