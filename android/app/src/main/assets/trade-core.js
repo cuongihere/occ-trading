@@ -83,9 +83,18 @@ class OCCMobileTrade {
   this.lastSnapshot=snap;return snap;
  }
  verifyFlat(s,{leverage=true}={}){
-  if(s.side||s.openOrders.length||s.algos.length||s.otherPositions.length||
-   s.marginType!=='ISOLATED'||(leverage&&s.leverage!==this.cp.config.leverage))
-   throw Error('Yêu cầu FLAT, không lệnh chờ, ISOLATED và đúng leverage');
+  if(s.side)throw Error('Binance đang có vị thế BTCUSDT '+s.side+' '+s.qty+
+   ' BTC; chỉ bật AUTO khi đã FLAT để tránh lệnh trùng.');
+  if(s.openOrders.length||s.algos.length)
+   throw Error('Binance còn '+s.openOrders.length+' lệnh thường và '+s.algos.length+
+    ' SL/TP Algo; phải xử lý trên Binance trước khi bật AUTO.');
+  if(s.otherPositions.length)
+   throw Error('Tài khoản Futures còn '+s.otherPositions.length+' vị thế khác; chỉ bật AUTO khi không có vị thế khác.');
+  if(s.marginType!=='ISOLATED')
+   throw Error('BTCUSDT Binance đang '+s.marginType+'; cần ISOLATED. Đổi chế độ ký quỹ trên Binance khi FLAT.');
+  if(leverage&&s.leverage!==this.cp.config.leverage)
+   throw Error('Đòn bẩy không khớp: Binance '+s.leverage+'x, Auto '+this.cp.config.leverage+
+    'x. Khi FLAT bấm Đặt leverage Binance.');
  }
  async getRules(){
   const info=await this.publicGet('/fapi/v1/exchangeInfo');
@@ -134,16 +143,26 @@ class OCCMobileTrade {
   }
   return {qty,parts};
  }
+ async preflight({price,healthy}){
+  if(!this.connected)throw Error('Chưa kết nối Binance Futures API');
+  if(this.cp.halted)throw Error('OCC đang khóa an toàn: '+(this.cp.error||'cần đối soát Binance'));
+  if(this.cp.phase!=='IDLE')throw Error('OCC còn lệnh/checkpoint: '+this.cp.phase);
+  if(!healthy)throw Error('Giá BTCUSDT chưa LIVE hoặc quá hạn');
+  const snap=await this.getSnapshot();
+  this.verifyFlat(snap);
+  const rules=await this.getRules();
+  const plan=this.plan(snap,price,rules);
+  return {quantityBTC:plan.qty,legsBTC:plan.parts,availableUSDT:snap.availableUSDT,
+   marginUSDT:this.cp.config.marginUSDT,leverage:this.cp.config.leverage,
+   markPrice:price,checkedAt:Date.now()};
+ }
  async arm({price,healthy,confirmation}){
   return this.locked(async()=>{
-   if(!this.connected)throw Error('Chưa kết nối Binance Futures API');
-   if(this.cp.halted)throw Error('OCC đang khóa an toàn: '+(this.cp.error||'cần đối soát Binance'));
-   if(this.cp.phase!=='IDLE')throw Error('OCC còn lệnh/checkpoint: '+this.cp.phase);
-   if(!healthy)throw Error('Giá BTCUSDT chưa LIVE hoặc quá hạn');
    if(confirmation!=='CHAP NHAN BTC FUTURES')throw Error('Chưa xác nhận giao dịch Futures tiền thật');
-   const snap=await this.getSnapshot();this.verifyFlat(snap);
-   this.plan(snap,price,await this.getRules());
-   this.auto=true;this.event('AUTO ON · chờ tín hiệu mới');return true;
+   const check=await this.preflight({price,healthy});
+   // Keep Binance checks read-only until the explicit confirmation has been given.
+   this.auto=true;this.event('AUTO ON · BTC '+check.quantityBTC+' · chờ tín hiệu M15 mới');
+   return true;
   });
  }
  disarm(){this.auto=false;this.event('AUTO OFF · giữ lệnh bảo vệ trên Binance');}
