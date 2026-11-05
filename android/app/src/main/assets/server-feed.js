@@ -18,7 +18,7 @@ class BinanceFeed {
     // Mark-only events or duplicate trade IDs must not certify live pricing.
     return this.state==='live' && this.lastDeliveredTradeAt>0 &&
       localNow>=this.lastDeliveredTradeAt && localNow-this.lastDeliveredTradeAt<=10000 &&
-      this.now()-this.lastTradeTime>=0 && this.now()-this.lastTradeTime<=10000 &&
+      this.now()-this.lastTradeTime>=-5000 && this.now()-this.lastTradeTime<=10000 &&
       localNow-this.lastReceive<=10000 && this.now()-this.lastMarketTime<=10000;
   }
   tradeAgeMs(){return this.lastDeliveredTradeAt?Math.max(0,this.clock()-this.lastDeliveredTradeAt):null;}
