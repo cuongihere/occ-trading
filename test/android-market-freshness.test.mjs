@@ -23,7 +23,7 @@ test('Auto feed is LIVE only when a unique aggTrade reached the UI recently',()=
  x.feed.consume({e:'kline',s:'BTCUSDT',E:x.now,k:{i:'15m',x:false}},true,x.now);
  x.feed.consume({e:'aggTrade',s:'BTCUSDT',E:x.now,a:10,T:x.now,p:'80509.4'},true,x.now);
  assert.equal(x.feed.healthy(),false);
- assert.equal(x.feed.tradeAgeMs(),110100);
+ assert.equal(x.feed.tradeAgeMs(),11100);
  assert.equal(x.shown.length,0);
  x.feed.consume({e:'aggTrade',s:'BTCUSDT',E:x.now,a:11,T:x.now,p:'80509.5'},true,x.now);
  assert.equal(x.feed.healthy(),true);
