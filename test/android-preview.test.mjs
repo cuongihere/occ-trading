@@ -58,6 +58,10 @@ test('Android reads account and Income, drives verified Auto execution and manua
  assert.match(js,/trade\.onSignal\(signal,lastTradePrice,true\)/);
  assert.match(js,/trade\.manualClose\(role\)/);
  assert.match(js,/trade\.arm\(/);
+ assert.match(js,/trade\.preflight\(/);
+ assert.match(js,/await inspectAuto\(\)/);
+ assert.match(js,/CHƯA THỂ BẬT AUTO/);
+ assert.match(src('android/app/src/main/assets/index.html'),/id="autoCheck"/);
  assert.match(js,/trade\.reconcile\(/);
  assert.match(js,/trade\.setLeverage\(/);
  for(const filename of ['trade-core.js','trade-execution.js','trade-recovery.js'])
