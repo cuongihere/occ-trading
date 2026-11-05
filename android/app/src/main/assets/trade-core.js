@@ -98,22 +98,49 @@ class OCCMobileTrade {
   if(!(rules.step>0&&rules.min>0&&rules.tick>0))throw Error('Thiếu filter Binance');
   return rules;
  }
+ minMarginForThreeTP(price,rules){
+  const c=this.cp.config;
+  if(!(price>0&&rules.step>0&&rules.min>0&&c.leverage>0))return null;
+  const minimumLots=Math.max(3*Math.ceil(rules.min/rules.step-1e-8),
+   Math.ceil(rules.minNotional/(price*rules.step)-1e-8));
+  for(let lots=minimumLots;lots<minimumLots+10000;lots++){
+   const qty=occRound(lots*rules.step);
+   const a=occFloor(qty*c.tp1Qty/100,rules.step);
+   const b=occFloor(qty*c.tp2Qty/100,rules.step);
+   const remainder=occRound(qty-a-b);
+   if([a,b,remainder].every(v=>v>=rules.min-1e-9)&&
+      qty*price>=rules.minNotional-1e-8)
+    return Math.ceil(qty*price/c.leverage*1.02*100)/100;
+  }
+  return null;
+ }
  plan(s,price,rules){
   const c=this.cp.config;
-  if(!(Number.isFinite(price)&&price>0&&Number.isFinite(s.availableUSDT)&&
-     s.availableUSDT>=c.marginUSDT))throw Error('Không đủ số dư/giá');
+  if(!Number.isFinite(price)||price<=0)
+   throw Error('Chưa có giá BTCUSDT Futures hợp lệ');
+  if(!Number.isFinite(s.availableUSDT))
+   throw Error('Binance không xác nhận USDT khả dụng');
+  if(s.availableUSDT<c.marginUSDT)
+   throw Error('USDT khả dụng thấp hơn ký quỹ '+c.marginUSDT+' USDT');
   const qty=occFloor(c.marginUSDT*c.leverage/price,rules.step);
   const a=occFloor(qty*c.tp1Qty/100,rules.step),b=occFloor(qty*c.tp2Qty/100,rules.step);
   const parts=[a,b,occRound(qty-a-b)];
   if(qty<rules.min||qty*price<rules.minNotional||
-     parts.some(x=>x<rules.min)||Math.abs(parts.reduce((x,y)=>x+y,0)-qty)>1e-8)
-   throw Error('Không đủ BTC để đặt đầy đủ 3 TP theo LOT_SIZE');
+     parts.some(v=>v<rules.min)||Math.abs(parts.reduce((x,y)=>x+y,0)-qty)>1e-8){
+   const minimum=this.minMarginForThreeTP(price,rules);
+   throw Error('Ký quỹ '+c.marginUSDT+' USDT ở '+c.leverage+
+     'x không đủ chia 3 TP theo Binance'+
+     (minimum==null?'.':'; cần khoảng '+minimum+' USDT hoặc hơn. Mở Cấu hình Auto để chỉnh.'));
+  }
   return {qty,parts};
  }
  async arm({price,healthy,confirmation}){
   return this.locked(async()=>{
-   if(confirmation!=='CHAP NHAN BTC FUTURES'||!this.connected||!healthy||
-      this.cp.halted||this.cp.phase!=='IDLE')throw Error('Auto chưa được phép bật');
+   if(!this.connected)throw Error('Chưa kết nối Binance Futures API');
+   if(this.cp.halted)throw Error('OCC đang khóa an toàn: '+(this.cp.error||'cần đối soát Binance'));
+   if(this.cp.phase!=='IDLE')throw Error('OCC còn lệnh/checkpoint: '+this.cp.phase);
+   if(!healthy)throw Error('Giá BTCUSDT chưa LIVE hoặc quá hạn');
+   if(confirmation!=='CHAP NHAN BTC FUTURES')throw Error('Chưa xác nhận giao dịch Futures tiền thật');
    const snap=await this.getSnapshot();this.verifyFlat(snap);
    this.plan(snap,price,await this.getRules());
    this.auto=true;this.event('AUTO ON · chờ tín hiệu mới');return true;
