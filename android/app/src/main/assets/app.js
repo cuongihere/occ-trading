@@ -42,13 +42,30 @@ const trade=new OCCMobileTrade({
 });
 stored=trade.cp;
 let autoClickBusy=false,lastAutoDiagnostic='';
+function quoteAgeMs(){
+ if(!lastTrade||!(lastTradePrice>0))return null;
+ const appAge=Math.max(0,Date.now()-lastTrade);
+ const sourceAge=feed?.tradeAgeMs?.();
+ return sourceAge==null?appAge:Math.max(appAge,sourceAge);
+}
+function quoteIsFresh(){
+ const age=quoteAgeMs();
+ return healthy&&feed?.healthy()===true&&age!==null&&age<=10000;
+}
+function quoteStaleReason(){
+ const age=quoteAgeMs();
+ if(age!==null&&age>10000)
+  return 'Giá BTCUSDT LAST đã cũ '+Math.ceil(age/1000)+' giây. '+
+    'Chờ aggTrade mới hoặc nhấn Nối lại giá; không bật Auto bằng giá cũ.';
+ return 'Binance chưa xác minh được LAST và Mark trực tiếp. '+
+  'Chờ dữ liệu mới hoặc nhấn Nối lại giá.';
+}
 function autoBlocker(){
  if(!connected)return 'Chưa kết nối API Binance Futures. Mở mục API Binance để kết nối.';
  if(trade.cp.halted)return 'OCC đang KHÓA: '+(trade.cp.error||'checkpoint cần đối soát Binance');
  if(trade.cp.phase!=='IDLE')return 'OCC còn '+trade.cp.phase+'; cần xử lý vị thế/checkpoint trước khi bật Auto.';
  if(!indicator.ready)return 'Chưa đồng bộ xong chỉ báo OCC H4/M15.';
- if(!healthy||!feed?.healthy())return 'Nguồn giá Binance chưa LIVE; chờ kết nối và đồng bộ.';
- if(!(lastTradePrice>0)||Date.now()-lastTrade>10000)return 'Giá BTCUSDT đang quá hạn; chưa thể bật Auto.';
+ if(!quoteIsFresh())return quoteStaleReason();
  return '';
 }
 function showAuto(){
@@ -246,7 +263,13 @@ function connectFeed(){
  feed=new BinanceFeed({
   onStatus:({state,message})=>setFeed(state,message),
   onReady:({h4,m15,now})=>{indicator.warmup(h4,m15,now);indicator.setRunning(false);indicator.setHealthy(false)},
-  onTrade:({price,receivedAt})=>{lastTrade=receivedAt;lastTradePrice=Number(price);$('last').textContent=fmtValue(price,1);$('priceTime').textContent=stamp(receivedAt)},
+  onTrade:({price,receivedAt})=>{
+    if(!(Number(price)>0)||!Number.isFinite(receivedAt))return;
+    lastTrade=receivedAt;lastTradePrice=Number(price);
+    $('last').textContent=fmtValue(price,1);
+    $('priceTime').textContent='LAST nhận lúc '+stamp(receivedAt);
+    showAuto();
+   },
   onMark:({price})=>{if(Number(price)>0){lastMark=Number(price);$('mark').textContent=fmtValue(price,2)}},
   onCandle:(bar,opts)=>{
    const signal=indicator.onCandle(bar,opts);indicator.pending=null;
@@ -254,7 +277,7 @@ function connectFeed(){
     $('signal').textContent=signal.side;
     $('signal').className=signal.side==='LONG'?'positive':'negative';
     $('signalAt').textContent=stamp(signal.time);
-    if(trade.auto&&healthy&&feed.healthy()&&Date.now()-lastTrade<10000&&lastTradePrice>0)
+    if(trade.auto&&quoteIsFresh())
      trade.onSignal(signal,lastTradePrice,true).then(()=>{showAuto();refresh()})
       .catch(e=>{msg(e);showAuto()});
    }
@@ -276,7 +299,7 @@ async function inspectAuto(){
  try{trade.setConfig(readConfig());displayConfig();}
  catch(e){$('configDetails').open=true;throw e;}
  return trade.preflight({price:lastTradePrice,
-  healthy:healthy&&feed?.healthy()&&Date.now()-lastTrade<10000});
+  healthy:quoteIsFresh()});
 }
 function showPreflightError(e){
  const reason=String(e?.message||e);
@@ -317,7 +340,7 @@ $('autoToggle').onclick=async()=>{
   }
   lastAutoDiagnostic='Đang đối soát lại Binance trước khi bật…';showAuto();
   await trade.arm({price:lastTradePrice,
-   healthy:healthy&&feed?.healthy()&&Date.now()-lastTrade<10000,confirmation});
+   healthy:quoteIsFresh(),confirmation});
   lastAutoDiagnostic='';
   msg('AUTO ON · Đã xác minh Binance, chờ tín hiệu OCC M15 MỚI.');
  }catch(e){showPreflightError(e)}
@@ -336,9 +359,25 @@ $('applyLeverage').onclick=async()=>{
   await trade.setLeverage(value);msg('Đòn bẩy đã xác minh');await refresh();
  }catch(e){msg(e)}finally{showAuto()}
 };
+$('priceReconnect').onclick=()=>{
+ lastAutoDiagnostic='Đang nối lại giá LAST + Mark';
+ lastTrade=0;lastTradePrice=null;
+ $('last').textContent='—';$('priceTime').textContent='Đang nối lại giá trực tiếp…';
+ connectFeed();showAuto();
+};
 displayConfig();connectionStatus();showAuto();connectFeed();
 setInterval(()=>{
- if(lastTrade&&Date.now()-lastTrade>10000){$('last').textContent='—';$('priceTime').textContent='Giá quá hạn'}
+ if(!quoteIsFresh()){
+  $('last').textContent='—';
+  $('priceTime').textContent=lastTrade?
+   'LAST cuối '+stamp(lastTrade)+' · đã quá hạn':'Chưa có giá LAST trực tiếp';
+  if(healthy){$('status').textContent='GIÁ CŨ';$('status').className='warning';}
+ }else{
+  $('last').textContent=fmtValue(lastTradePrice,1);
+  $('priceTime').textContent='LAST nhận lúc '+stamp(lastTrade);
+  $('status').textContent='LIVE';$('status').className='positive';
+ }
+ showAuto();
 },1000);
 setInterval(async()=>{
  if(!connected)return;
