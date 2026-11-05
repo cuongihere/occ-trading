@@ -21,6 +21,9 @@ button.primary{background:#9eebbd;color:#0b2a20;border:0}
 button.danger{background:#452932;color:#ffd5dc}
 button:disabled{opacity:.5}
 #autoToggle{min-width:88px}
+#autoCheck{font-size:11px;padding:7px 8px}
+#safetyLine:not(:empty){padding:9px 11px;border:1px solid #52657c;border-radius:8px;background:#16273a;line-height:1.5}
+#message:not(:empty){padding:9px 11px;background:#392a24;border-radius:8px}
 .level button{display:block;width:100%;margin-top:7px;padding:6px 7px;font-size:11px}
 #safetyLine{min-height:0;font-size:11px;color:#ffcf99;margin-bottom:6px}
 
@@ -51,7 +54,7 @@ th{background:#22364d;color:#c8def1} .scroll{overflow-x:auto}
 @media(max-width:380px){.top{grid-template-columns:repeat(2,1fr)}.stats{grid-template-columns:repeat(2,1fr)}}
 </style></head><body>
 <header><div><h1>OCC Trading</h1><small>BTCUSDT Futures · Android</small></div>
- <div class="row"><strong id="status" class="warning">CHỜ BINANCE</strong><strong id="autoState" class="muted">AUTO OFF</strong><button id="autoToggle" class="primary" type="button">Bật Auto</button></div>
+ <div class="row"><strong id="status" class="warning">CHỜ BINANCE</strong><strong id="autoState" class="muted">AUTO OFF</strong><button id="autoCheck" type="button">Kiểm tra Auto</button><button id="autoToggle" class="primary" type="button">Bật Auto</button></div>
 </header>
 <div id="safetyLine" role="status" aria-live="polite"></div>
 <div id="message" role="alert" aria-live="assertive"></div>
