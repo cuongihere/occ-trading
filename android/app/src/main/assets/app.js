@@ -41,16 +41,32 @@ const trade=new OCCMobileTrade({
  newId:()=>OCCAndroid.newPrefix(),report:message=>log(message)
 });
 stored=trade.cp;
+let autoClickBusy=false;
+function autoBlocker(){
+ if(!connected)return 'Chưa kết nối API Binance Futures. Mở mục API Binance để kết nối.';
+ if(trade.cp.halted)return 'OCC đang KHÓA: '+(trade.cp.error||'checkpoint cần đối soát Binance');
+ if(trade.cp.phase!=='IDLE')return 'OCC còn '+trade.cp.phase+'; cần xử lý vị thế/checkpoint trước khi bật Auto.';
+ if(!indicator.ready)return 'Chưa đồng bộ xong chỉ báo OCC H4/M15.';
+ if(!healthy||!feed?.healthy())return 'Nguồn giá Binance chưa LIVE; chờ kết nối và đồng bộ.';
+ if(!(lastTradePrice>0)||Date.now()-lastTrade>10000)return 'Giá BTCUSDT đang quá hạn; chưa thể bật Auto.';
+ return '';
+}
 function showAuto(){
- $('autoState').textContent=trade.cp.halted?'AUTO KHÓA':trade.auto?'AUTO ON':'AUTO OFF';
+ const blocked=autoBlocker();
+ const state=trade.cp.halted?'AUTO KHÓA':trade.auto?'AUTO ON':'AUTO OFF';
+ $('autoState').textContent=state;
  $('autoState').className=trade.cp.halted?'negative':trade.auto?'positive':'muted';
- $('autoToggle').textContent=trade.auto?'Tắt Auto':'Bật Auto';
- $('autoToggle').disabled=trade.busy||!connected||(!trade.auto&&
-    (trade.cp.halted||trade.cp.phase!=='IDLE'||!healthy));
+ $('autoToggle').textContent=trade.busy||autoClickBusy?'Đang kiểm tra…':trade.auto?'Tắt Auto':'Bật Auto';
+ // Keep the toggle tappable even when Binance is offline: explain the blocker
+ // instead of silently disabling the only control in the dashboard.
+ $('autoToggle').disabled=trade.busy||autoClickBusy;
  $('closeAll').disabled=trade.busy||trade.cp.halted||trade.cp.phase!=='PROTECTED'||!account;
  $('applyLeverage').disabled=trade.busy||trade.auto||trade.cp.halted||
     trade.cp.phase!=='IDLE'||!connected;
- $('safetyLine').textContent=trade.cp.halted?'KHÓA · '+(trade.cp.error||trade.lastError):'';
+ $('safetyLine').textContent=trade.auto?
+  (healthy&&feed?.healthy()?'AUTO ON · CHỜ TÍN HIỆU OCC M15 MỚI':
+    'AUTO ON · CHỜ BINANCE KHÔI PHỤC GIÁ, KHÔNG GỬI LỆNH MỚI'):
+  blocked||'AUTO OFF · SẴN SÀNG BẬT';
 }
 
 function saveLocal(){
@@ -253,12 +269,43 @@ async function performManual(role){
  }catch(e){msg(e)}finally{showAuto()}
 }
 $('autoToggle').onclick=async()=>{
- if(trade.auto){trade.disarm();showAuto();return;}
+ if(trade.auto){
+  trade.disarm();msg('AUTO OFF · SL/TP đang mở trên Binance vẫn giữ nguyên.');
+  showAuto();return;
+ }
+ const blocker=autoBlocker();
+ if(blocker){
+  msg(blocker);
+  if(!connected)$('apiEditor').open=true;
+  if(trade.cp.halted||trade.cp.phase!=='IDLE')$('reconcile').focus();
+  return;
+ }
+ try{
+  // Match PC behavior: applying the visible Auto settings before preflight
+  // prevents the saved default 20 USDT from silently overriding an edited margin.
+  const proposed=readConfig();
+  trade.setConfig(proposed);
+  displayConfig();
+ }catch(e){
+  $('configDetails').open=true;msg(e);showAuto();return;
+ }
  if(!confirm('BẬT AUTO BTCUSDT FUTURES BẰNG TIỀN THẬT?'))return;
  const confirmation=prompt('Nhập CHAP NHAN BTC FUTURES:');
- try{await trade.arm({price:lastTradePrice,healthy:healthy&&feed?.healthy()&&
-     Date.now()-lastTrade<10000,confirmation});}
- catch(e){msg(e)}finally{showAuto()}
+ if(confirmation!=='CHAP NHAN BTC FUTURES'){
+  msg('Chưa xác nhận bật Auto, không đặt lệnh.');return;
+ }
+ autoClickBusy=true;showAuto();
+ $('message').textContent='Đang xác minh tài khoản, vị thế và khối lượng TP trên Binance…';
+ try{
+  await trade.arm({price:lastTradePrice,
+   healthy:healthy&&feed?.healthy()&&Date.now()-lastTrade<10000,confirmation});
+  msg('AUTO ON · Đã xác minh Binance, chờ tín hiệu OCC M15 MỚI (không vào lệnh ngay).');
+ }catch(e){
+  msg(e);
+  if(/ký quỹ|TP|LOT_SIZE|USDT/i.test(String(e.message)))$('configDetails').open=true;
+ }finally{
+  autoClickBusy=false;showAuto();
+ }
 };
 $('closeAll').onclick=()=>performManual('ALL');
 $('reconcile').onclick=async()=>{
