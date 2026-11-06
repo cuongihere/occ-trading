@@ -893,6 +893,9 @@ test('PC restarted while LIMIT cancellation outcome was unknown must never send 
  assert.equal(restarted.armed,false);
  assert.equal(restarted.halted,true);
  assert.equal(restarted.limitCancelUncertain,true);
+ await assert.rejects(
+  restarted.connect({...creds,apiKey:'wrong-api-credentials-for-another-account'}),
+  /đúng API Binance đã mã hóa/);
  await restarted.connect(creds);
  const before=fx.calls.filter(x=>x.method==='DELETE'&&x.path==='/fapi/v1/order').length;
  await assert.rejects(restarted.cancelOpenLimit(),/không gửi hủy lần hai/i);
