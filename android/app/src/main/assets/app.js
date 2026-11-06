@@ -367,6 +367,10 @@ $('autoToggle').onclick=async()=>{
   const check=await inspectAuto();
   lastAutoDiagnostic='BINANCE ĐÃ XÁC MINH · '+check.quantityBTC+' BTC · 3 TP hợp lệ';
   showAuto();
+  if(trade.cp.config.entryMode==='LIMIT_PULLBACK'&&!confirm(
+   'LIMIT chờ giá có thể không khớp hoặc khớp một phần. Nếu điện thoại mất mạng/tắt app, '+
+   'Binance có thể giữ lệnh tối đa khoảng 11 phút trước khi tự hết hạn; '+
+   'phần khớp trong lúc app tắt có thể CHƯA CÓ STOP. Chỉ tiếp tục khi bạn chấp nhận rủi ro.'))return;
   if(!confirm('BẬT AUTO BTCUSDT FUTURES BẰNG TIỀN THẬT?'))return;
   const confirmation=prompt('Nhập CHAP NHAN BTC FUTURES:');
   if(confirmation!=='CHAP NHAN BTC FUTURES'){
