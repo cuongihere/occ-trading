@@ -218,10 +218,18 @@ export class BrowserFutures{
   return this.account;
  }
  async connect({apiKey,apiSecret,environment='production',remember=true}){
-  if(this.armed||this.busy||this.activeProtection||this.pendingLimit)throw Error('Tắt Auto và hủy LIMIT trước khi đổi API');
+  if(this.armed||this.busy||this.activeProtection||(this.pendingLimit&&this.api))
+   throw Error('Tắt Auto và hủy LIMIT trước khi đổi API');
   if(environment!=='production')throw Error('Chỉ sử dụng Binance Futures thật');
   if(typeof apiKey!=='string'||typeof apiSecret!=='string'||apiKey.length<8||apiSecret.length<8)
    throw Error('Nhập đầy đủ API Key và Secret');
+  if(this.pendingLimit){
+   // Only reconnect to the original DPAPI-verified Binance account.
+   // Never cancel an outstanding order using an arbitrary replacement API.
+   const original=this.vault.exists()?this.vault.load():null;
+   if(!original||original.apiKey!==apiKey||original.apiSecret!==apiSecret||remember===false)
+    throw Error('LIMIT chờ cần đúng API Binance đã mã hóa trên Windows; không được đổi API khi chưa đối soát');
+  }
   this.api?.close();this.api=null;this.account=null;this.environment='production';
   const connection=this.transportFactory({apiKey,apiSecret,environment:'production',
    productionConsent:'I_ACCEPT_LIVE_BTCUSDT'});
@@ -327,6 +335,7 @@ export class BrowserFutures{
   }finally{this.busy=false;}
  }
  async reconcileClosedAfterReconnect(){
+  if(this.pendingLimit)return false; // Explicit Binance reconciliation required.
   if(!this.api||this.armed||!this.halted||this.activeProtection)return false;
   this.recoveryStatus='checking';this.lastRecoveryCheck=Date.now();
   try{
