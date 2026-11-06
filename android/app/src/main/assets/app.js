@@ -7,7 +7,7 @@ let seq=0,feed=null,healthy=false,lastTrade=0,lastTradePrice=null,lastMark=null,
     trades=[],income=[],lastIncome=0,indicator=new OCCEngine(),busy=false;
 let stored={phase:'IDLE',config:{marginUSDT:20,leverage:5,side:'BOTH',slPercent:1,tpMode:'Percent',
  tp1Val:1,tp2Val:2,tp3Val:3,tp1Qty:33,tp2Qty:33,reverseOnSignal:false,
- entryMode:'MARKET',limitOffsetPct:0.05,limitWaitSeconds:90}};
+ entryMode:'MARKET',limitBasis:'OCC_CROSS',limitOffsetPct:0.05,limitWaitSeconds:90}};
 try{
  const x=JSON.parse(OCCAndroid.loadState()||'{}');
  stored={...stored,...x,config:{...stored.config,...x.config}};
@@ -104,7 +104,7 @@ function displayConfig(){
  const c=stored.config;
  for(const [id,v]of Object.entries({marginUSDT:c.marginUSDT,leverage:c.leverage,side:c.side,sl:c.slPercent,
   mode:c.tpMode,tp1:c.tp1Val,tp2:c.tp2Val,tp3:c.tp3Val,q1:c.tp1Qty,q2:c.tp2Qty,
-  entryMode:c.entryMode,limitOffsetPct:c.limitOffsetPct,limitWaitSeconds:c.limitWaitSeconds}))
+  entryMode:c.entryMode,limitBasis:c.limitBasis,limitOffsetPct:c.limitOffsetPct,limitWaitSeconds:c.limitWaitSeconds}))
    $(id).value=v;
  $('reverse').checked=c.reverseOnSignal;
  $('summary').textContent=(c.entryMode==='LIMIT_PULLBACK'?'LIMIT -'+c.limitOffsetPct+'%':'MARKET')+
@@ -115,7 +115,7 @@ function readConfig(){
   slPercent:Number($('sl').value),tpMode:$('mode').value,
   tp1Val:Number($('tp1').value),tp2Val:Number($('tp2').value),tp3Val:Number($('tp3').value),
   tp1Qty:Number($('q1').value),tp2Qty:Number($('q2').value),reverseOnSignal:$('reverse').checked,
-  entryMode:$('entryMode').value,limitOffsetPct:Number($('limitOffsetPct').value),
+  entryMode:$('entryMode').value,limitBasis:$('limitBasis').value,limitOffsetPct:Number($('limitOffsetPct').value),
   limitWaitSeconds:Number($('limitWaitSeconds').value)};
  if(!['BOTH','LONG','SHORT'].includes(c.side)||!['Percent','Points'].includes(c.tpMode)||
   !Number.isInteger(c.leverage)||c.leverage<1||c.leverage>20||!(c.marginUSDT>0&&c.marginUSDT<=1000)||
@@ -123,6 +123,7 @@ function readConfig(){
   [c.tp1Val,c.tp2Val,c.tp3Val,c.tp1Qty,c.tp2Qty].some(v=>!Number.isFinite(v)||v<=0)||
   c.tp1Qty+c.tp2Qty>=100||
   !['MARKET','LIMIT_PULLBACK'].includes(c.entryMode)||
+  !['OCC_CROSS','M15_CLOSE'].includes(c.limitBasis)||
   !(c.limitOffsetPct>=0.01&&c.limitOffsetPct<=1)||
   !Number.isInteger(c.limitWaitSeconds)||c.limitWaitSeconds<30||c.limitWaitSeconds>180)
    throw Error('Cấu hình không hợp lệ');
