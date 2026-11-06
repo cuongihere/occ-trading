@@ -14,6 +14,7 @@ import {projectCompactSLTP} from './futures-compact-pnl.mjs';
 import {validateManagedExit,manualExitControls} from './futures-manual-exit.mjs';
 import {LiveStatsLedger} from './binance-live-stats.mjs';
 import {syncOCCLiveHistory} from './futures-live-history.mjs';
+import {installLimitEntry} from './futures-limit-entry.mjs';
 
 const DEFAULT={side:'BOTH',marginUSDT:20,leverage:5,slPercent:1,tpMode:'Percent',
  tp1Val:1,tp2Val:2,tp3Val:3,tp1Qty:33,tp2Qty:33,reverseOnSignal:false};
@@ -30,8 +31,11 @@ export class BrowserFutures{
   this.api=null;this.environment=null;this.account=null;this.filters=null;
   this.armed=false;this.busy=false;this.halted=false;this.error=null;this.events=[];this.activeProtection=null;
   this.recoveryStatus='idle';this.lastRecoveryCheck=null;this.restoreTask=null;
+  this.pendingLimit=null;
   this.historySyncTask=null;this.lastHistorySync=0;this.lastIncomeSync=0;this.historyError=null;this.historyCount=0;this.lastEntryTiming=null;
   const unresolved=existsSync(this.intentPath)?JSON.parse(readFileSync(this.intentPath,'utf8')):null;
+  if(['LIMIT_PENDING','LIMIT_CANCEL_SENDING'].includes(unresolved?.phase))
+   this.pendingLimit={...unresolved};
   const prior=existsSync(this.protectionPath)?new ProtectionCheckpoint(this.protectionPath).load():null;
   this.previousProtection=prior&&prior.phase!=='IDLE'?prior:null; // ID reference only, never resume order management.
   if((unresolved&&unresolved.phase!=='CLEARED')||(prior&&prior.phase!=='IDLE')){
@@ -110,7 +114,12 @@ export class BrowserFutures{
    historyError:this.historyError,historyCount:this.historyCount,
    protectedPosition:this.activeProtection?{entry:this.activeProtection.entry,stop:this.activeProtection.stop,tps:this.activeProtection.tps}:null,
    config:this.config,account:this.account,credentialSaved:this.vault.exists(),lastAccountSync:this.lastAccountSync,
-   lastEntryTiming:this.lastEntryTiming,events:this.events.slice(-20),
+   lastEntryTiming:this.lastEntryTiming,
+   pendingLimit:this.pendingLimit?{
+    side:this.pendingLimit.side,price:this.pendingLimit.price,qty:this.pendingLimit.qty,
+    expiresAt:this.pendingLimit.expiresAt,clientId:this.pendingLimit.clientId,
+    orderId:this.pendingLimit.orderId}:null,
+   events:this.events.slice(-20),
    warning:'Giao dịch tiền thật có thể mất vốn. API Key/Secret chỉ giữ trong RAM; cần xác nhận mỗi khi bật Auto.'};
  }
  // Read-only exchange inspection works while AUTO is halted after restart.
@@ -414,7 +423,8 @@ export class BrowserFutures{
   if(!this.api)throw Error('Kết nối API trên trang Binance trước');
   if(this.environment!=='production')throw Error('Chỉ sử dụng Binance Futures thật');
   if(acceptance!=='CHAP NHAN BTC FUTURES')throw Error('Chưa xác nhận giao dịch tiền thật');
-  if(this.halted||this.busy||this.activeProtection)throw Error(this.error||'Lệnh tồn đọng chưa đối soát; không bật Auto');
+  if(this.halted||this.busy||this.activeProtection||this.pendingLimit)
+    throw Error(this.error||'Lệnh hoặc LIMIT tồn đọng chưa đối soát; không bật Auto');
   const a=await this.inspect();
   if(!a.canTrade||a.hasOtherPositions||a.dualSidePosition!==false||a.marginType!=='ISOLATED'||
    a.leverage!==this.config.leverage||a.hasUnknownOrders||a.positionBTC!==0)
@@ -655,7 +665,7 @@ export class BrowserFutures{
   return true;
  }
  async signal(signal,feedHealthy,quoteProvider=null){
-  if(!this.armed||this.busy||this.halted||this.environment!=='production'||!feedHealthy||!signal?.side)return;
+  if(!this.armed||this.busy||this.halted||this.pendingLimit||this.environment!=='production'||!feedHealthy||!signal?.side)return;
   const existing=this.activeProtection;
   if(existing&&(!this.config.reverseOnSignal||existing.entry.side===signal.side||
    (this.config.side!=='BOTH'&&this.config.side!==signal.side))){
@@ -691,6 +701,11 @@ try{
   // Retain compatibility with test/external callers that do not supply live stream.
   const quote=await this.api.get('/fapi/v1/ticker/price',{symbol:'BTCUSDT'});
   quotePrice=Number(quote.price);
+ }
+ if(this.config.entryMode==='LIMIT_PULLBACK'){
+  entrySubmissionPossible=true;
+  await this.submitLimit(signal,a,quotePrice);
+  return;
  }
  const plan=draftProtectedOrder({side:signal.side,account:a,filters:this.filters,
   quotePrice},this.config);
@@ -753,7 +768,7 @@ this.log('PROTECTED','Futures thật entry '+response.orderId+' có SL và '+res
  } 
  // Monitor only the position and orders that OCC placed; never cancel unknown orders.
  async monitor(){
-  if(!this.api||this.environment!=='production'||this.busy||!this.activeProtection||this.halted)return;
+  if(!this.api||this.environment!=='production'||this.busy||this.pendingLimit||!this.activeProtection||this.halted)return;
   this.busy=true;
   try{
    const rows=await this.api.get('/fapi/v3/positionRisk',{symbol:'BTCUSDT'});
@@ -804,3 +819,5 @@ this.log('HALTED','Auto vẫn ON nhưng khóa giao dịch; cần kiểm tra Bina
  }
 
 }
+
+installLimitEntry(BrowserFutures);
