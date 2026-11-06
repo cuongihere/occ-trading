@@ -125,12 +125,12 @@ const server=createServer(async(req,res)=>{
    }
    else if(req.url==='/control/live/off'){
     browserFutures.disarm();
-    if(browserFutures.pendingLimit)await browserFutures.monitorPendingLimit({cancelNow:true});
+    if(browserFutures.pendingLimit)await browserFutures.cancelOpenLimit();
    }
    else if(req.url==='/control/live/limit-cancel'){
     browserFutures.disarm();
     if(!browserFutures.pendingLimit)throw Error('Không có LIMIT OCC đang chờ');
-    await browserFutures.monitorPendingLimit({cancelNow:true});
+    await browserFutures.cancelOpenLimit();
    }
    else if(req.url==='/control/live/manual-exit'){
     return res.end(JSON.stringify(await browserFutures.manualMarketExit(p)));
