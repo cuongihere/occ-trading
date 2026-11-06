@@ -81,6 +81,9 @@ th{background:#22364d;color:#c8def1} .scroll{overflow-x:auto}
  <label>Ký quỹ (USDT)<input id="marginUSDT" type="number" min="1" step="1"></label>
  <label>Đòn bẩy<input id="leverage" type="number" min="1" max="20"></label>
  <label>Chiều<select id="side"><option value="BOTH">Long &amp; Short</option><option value="LONG">Long</option><option value="SHORT">Short</option></select></label>
+ <label>Kiểu vào lệnh<select id="entryMode"><option value="MARKET">MARKET hiện tại</option><option value="LIMIT_PULLBACK">LIMIT chờ hồi giá</option></select></label>
+ <label>Lệch giá LIMIT (%)<input id="limitOffsetPct" type="number" min="0.01" max="1" step="0.01"></label>
+ <label>Chờ LIMIT tối đa (giây)<input id="limitWaitSeconds" type="number" min="30" max="180" step="5"></label>
  <label>SL (%)<input id="sl" type="number" step=".1"></label>
  <label>Kiểu TP<select id="mode"><option value="Percent">%</option><option value="Points">USDT</option></select></label>
  <label>TP1<input id="tp1" type="number" step=".01"></label><label>TP2<input id="tp2" type="number" step=".01"></label>
@@ -89,6 +92,7 @@ th{background:#22364d;color:#c8def1} .scroll{overflow-x:auto}
  </div><label class="row" style="flex-direction:row"><input type="checkbox" id="reverse" style="width:auto">Đảo chiều theo OCC</label>
  <div class="row" style="margin-top:9px"><button id="saveConfig" class="primary">Lưu cấu hình</button><button id="applyLeverage" disabled>Đặt leverage Binance</button></div>
  </details></section>
+<section class="card"><div class="row" style="justify-content:space-between"><h2>LIMIT Entry đang chờ</h2><button id="cancelLimit" type="button" class="danger" disabled>Hủy LIMIT</button></div><div id="limitPending" class="meta">Không có LIMIT OCC đang chờ</div></section>
 <section class="card"><div class="row" style="justify-content:space-between"><h2>Vị thế & SL/TP trên Binance</h2><button id="refresh">Đồng bộ</button><button id="reconcile">Kiểm tra OCC</button><button id="closeAll" class="danger" disabled>Đóng MARKET</button></div>
 <div class="stats"><div>Entry<strong id="entry">—</strong></div><div>Mark<strong id="positionMark">—</strong></div>
 <div>Liq.<strong id="liq">—</strong></div><div>P&L BTC<strong id="btcPnl">—</strong></div><div>Margin<strong id="marginMode">—</strong></div><div>Leverage<strong id="actualLeverage">—</strong></div></div>
@@ -97,5 +101,5 @@ th{background:#22364d;color:#c8def1} .scroll{overflow-x:auto}
 <div id="incomeSummary" class="meta"></div><div class="scroll"><table><thead><tr><th>Thời gian</th><th>Chiều</th><th>Khối lượng</th><th>Giá</th><th>Realized</th><th>Phí</th></tr></thead><tbody id="historyBody"></tbody></table></div></section>
 <section class="card"><div class="row" style="justify-content:space-between"><h2>Tín hiệu OCC</h2><strong id="signal">—</strong></div><div class="meta" id="signalAt">—</div><div class="meta" id="entryTiming">Độ trễ Entry: chưa có lệnh mới</div></section>
 <div id="events"></div>
-<script src="engine.js"></script><script src="server-feed.js"></script><script src="trade-core.js"></script><script src="trade-execution.js"></script><script src="trade-recovery.js"></script><script src="app.js"></script>
+<script src="engine.js"></script><script src="server-feed.js"></script><script src="trade-core.js"></script><script src="trade-execution.js"></script><script src="trade-recovery.js"></script><script src="trade-limit.js"></script><script src="app.js"></script>
 </body></html>
