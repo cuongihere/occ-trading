@@ -493,8 +493,8 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
   </label>
   <div id="sizingAlert" class="sizingAlert unavailable" role="status" aria-live="polite">Đang kiểm tra khối lượng TP1/TP2/TP3 theo Binance…</div>
   <div class="settingActions"><div class="row"><button id="save" class="primary">Lưu cấu hình</button>
-<button id="applyLeverage" class="minor" disabled>Áp dụng đòn bẩy lên Binance</button></div>
-<span id="settingStatus" class="small">Tự lưu · Auto OFF khi sửa</span></div>
+<button id="applyLeverage" class="minor" disabled>Áp dụng đòn bẩy lên Binance</button><button id="cancelLimit" class="minor" hidden>Hủy LIMIT</button></div>
+<span id="settingStatus" class="small">Tự lưu · Auto OFF khi sửa</span><span id="limitInfo" class="small" aria-live="polite"></span></div>
    </div>
   </details>
  </div>
@@ -669,6 +669,13 @@ for(const id of [...numbers,'side','mode','entryMode','limitBasis']){
  });
 }
 $('save').onclick=()=>{clearTimeout(saveTimer);saveConfig();};
+$('cancelLimit').onclick=async()=>{
+ if(!confirm('Hủy LIMIT đang chờ? Phần khớp một phần có thể được chốt MARKET reduceOnly.'))return;
+ $('cancelLimit').disabled=true;
+ try{await request('limit-cancel');$('apiError').textContent='Đã xử lý yêu cầu hủy LIMIT.';}
+ catch(e){$('apiError').textContent='Chưa đối soát LIMIT: '+e.message;}
+ finally{await refreshLive();}
+};
 $('reverseToggle').onchange=async()=>{
  const value=$('reverseToggle').checked;
  if(value&&!confirm('BẬT ĐẢO CHIỀU FUTURES TIỀN THẬT? Khi có tín hiệu OCC ngược, bot có thể đóng vị thế hiện tại và mở vị thế ngược sau khi xác minh an toàn.')){
@@ -741,6 +748,9 @@ $('enabled').onchange=async()=>{
    const check=await validateSizing();
    if(check.status!=='valid')throw Error('Không thể bật AUTO: '+check.message);
    if(!await saveConfig(true))throw Error('Cấu hình chưa hợp lệ hoặc chưa lưu được');
+   if($('entryMode').value==='LIMIT_PULLBACK'&&!confirm(
+    'LIMIT có thể khớp lúc OCC mất mạng/tắt; STOP/TP chưa có đến khi app xác minh khớp. '+
+    'GTD dự phòng Binance khoảng 11 phút. Bạn chấp nhận rủi ro này?'))throw Error('Đã hủy LIMIT');
    if(!confirm('BẬT BOT BTCUSDT FUTURES BẰNG TIỀN THẬT? Có thể thua lỗ hoặc thanh lý.'))throw Error('Đã hủy bật Auto');
    const acceptance=prompt('Nhập CHAP NHAN BTC FUTURES để bật Auto tiền thật:');
    if(acceptance!=='CHAP NHAN BTC FUTURES')throw Error('Chưa xác nhận');
@@ -764,6 +774,11 @@ async function refreshLive(){
   $('rememberApi').checked=s.credentialSaved||$('rememberApi').checked;
   $('apiError').textContent=s.error?('Cần kiểm tra: '+s.error):$('apiError').textContent;
   $('enabled').checked=!!s.armed;
+  const pending=s.pendingLimit;
+  $('cancelLimit').hidden=!pending;
+  $('cancelLimit').disabled=autoBusy||s.busy||!s.connected;
+  $('limitInfo').textContent=pending?'LIMIT '+pending.side+' '+pending.qty+' BTC @'+fmt(pending.price,2)+' · '+Math.max(0,Math.ceil((pending.expiresAt-Date.now())/1000))+'s':'';
+  if(pending)$('settingStatus').textContent='LIMIT chờ khớp · chưa có STOP/TP';
   if(!reverseBusy&&s.config){
    $('reverseToggle').checked=s.config.reverseOnSignal===true;
    $('reverseState').textContent=s.config.reverseOnSignal===true?'ON':'OFF';
