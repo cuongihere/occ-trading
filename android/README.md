@@ -25,6 +25,16 @@ APK Android độc lập: không cần PC/VPS, chạy trong lúc ứng dụng đ
 - Đồng bộ các ô cấu hình ngay trước khi kiểm tra; nếu ký quỹ không đủ để tạo 3 TP theo LOT_SIZE, tính mức ký quỹ tối thiểu ước tính từ giá BTC, đòn bẩy và filters Binance; không âm thầm tăng tiền vào lệnh.
 - Tách các tác vụ Binance REST công khai, đọc tài khoản và gửi lệnh thành các hàng đợi native riêng để tránh nghẽn mạng trong lúc khởi tạo.
 
+## Entry LIMIT chờ hồi giá (tùy chọn, MARKET vẫn mặc định)
+
+- Chọn `Cấu hình Auto → Kiểu vào lệnh: LIMIT chờ hồi giá`. Mốc giá mặc định **giá giao cắt hai đường MA OCC trên nến M15 đã xác nhận** (`crossPrice=(openSeries+closeSeries)/2`); có thể chuyển sang giá đóng nến M15.
+- LIMIT LONG = giá *thấp hơn* cả mốc giao cắt và BTCUSDT LAST hiện tại, LIMIT SHORT = giá *cao hơn*. Lệch mặc định 0,05% và làm tròn theo PRICE_FILTER Binance, không thay đổi SL/TP 1/2/3% hay tỷ lệ 33/33/34. Giá MA có thể xa giá giao dịch thực, dẫn đến không khớp.
+- Chờ tối đa 90 giây khi app còn hoạt động. Hết thời gian hoặc Binance báo `PARTIALLY_FILLED`, OCC hủy phần LIMIT chưa khớp trước rồi mới xác minh vị thế và đặt STOP trước TP. Nếu lượng BTC khớp không đủ lot chia 3 TP, app giữ STOP close-all, tắt Auto và yêu cầu người dùng xử lý phần còn lại.
+- Để tránh GTC tồn tại vô hạn nếu Android bị tắt đột ngột, LIMIT đặt lên Binance bằng `timeInForce=GTD` với hạn dự phòng khoảng **11 phút** (do Binance yêu cầu GTD từ 600 giây trở lên). Khả năng hủy sau 90 giây **phụ thuộc app còn chạy, có mạng và API Binance hoạt động**.
+- **RỦI RO QUAN TRỌNG:** nếu Android bị kill, mất mạng hoặc mất điện thoại trong thời gian LIMIT chờ, lệnh có thể khớp sau đó nhưng STOP/TP chưa được app đặt. Không có OCO/SL tự động đi kèm một cách nguyên tử trên sàn với lệnh entry này. Không coi đây là phiên bản giao dịch 24/7 an toàn không giám sát. Nhấn `Tắt Auto` hoặc `Hủy LIMIT` khi app còn mạng để hủy lệnh và đối soát Binance.
+- LIMIT không chắc tốt hơn MARKET: có thể bỏ lỡ xu hướng, khớp một phần, hoặc vẫn chịu phí taker nếu lệnh đã trở thành marketable lúc gửi. Không tự chuyển LIMIT sang MARKET để đuổi giá.
+- Trước khi giao dịch thật phải thử từng kịch bản và xác nhận trong Binance: LIMIT NEW/PARTIALLY_FILLED/FILLED, hủy, STOP, TP, khởi động lại; thử bằng số vốn chịu rủi ro.
+
 ## Chức năng
 
 - OCC SMMA8 H4/M15 nguyên bản; chỉ nhận tín hiệu nến LIVE và không phát lại tín hiệu cũ.
