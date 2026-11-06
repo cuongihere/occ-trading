@@ -73,7 +73,9 @@ const feed=new BinanceFeed({
   const signal=liveSignalEngine.onCandle(bar,opts);
   liveSignalEngine.pending=null; // signals only; never simulate entry or fills
   if(signal?.eligible&&opts.live&&feed.healthy()&&browserFutures.armed)
-   browserFutures.signal(signal,true).catch(e=>console.error('Futures Auto:',e.message));
+   browserFutures.signal(signal,true,
+    ()=>btcMarketQuote.snapshot({healthy:feed.healthy(),state:feed.state}))
+    .catch(e=>console.error('Futures Auto:',e.message));
  },
  onTrade(t){btcMarketQuote.updateTrade(t);lastObserved=t.receivedAt??Date.now();const due=engine.pending||engine.exitTrigger(t.price)||Date.now()-lastPriceCommit>=1000;
   if(!due)return;lastPriceCommit=Date.now();const healthy=feed.healthy();commit(engine.pending||engine.exitTrigger(t.price)?'execution_candidate':'price_sample',{trade:t,healthy},t.time,lastObserved,()=>engine.onTrade(t,healthy));
