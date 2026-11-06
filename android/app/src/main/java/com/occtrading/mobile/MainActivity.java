@@ -225,7 +225,8 @@ public final class MainActivity extends Activity {
         if(method.equals("GET"))return SIGNED_GET.contains(path);
         if(method.equals("POST"))return path.equals("/fapi/v1/order")||
             path.equals("/fapi/v1/algoOrder")||path.equals("/fapi/v1/leverage");
-        return method.equals("DELETE")&&path.equals("/fapi/v1/algoOrder");
+        return method.equals("DELETE")&&(path.equals("/fapi/v1/algoOrder")||
+            path.equals("/fapi/v1/order"));
     }
     // Native checkpoint lease: permit exactly one mutation per durable intent.
     // An unknown Binance ACK must never cause an automatic duplicate POST/DELETE.
@@ -235,7 +236,8 @@ public final class MainActivity extends Activity {
             JSONObject state=new JSONObject(pref.getString("checkpoint","{}"));
             JSONObject intent=state.optJSONObject("intent");
             String phase=state.optString("phase");
-            boolean approvedCleanup=method.equals("DELETE")&&"CLEANUP_SENDING".equals(phase);
+            boolean approvedCleanup=method.equals("DELETE")&&
+                ("CLEANUP_SENDING".equals(phase)||"LIMIT_CANCEL_SENDING".equals(phase));
             if(intent==null||(state.optBoolean("halted",false)&&!approvedCleanup)||
                intent.optBoolean("sent",false))
                 throw new SecurityException("Lệnh không có checkpoint hợp lệ hoặc đã gửi");
@@ -260,6 +262,21 @@ public final class MainActivity extends Activity {
                 if(close)close=e!=null&&
                     p.optString("side").equals("LONG".equals(e.optString("side"))?"SELL":"BUY");
                 valid=entry||close;
+            }else if("POST".equals(method)&&"/fapi/v1/order".equals(path)&&
+                "LIMIT".equals(p.optString("type"))&&
+                "BOTH".equals(p.optString("positionSide"))&&
+                "GTD".equals(p.optString("timeInForce"))&&
+                "ACK".equals(p.optString("newOrderRespType"))){
+                long goodTillDate=p.optLong("goodTillDate");
+                valid="LIMIT_SENDING".equals(phase)&&"LIMIT_ENTRY".equals(kind)&&
+                    p.optString("newClientOrderId").equals(intent.optString("clientId"))&&
+                    p.optString("side").equals("LONG".equals(intent.optString("side"))?"BUY":"SELL")&&
+                    Math.abs(p.optDouble("quantity")-intent.optDouble("qty"))<1e-8&&
+                    Math.abs(p.optDouble("price")-intent.optDouble("price"))<1e-8&&
+                    p.optDouble("price")>0&&p.optDouble("quantity")>0&&
+                    goodTillDate==intent.optLong("goodTillDate")&&
+                    goodTillDate>System.currentTimeMillis()+600000&&
+                    goodTillDate<System.currentTimeMillis()+1800000;
             }else if("POST".equals(method)&&"/fapi/v1/algoOrder".equals(path)&&
                  "PROTECTION_SENDING".equals(phase)&&"ALGO".equals(kind)&&
                  "BOTH".equals(p.optString("positionSide"))&&
@@ -275,6 +292,14 @@ public final class MainActivity extends Activity {
                         "true".equals(p.optString("closePosition")))||
                      (role.matches("TP[123]")&&"TAKE_PROFIT_MARKET".equals(p.optString("type"))&&
                         "true".equals(p.optString("reduceOnly"))&&p.optDouble("quantity")>0));
+            }else if("DELETE".equals(method)&&"/fapi/v1/order".equals(path)){
+                JSONObject pending=state.optJSONObject("pendingLimit");
+                valid="LIMIT_CANCEL_SENDING".equals(phase)&&
+                    "LIMIT_CANCEL".equals(kind)&&pending!=null&&
+                    p.optString("orderId").equals(intent.optString("orderId"))&&
+                    p.optString("origClientOrderId").equals(intent.optString("clientId"))&&
+                    p.optString("orderId").equals(pending.optString("orderId"))&&
+                    p.optString("origClientOrderId").equals(pending.optString("clientId"));
             }else if("DELETE".equals(method)&&"/fapi/v1/algoOrder".equals(path)){
                 valid="CANCEL".equals(kind)&&
                     ("TP_CANCEL_SENDING".equals(phase)||"CLEANUP_SENDING".equals(phase))&&
