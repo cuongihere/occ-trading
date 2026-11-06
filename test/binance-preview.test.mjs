@@ -79,7 +79,9 @@ test('Auto remains selected through Binance feed interruption and only OFF or ex
  assert.doesNotMatch(server,/s\.state!=='live'&&browserFutures\.armed\)browserFutures\.disarm\(\)/);
  assert.match(server,/opts\.live&&feed\.healthy\(\)&&browserFutures\.armed/);
  assert.match(server,/marketHealthy:feed\.healthy\(\)/);
- assert.match(server,/\/control\/live\/off'\)\{browserFutures\.disarm\(\)/);
+ assert.match(server,/\/control\/live\/off'\)\{/);
+ assert.match(server,/browserFutures\.disarm\(\)/);
+ assert.match(server,/browserFutures\.cancelOpenLimit\(\)/);
  assert.match(html,/AUTO ON · CHỜ GIÁ/);
  assert.match(html,/AUTO ON · KHÓA AN TOÀN/);
  assert.match(html,/sizingStatus!=='valid'/);
@@ -244,7 +246,10 @@ test('API, real Binance quote and minimized Auto config share a row without losi
  assert.match(config,/id="autoConfigSnapshot"/);
  assert.match(config,/class="configPrimary"/);
  assert.match(config,/class="configTargets"/);
- assert.equal((config.match(/<label/g)||[]).length,12);
+ assert.equal((config.match(/<label/g)||[]).length,16);
+ for(const id of ['entryMode','limitBasis','limitOffsetPct','limitWaitSeconds','cancelLimit','limitInfo'])
+  assert.match(config,new RegExp('id="'+id+'"'));
+ assert.match(html,/\.configPanel \.configTargets\{display:grid;grid-template-columns:/);
  assert.match(html,/\.topgrid\{display:grid;grid-template-columns:minmax\(310px,1\.15fr\) minmax\(260px,\.9fr\) minmax\(350px,1fr\)/);
  assert.match(html,/\.pricePanel \.marketTicker\{flex:1 1 auto;margin:0/);
  assert.match(html,/\.configPanel \.configTargets\{grid-template-columns:repeat\(6,minmax\(0,1fr\)\)/);
