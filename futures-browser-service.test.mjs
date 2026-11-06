@@ -33,6 +33,7 @@ function fake({flatRiskRows=false,brokenConfig=false,failStop=false,leverage=5,l
    if(path==='/fapi/v1/ticker/price')return {symbol:'BTCUSDT',price:'77000'};
    if(path==='/fapi/v1/order'){
     if(limit.order&&String(p.orderId)===String(limit.order.orderId))return {...limit.order};
+    if(limit.close&&String(p.orderId)===String(limit.close.orderId))return {...limit.close};
     const entry=calls.filter(x=>x.method==='POST'&&x.path==='/fapi/v1/order'&&x.p.reduceOnly!=='true').at(-1)?.p;
     return {symbol:'BTCUSDT',side:entry?.side||'BUY',positionSide:'BOTH',
      status:'FILLED',type:'MARKET',executedQty:'.032',avgPrice:'77000',orderId:position.entryOrderId,
@@ -54,7 +55,13 @@ function fake({flatRiskRows=false,brokenConfig=false,failStop=false,leverage=5,l
       status:'NEW',origQty:p.quantity,executedQty:'0',price:p.price,avgPrice:'0'};
      return {orderId:9991,clientOrderId:p.newClientOrderId};
     }
-    if(p.reduceOnly==='true'){position.qty=0;return {orderId:999,status:'FILLED'};}
+    if(p.reduceOnly==='true'){
+     position.qty=0;
+     limit.close={symbol:'BTCUSDT',orderId:999,clientOrderId:p.newClientOrderId,
+      type:'MARKET',status:'FILLED',reduceOnly:true,executedQty:p.quantity,
+      side:p.side,positionSide:'BOTH'};
+     return {orderId:999,status:'FILLED'};
+    }
     position.entryOrderId=position.nextEntryOrderId++;
     position.qty=p.side==='BUY'?.032:-.032;return {orderId:position.entryOrderId,status:'FILLED'};
    }
@@ -848,4 +855,25 @@ test('PC fully FILLED LIMIT waits for verified position, installs STOP before TP
   ['/fapi/v1/order',...Array(4).fill('/fapi/v1/algoOrder')]);
  assert.equal(posted[1].p.type,'STOP_MARKET');
  assert.equal(posted[1].p.closePosition,'true');
+});
+
+test('PC partially filled LIMIT cancels unfilled remainder then verifies one reduceOnly MARKET FLAT',async t=>{
+ const dir=tmp(t),fx=fake(),svc=new BrowserFutures({
+  dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await svc.connect(creds);
+ svc.saveConfig({marginUSDT:500,leverage:5,entryMode:'LIMIT_PULLBACK',
+  limitBasis:'M15_CLOSE',limitOffsetPct:0.05,limitWaitSeconds:90});
+ await svc.arm('CHAP NHAN BTC FUTURES',77000);
+ await svc.signal({id:'S-1',side:'LONG',barTime:900000,candleClose:77000},true);
+ const order=fx.limit.order;
+ fx.limit.order={...order,status:'PARTIALLY_FILLED',executedQty:'.001',avgPrice:order.price};
+ fx.position.qty=.001;
+ await svc.pollLimit();
+ assert.equal(svc.snapshot().pendingLimit,null);
+ assert.equal(svc.snapshot().protectedPosition,null);
+ assert.equal(fx.position.qty,0);
+ assert.equal(fx.calls.filter(x=>x.method==='DELETE'&&x.path==='/fapi/v1/order').length,1);
+ const exit=fx.calls.filter(x=>x.method==='POST'&&x.path==='/fapi/v1/order'&&x.p.type==='MARKET');
+ assert.equal(exit.length,1);
+ assert.equal(exit[0].p.reduceOnly,'true');
 });
