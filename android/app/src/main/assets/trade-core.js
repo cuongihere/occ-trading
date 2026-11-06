@@ -4,7 +4,7 @@
 const OCC_ACTIVE = new Set(['NEW','ACCEPTED','PENDING_NEW']);
 const OCC_DEFAULT = {side:'BOTH',marginUSDT:20,leverage:5,slPercent:1,
  tpMode:'Percent',tp1Val:1,tp2Val:2,tp3Val:3,tp1Qty:33,tp2Qty:33,reverseOnSignal:false,
- entryMode:'MARKET',limitOffsetPct:0.05,limitWaitSeconds:90};
+ entryMode:'MARKET',limitBasis:'OCC_CROSS',limitOffsetPct:0.05,limitWaitSeconds:90};
 const occNumber = value => value===null||value===undefined||value===''?NaN:Number(value);
 const occRound = (v,d=10) => Number(v.toFixed(d));
 const occFloor = (v,step) => occRound(Math.floor(v/step+1e-9)*step);
@@ -18,6 +18,7 @@ function occValidateConfig(raw){
   c[key]=occNumber(c[key]);
  if(!['BOTH','LONG','SHORT'].includes(c.side)||!['Percent','Points'].includes(c.tpMode)||
     !['MARKET','LIMIT_PULLBACK'].includes(c.entryMode)||
+    !['OCC_CROSS','M15_CLOSE'].includes(c.limitBasis)||
     !Number.isFinite(c.limitOffsetPct)||c.limitOffsetPct<0.01||c.limitOffsetPct>1||
     !Number.isInteger(c.limitWaitSeconds)||c.limitWaitSeconds<30||c.limitWaitSeconds>180||
     typeof c.reverseOnSignal!=='boolean'||!Number.isInteger(c.leverage)||c.leverage<1||
