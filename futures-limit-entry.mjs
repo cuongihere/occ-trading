@@ -83,7 +83,7 @@ export function installLimitEntry(BrowserFutures){
    throw Error('Binance còn lệnh khác sau khi LIMIT kết thúc');
   if(qty===0){
    if(snap.positionBTC!==0)throw Error('LIMIT không khớp nhưng còn vị thế BTC');
-   this.pendingLimit=null;
+   this.pendingLimit=null;this.limitCancelUncertain=false;
    this.saveIntent({phase:'CLEARED',at:Date.now()});
    this.log('LIMIT_EXPIRED','LIMIT không khớp; chỉ xét tín hiệu giao cắt tiếp theo');
    return;
@@ -103,7 +103,7 @@ export function installLimitEntry(BrowserFutures){
     tickSize:p.tickSize,clientPrefix:p.clientId});
    this.saveIntent({phase:'PROTECTED',clientId:p.clientId,orderId:p.orderId});
    this.activeProtection=result;
-   this.pendingLimit=null;
+   this.pendingLimit=null;this.limitCancelUncertain=false;
    this.log('LIMIT_PROTECTED','LIMIT khớp đủ '+qty+' BTC; xác nhận STOP + 3 TP');
    return;
   }
@@ -128,7 +128,7 @@ export function installLimitEntry(BrowserFutures){
   const flat=await this.inspect();
   if(flat.positionBTC!==0||flat.openOrders||flat.openAlgos)
    throw Error('Binance chưa FLAT sau chốt LIMIT một phần');
-  this.pendingLimit=null;
+  this.pendingLimit=null;this.limitCancelUncertain=false;
   this.saveIntent({phase:'CLEARED',at:Date.now()});
   this.log('LIMIT_PARTIAL_CLOSED','LIMIT khớp '+qty+' BTC; đã chốt reduceOnly, chờ tín hiệu mới');
  };
@@ -140,10 +140,13 @@ export function installLimitEntry(BrowserFutures){
    let o=await read(this,p);
    if(completed.has(o.status))return await this.finalizeLimit(o);
    if(!live.has(o.status))throw Error('Binance LIMIT trạng thái không rõ '+o.status);
+   if(this.limitCancelUncertain)
+    throw Error('Lần hủy LIMIT trước không rõ kết quả; không gửi hủy lần hai. Kiểm tra và hủy thủ công trên Binance trước khi đối soát.');
    if(!cancelNow&&Date.now()<p.expiresAt&&o.status==='NEW')return;
    // Partial fills also trigger immediate cancellation so the size cannot
    // increase after a STOP is installed.
    this.saveIntent({phase:'LIMIT_CANCEL_SENDING',...p});
+   this.limitCancelUncertain=true;
    mutated=true;
    await this.api.del('/fapi/v1/order',{
     symbol:'BTCUSDT',orderId:p.orderId,origClientOrderId:p.clientId});
