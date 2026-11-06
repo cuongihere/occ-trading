@@ -806,3 +806,46 @@ test('Stale websocket quote rejects Entry before mutation without retry/fabricat
  assert.equal(service.snapshot().halted,false);
  assert.match(service.snapshot().error,/quá hạn/);
 });
+
+test('PC LIMIT pullback opt-in queues GTD, cancels unfilled order and awaits a NEW crossover',async t=>{
+ const dir=tmp(t),fx=fake(),svc=new BrowserFutures({
+  dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await svc.connect(creds);
+ svc.saveConfig({marginUSDT:500,leverage:5,entryMode:'LIMIT_PULLBACK',
+  limitBasis:'OCC_CROSS',limitOffsetPct:0.05,limitWaitSeconds:90});
+ await svc.arm('CHAP NHAN BTC FUTURES',77000);
+ await svc.signal({id:'S-1',side:'LONG',barTime:900000,crossPrice:77000,candleClose:77000},true);
+ const queued=svc.snapshot().pendingLimit;
+ assert.ok(queued&&queued.price<77000&&queued.side==='LONG');
+ assert.equal(svc.snapshot().protectedPosition,null);
+ assert.equal(fx.calls.filter(x=>x.method==='POST'&&x.path==='/fapi/v1/order').at(-1).p.type,'LIMIT');
+ assert.equal(fx.calls.some(x=>x.method==='POST'&&x.path==='/fapi/v1/algoOrder'),false);
+ await svc.signal({id:'S-2',side:'SHORT',barTime:1800000,crossPrice:77000},true);
+ assert.equal(fx.calls.filter(x=>x.method==='POST'&&x.path==='/fapi/v1/order').length,1);
+ await svc.cancelOpenLimit();
+ assert.equal(svc.snapshot().pendingLimit,null);
+ assert.equal(svc.snapshot().armed,true);
+ assert.equal(fx.limit.order.status,'CANCELED');
+ assert.equal(fx.calls.filter(x=>x.method==='DELETE'&&x.path==='/fapi/v1/order').length,1);
+});
+
+test('PC fully FILLED LIMIT waits for verified position, installs STOP before TP1/2/3',async t=>{
+ const dir=tmp(t),fx=fake(),svc=new BrowserFutures({
+  dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await svc.connect(creds);
+ svc.saveConfig({marginUSDT:500,leverage:5,entryMode:'LIMIT_PULLBACK',
+  limitBasis:'OCC_CROSS',limitOffsetPct:0.05,limitWaitSeconds:90});
+ await svc.arm('CHAP NHAN BTC FUTURES',77000);
+ await svc.signal({id:'S-1',side:'LONG',barTime:900000,crossPrice:77000,candleClose:77000},true);
+ const order=fx.limit.order;
+ fx.limit.order={...order,status:'FILLED',executedQty:order.origQty,avgPrice:order.price};
+ fx.position.qty=Number(order.origQty);
+ await svc.pollLimit();
+ assert.equal(svc.snapshot().pendingLimit,null);
+ assert.ok(svc.snapshot().protectedPosition?.stop);
+ const posted=fx.calls.filter(x=>x.method==='POST');
+ assert.deepEqual(posted.map(x=>x.path),
+  ['/fapi/v1/order',...Array(4).fill('/fapi/v1/algoOrder')]);
+ assert.equal(posted[1].p.type,'STOP_MARKET');
+ assert.equal(posted[1].p.closePosition,'true');
+});
