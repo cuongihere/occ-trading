@@ -63,7 +63,7 @@ function fixture(saved=''){
   state.entry=Number(pending.price);
  };
  const signal={id:'occsignal-1',barTime:900000,time:1800000,side:'LONG',
-  eligible:true,candleClose:78000};
+  eligible:true,candleClose:78000,crossPrice:78000};
  return {bot,calls,algos,signal,fill,state,get pending(){return pending},
   get saved(){return store}};
 }
