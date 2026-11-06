@@ -43,6 +43,15 @@ Tỷ lệ thắng = số vị thế thắng chia tổng số vị thế đóng, 
 
 ## 5. Cấu hình chiến lược và SL/TP
 
+### Kiểu vào lệnh PC: MARKET / LIMIT chờ hồi (cập nhật 06/11/2026)
+
+- Trang PC `/binance` có thêm **Vào lệnh**, **Mốc LIMIT**, **Lệch (%)** và **Chờ (s)** ngay trong Cấu hình Auto; bố cục desktop nén thành **hai hàng**, giữ nguyên ký quỹ, leverage, SL/TP và tỷ lệ chốt của người dùng. **Mặc định MARKET**; LIMIT là lựa chọn riêng, không tự chuyển chế độ.
+- **LIMIT_PULLBACK:** lấy mốc giá giao cắt hai đường SMMA OCC (`crossPrice`) hoặc giá đóng nến M15 (`M15_CLOSE`). LONG đặt thấp hơn `min(mốc, LAST)`, SHORT đặt cao hơn `max(mốc, LAST)` theo độ lệch % (mặc định 0,05%), làm tròn tick Binance. Nếu không có mốc giá OCC hoặc giá LIMIT không tốt hơn thị trường, không gửi lệnh.
+- Binance nhận `LIMIT timeInForce=GTD` (hạn dự phòng ~11 phút theo giới hạn tối thiểu 600 giây của Binance), OCC theo dõi 2,5 giây/lần và dự kiến hủy phần chưa khớp sau 90 giây khi ứng dụng PC còn chạy và Binance API đáp ứng. **Tắt Auto** cũng yêu cầu hủy LIMIT đang chờ. Có nút **Hủy LIMIT** và dòng trạng thái ID/giá/thời gian còn lại.
+- Chỉ khi LIMIT **FILLED đầy đủ** và vị thế BTCUSDT được xác minh thì mới đặt STOP close-all trước, sau đó TP1/TP2/TP3. Nếu LIMIT **khớp một phần**, OCC cố hủy phần còn lại và đóng phần đã khớp bằng một MARKET reduceOnly được Binance đối soát, không tự giữ vị thế nhỏ không đủ 3 TP. Bất kỳ ACK, cancel, readback hoặc trạng thái khớp không rõ đều **KHÓA AN TOÀN**, không gửi lại lệnh mù.
+- **Rủi ro bắt buộc hiểu:** Nếu PC/app bị tắt, mất mạng hoặc Binance API không đáp ứng khi LIMIT chờ, Binance vẫn có thể khớp LIMIT trước GTD nhưng STOP/TP chưa có trên sàn. Đừng dùng chế độ LIMIT như bot 24/7 không giám sát; vào Binance kiểm tra ngay nếu OCC hiện **LIMIT CHỜ / HALTED** hoặc có vị thế chưa thấy STOP.
+- Cấu hình LIMIT, STOP và TP là chức năng đặt lệnh tiền thật. Bộ thử nghiệm GitHub Actions dùng Binance giả lập, **chưa được kiểm chứng end-to-end trên Binance Production**. Không chạy đồng thời Auto PC và Android.
+
 **BTCUSDT perpetual · M15/H4 · SMMA 8 · delay 0 · BOTH · Multi TP v5**.
 - **Mô phỏng (Paper):** Engine hỗ trợ cờ `reverseOnSignal` (OFF mặc định) để tái hiện cách đóng vị thế cũ và mở theo tín hiệu đối nghịch như bản đầu; OFF tiếp tục giữ đến SL/TP. Chế độ Futures thật điều khiển độc lập bằng công tắc trên trang Binance.
 
