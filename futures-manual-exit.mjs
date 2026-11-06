@@ -25,7 +25,7 @@ export function validateManagedExit({managed,account,algos,entryOrder,filters,ro
  if(!entryOrder||String(entryOrder.orderId)!==String(entry.orderId)||
     entryOrder.symbol!=='BTCUSDT'||entryOrder.clientOrderId!==prefix||
     entryOrder.side!==(sign===1?'BUY':'SELL')||
-    entryOrder.status!=='FILLED'||entryOrder.type!=='MARKET'||entryOrder.positionSide!=='BOTH'||
+    entryOrder.status!=='FILLED'||!['MARKET','LIMIT'].includes(entryOrder.type)||entryOrder.positionSide!=='BOTH'||
     !(Number(entryOrder.executedQty)>=qty-1e-9))
   throw Error('Không xác minh được Entry do OCC đặt trên Binance');
  const step=positive(filters?.stepSize),minQty=positive(filters?.minQty);
