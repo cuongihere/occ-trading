@@ -172,3 +172,17 @@ test('Auto preflight gives actionable leverage mismatch without mutating Binance
  await assert.rejects(h.bot.preflight({price:78000,healthy:true}),/Binance 5x, Auto 6x/);
  assert.equal(h.calls.filter(x=>x.method!=='GET').length,0);
 });
+
+test('Android records actual M15 signal-to-MARKET latency and Binance ACK without delaying SL',async()=>{
+ const h=harness();
+ await h.bot.arm({price:78000,healthy:true,confirmation:'CHAP NHAN BTC FUTURES'});
+ const signalTime=Date.now()-250;
+ await h.bot.enter('LONG',78000,'signal-latency',signalTime);
+ const timing=h.bot.lastEntryTiming;
+ assert.ok(timing&&timing.sentAt>=signalTime);
+ assert.ok(timing.signalToSendMs>=250);
+ assert.ok(timing.exchangeAckMs>=0);
+ assert.ok(timing.ackAt>=timing.sentAt);
+ assert.equal(h.bot.cp.phase,'PROTECTED');
+ assert.equal(h.bot.cp.stop.role,'SL');
+});
