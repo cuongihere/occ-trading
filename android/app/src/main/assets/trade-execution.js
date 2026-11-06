@@ -15,7 +15,10 @@ p.verifyOwnership=async function(){
  const order=await this.signed('GET','/fapi/v1/order',{symbol:'BTCUSDT',orderId:e.orderId});
  if(order.symbol!=='BTCUSDT'||!eq(order.orderId,e.orderId)||order.clientOrderId!==e.clientId||
    order.side!==(e.side==='LONG'?'BUY':'SELL')||order.positionSide!=='BOTH'||
-   order.type!=='MARKET'||order.status!=='FILLED'||!(Number(order.executedQty)>0))
+   !['MARKET','LIMIT'].includes(order.type)||order.type!==(e.type||'MARKET')||
+   (order.type==='MARKET'?order.status!=='FILLED':
+     !['FILLED','CANCELED','EXPIRED','EXPIRED_IN_MATCH'].includes(order.status))||
+   !(Number(order.executedQty)>0)||!plus(Number(order.executedQty),e.qty))
   throw Error('Entry Binance khác checkpoint OCC');
  return order;
 };
