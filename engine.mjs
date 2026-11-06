@@ -113,7 +113,7 @@ export class OCCEngine {
   if(side&&live){
    const id=`${this.sessionId}:BTCUSDT:M15:${b.time}:${side}`;
    if(!this.signals.some(s=>s.id===id)){
-    signal={id,time:b.closeTime+1,barTime:b.time,observedAt,side,candleClose:b.close,openSeries,closeSeries,eligible:this.running&&this.healthy&&(!this.position||(this.config.reverseOnSignal&&this.position.side!==side)),source:'Binance USD-M BTCUSDT',mode:'delay0',h4Provisional:(b.closeTime!==ht+H4-1)};
+    signal={id,time:b.closeTime+1,barTime:b.time,observedAt,side,candleClose:b.close,crossPrice:(openSeries+closeSeries)/2,openSeries,closeSeries,eligible:this.running&&this.healthy&&(!this.position||(this.config.reverseOnSignal&&this.position.side!==side)),source:'Binance USD-M BTCUSDT',mode:'delay0',h4Provisional:(b.closeTime!==ht+H4-1)};
     this.signals.push(Object.freeze(signal));
     if(signal.eligible)this.pending={...signal};
    }
