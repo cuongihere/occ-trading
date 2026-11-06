@@ -136,6 +136,10 @@ p.monitor=async function(){
  if(!this.connected||this.busy)return;
  try{
   return await this.locked(async()=>{
+   if(this.cp.phase==='LIMIT_PENDING'&&!this.cp.halted){
+    await this.monitorPendingLimit();
+    return this.lastSnapshot;
+   }
    const s=await this.getSnapshot();
    if(this.cp.halted)return s;
    if(this.cp.phase==='IDLE'){
@@ -154,6 +158,14 @@ p.monitor=async function(){
 p.reconcile=async function(){
  return this.locked(async()=>{
   if(this.auto)throw Error('Tắt AUTO trước khi đối soát');
+  if(this.cp.phase==='LIMIT_PENDING'){
+   // On restart, cancellation must happen before any new Auto entry.
+   // Exchange readback + native checkpoint lease remain mandatory.
+   await this.cancelPendingLimit();
+   if(this.cp.phase==='LIMIT_PENDING')throw Error('LIMIT chưa được Binance xác nhận hủy');
+   this.event('Đã đối soát LIMIT; AUTO vẫn OFF');
+   return;
+  }
   const s=await this.getSnapshot();
   if(this.cp.phase==='PROTECTED'){
    if(s.side){
