@@ -128,6 +128,10 @@ export function installLimitEntry(BrowserFutures){
   const flat=await this.inspect();
   if(flat.positionBTC!==0||flat.openOrders||flat.openAlgos)
    throw Error('Binance chưa FLAT sau chốt LIMIT một phần');
+  // Persist real Binance exit order ID: P&L must be computed from actual fills,
+  // not the LIMIT reference price or an assumed zero-fee close.
+  this.registerRealOrder({orderId:ack.orderId,groupId:p.clientId,
+   clientId:exitId,role:'CLOSE',side:closeSide(p.side)});
   this.pendingLimit=null;this.limitCancelUncertain=false;
   this.saveIntent({phase:'CLEARED',at:Date.now()});
   this.log('LIMIT_PARTIAL_CLOSED','LIMIT khớp '+qty+' BTC; đã chốt reduceOnly, chờ tín hiệu mới');
