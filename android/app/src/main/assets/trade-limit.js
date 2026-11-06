@@ -119,12 +119,19 @@ p.processPendingLimit=async function(order){
   const s=await this.getSnapshot();
   if(s.side||s.openOrders.length||s.algos.length)throw Error('LIMIT không khớp nhưng Binance còn vị thế/lệnh');
   this.cp.phase='IDLE';this.cp.pendingLimit=null;this.cp.intent=null;
+  this.cp.halted=false;this.cp.error=null;
   this.persist();this.event('LIMIT không khớp, đã kết thúc · chờ tín hiệu mới');
   return false;
  }
  if(!(Number(order.avgPrice)>0))throw Error('LIMIT có BTC đã khớp nhưng chưa xác nhận giá trung bình');
+ const state=await this.getSnapshot();
+ if(state.side!==pending.side||!near(state.qty,qty)||state.openOrders.length||
+    state.algos.length||state.otherPositions.length)
+  throw Error('LIMIT đã khớp nhưng vị thế Binance không đúng hoặc còn lệnh chờ');
  const rules=await this.getRules();
- this.cp.phase='LIMIT_FILLED';this.cp.intent=null;this.persist();
+ this.cp.phase='LIMIT_FILLED';this.cp.intent=null;
+ // Allows protective STOP placement only after exact terminal fill readback.
+ this.cp.halted=false;this.cp.error=null;this.persist();
  // Exchange order is terminal, and position must match before STOP can be submitted.
  try{
   const result=await this.activateFilledEntry({order,side:pending.side,
