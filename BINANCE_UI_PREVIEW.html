@@ -483,6 +483,7 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
   <h2>Vị thế BTCUSDT & trạng thái bot</h2>
   <div class="riskHeadline" id="riskHeadline">Đang đọc vị thế từ Binance…</div>
   <div class="riskUpdated" id="riskUpdated">Dữ liệu vị thế sẽ cập nhật tự động</div>
+  <div class="riskUpdated" id="entryTiming" role="status">Độ trễ Entry: chưa có tín hiệu mới</div>
   <div class="positionGrid">
    <div><span class="label">Entry</span><strong id="entryPrice">—</strong></div>
    <div><span class="label">Mark Price</span><strong id="markPrice">—</strong></div>
@@ -759,6 +760,11 @@ $('autoLabel').textContent=s.halted?(s.armed?'AUTO ON · KHÓA AN TOÀN':'HALTED
   color($('btcPnl'),a?.btcUnrealizedUSDT);
   $('marginMode').textContent=a?.marginType||'—';
   $('accountLeverage').textContent=a?.leverage?a.leverage+'x':'—';
+  const timing=s.lastEntryTiming;
+  $('entryTiming').textContent=timing&&timing.signalToSendMs!=null?
+   'Entry từ mở nến M15 đến gửi MARKET: '+timing.signalToSendMs+' ms'+
+   (timing.exchangeAckMs!=null?' · Binance ACK: '+timing.exchangeAckMs+' ms':' · đang chờ ACK'):
+   'Độ trễ Entry: chưa có tín hiệu mới';
   $('accountLeverage').style.color=leverageMismatch?'#ff9ea0':'#edf6ff';
   $('leverageMismatch').textContent=leverageMismatch?'Bot '+desiredLeverage+'x · Chưa đồng bộ':'';
   $('leverageMismatch').style.color=leverageMismatch?'#ff9ea0':'#9feab5';
