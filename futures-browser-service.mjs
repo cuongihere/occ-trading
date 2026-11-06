@@ -344,7 +344,11 @@ export class BrowserFutures{
   if(!this.api||!this.account)throw Error(this.error||'Không kết nối được Binance API; nhập lại API Key hoặc thử lại');
   this.recoveryStatus='checking';this.lastRecoveryCheck=Date.now();
   try{
-   if(this.halted&&this.previousProtection?.phase==='PROTECTED')
+   if(this.pendingLimit){
+    await this.monitorPendingLimit({cancelNow:true});
+    if(!this.activeProtection)await this.reconcileFlat();
+    else throw Error('LIMIT đã khớp và có STOP/TP; kiểm tra vị thế Binance trước khi bật lại AUTO');
+   }else if(this.halted&&this.previousProtection?.phase==='PROTECTED')
     await this.reconcileVerifiedClosedPosition();
    else await this.reconcileFlat();
    await this.refreshRealHistory({force:true});
