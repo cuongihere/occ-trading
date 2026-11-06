@@ -75,25 +75,35 @@ p.emergencyClose=async function(){
  this.cp.tps=[];this.persist();
  this.event('EMERGENCY: đã đóng BTC không có STOP, cần kiểm tra Binance');
 };
-p.enter=async function(side,price,signalId){
+p.enter=async function(side,price,signalId,signalTime=null){
  return this.locked(async()=>{
   if(!this.auto||this.cp.halted||this.cp.phase!=='IDLE'||
     !['LONG','SHORT'].includes(side)||
     (this.cp.config.side!=='BOTH'&&side!==this.cp.config.side))return false;
   let started=false;
   try{
-   const s=await this.getSnapshot();this.verifyFlat(s);
-   const rules=await this.getRules(),plan=this.plan(s,price,rules);
+   // Independent read-only checks run in parallel; FLAT/ISOLATED/lot checks unchanged.
+   const [s,rules]=await Promise.all([this.getSnapshot(),this.getRules()]);
+   this.verifyFlat(s);
+   const plan=this.plan(s,price,rules);
    const clientId=this.newId();
    if(!occValidId(clientId))throw Error('Không tạo được Client ID giao dịch');
    this.cp.phase='ENTRY_SENDING';
    this.cp.intent={kind:'ENTRY',clientId,qty:plan.qty,side,signalId,sent:false};
    this.persist();started=true;
+   const sentAt=Date.now(),targetTime=Number(signalTime);
+   this.lastEntryTiming={signalTime:Number.isFinite(targetTime)&&targetTime>0?targetTime:null,
+    sentAt,ackAt:null,signalToSendMs:Number.isFinite(targetTime)&&targetTime>0?
+     Math.max(0,sentAt-targetTime):null,exchangeAckMs:null};
    const ack=await this.signed('POST','/fapi/v1/order',{
     symbol:'BTCUSDT',positionSide:'BOTH',side:side==='LONG'?'BUY':'SELL',
     type:'MARKET',quantity:String(plan.qty),newClientOrderId:clientId,newOrderRespType:'RESULT'
    });
    if(!ack?.orderId)throw Error('Không nhận được Entry Order ID');
+   const ackAt=Date.now();this.lastEntryTiming.ackAt=ackAt;
+   this.lastEntryTiming.exchangeAckMs=Math.max(0,ackAt-sentAt);
+   this.event('Entry sau mở M15 '+(this.lastEntryTiming.signalToSendMs??'—')+
+    ' ms · Binance ACK thêm '+this.lastEntryTiming.exchangeAckMs+' ms');
    const order=await this.signed('GET','/fapi/v1/order',{symbol:'BTCUSDT',orderId:ack.orderId});
    if(order.symbol!=='BTCUSDT'||order.clientOrderId!==clientId||!eq(order.orderId,ack.orderId)||
       order.status!=='FILLED'||order.positionSide!=='BOTH'||order.type!=='MARKET'||
@@ -150,11 +160,11 @@ p.onSignal=async function(signal,price,healthy){
   try{
    await this.manualClose('ALL',{automaticReversal:true});
    if(this.cp.phase==='IDLE'&&this.auto&&!this.cp.halted)
-    return this.enter(signal.side,price,signal.id);
+    return this.enter(signal.side,price,signal.id,signal.time);
   }catch(e){this.event('Không đảo chiều: '+e.message);}
   return false;
  }
  if(this.cp.phase!=='IDLE')return false;
- return this.enter(signal.side,price,signal.id);
+ return this.enter(signal.side,price,signal.id,signal.time);
 };
 })();
