@@ -48,7 +48,8 @@ function createUi(){
   constructor(){
    this.cp={phase:'IDLE',halted:false,config:{side:'BOTH',marginUSDT:70,
     leverage:5,slPercent:1,tpMode:'Percent',tp1Val:1,tp2Val:2,tp3Val:3,
-    tp1Qty:33,tp2Qty:33,reverseOnSignal:false}};
+    tp1Qty:33,tp2Qty:33,reverseOnSignal:false,
+    entryMode:'MARKET',limitOffsetPct:0.05,limitWaitSeconds:90}};
    this.auto=false;this.connected=false;this.busy=false;
    current.trade=this;
   }
