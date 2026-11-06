@@ -156,6 +156,13 @@ export function installLimitEntry(BrowserFutures){
    throw e;
   }
  };
+ BrowserFutures.prototype.cancelOpenLimit=async function(){
+  if(!this.pendingLimit)throw Error('Không có LIMIT OCC đang chờ');
+  if(this.busy)throw Error('OCC đang xử lý lệnh LIMIT, không gửi hủy trùng');
+  this.busy=true;
+  try{return await this.monitorPendingLimit({cancelNow:true});}
+  finally{this.busy=false;}
+ };
  BrowserFutures.prototype.pollLimit=async function(){
   if(!this.pendingLimit||this.busy||!this.api||this.halted)return;
   this.busy=true;
