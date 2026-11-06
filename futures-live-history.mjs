@@ -16,8 +16,12 @@ export async function discoverOCCOrderIds(api,ledger,{checkpoint=null,intent=nul
  }catch(e){warnings.push('Không đọc được lịch sử Entry Binance: '+e.message);}
  for(const order of ordinary){
   const id=numericOrder(order?.orderId),client=String(order?.clientOrderId||'');
+  const amount=Number(order?.executedQty);
+  const hasRealFill=Number.isFinite(amount)&&amount>0&&
+   (order?.status==='FILLED'||(order?.type==='LIMIT'&&
+    ['CANCELED','EXPIRED','EXPIRED_IN_MATCH'].includes(order.status)));
   if(!id||!ROOT.test(client)||order.symbol!=='BTCUSDT'||
-     !['MARKET','LIMIT'].includes(order.type)||order.positionSide!=='BOTH'||order.status!=='FILLED'||
+     !['MARKET','LIMIT'].includes(order.type)||order.positionSide!=='BOTH'||!hasRealFill||
      (order.reduceOnly===true||order.reduceOnly==='true')||!['BUY','SELL'].includes(order.side))continue;
   add({orderId:id,groupId:client,clientId:client,role:'ENTRY',side:order.side});
  }
