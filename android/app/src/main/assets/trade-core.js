@@ -3,7 +3,8 @@
 // Auto intent always OFF after process restart; no replay of stale signals.
 const OCC_ACTIVE = new Set(['NEW','ACCEPTED','PENDING_NEW']);
 const OCC_DEFAULT = {side:'BOTH',marginUSDT:20,leverage:5,slPercent:1,
- tpMode:'Percent',tp1Val:1,tp2Val:2,tp3Val:3,tp1Qty:33,tp2Qty:33,reverseOnSignal:false};
+ tpMode:'Percent',tp1Val:1,tp2Val:2,tp3Val:3,tp1Qty:33,tp2Qty:33,reverseOnSignal:false,
+ entryMode:'MARKET',limitOffsetPct:0.05,limitWaitSeconds:90};
 const occNumber = value => value===null||value===undefined||value===''?NaN:Number(value);
 const occRound = (v,d=10) => Number(v.toFixed(d));
 const occFloor = (v,step) => occRound(Math.floor(v/step+1e-9)*step);
@@ -13,9 +14,12 @@ const occExitSide = side => side==='LONG'?'SELL':'BUY';
 const occValidId = id => /^OCCBTC-[0-9a-f]{14}$/.test(String(id||''));
 function occValidateConfig(raw){
  const c={...OCC_DEFAULT,...raw};
- for(const key of ['marginUSDT','leverage','slPercent','tp1Val','tp2Val','tp3Val','tp1Qty','tp2Qty'])
+ for(const key of ['marginUSDT','leverage','slPercent','tp1Val','tp2Val','tp3Val','tp1Qty','tp2Qty','limitOffsetPct','limitWaitSeconds'])
   c[key]=occNumber(c[key]);
  if(!['BOTH','LONG','SHORT'].includes(c.side)||!['Percent','Points'].includes(c.tpMode)||
+    !['MARKET','LIMIT_PULLBACK'].includes(c.entryMode)||
+    !Number.isFinite(c.limitOffsetPct)||c.limitOffsetPct<0.01||c.limitOffsetPct>1||
+    !Number.isInteger(c.limitWaitSeconds)||c.limitWaitSeconds<30||c.limitWaitSeconds>180||
     typeof c.reverseOnSignal!=='boolean'||!Number.isInteger(c.leverage)||c.leverage<1||
     c.leverage>20||!(c.marginUSDT>0&&c.marginUSDT<=1000)||!(c.slPercent>0&&c.slPercent<=10)||
     ['tp1Val','tp2Val','tp3Val','tp1Qty','tp2Qty'].some(k=>!(c[k]>0))||
@@ -101,8 +105,10 @@ class OCCMobileTrade {
   const symbol=info.symbols?.find(x=>x.symbol==='BTCUSDT'&&x.status==='TRADING'&&x.contractType==='PERPETUAL');
   if(!symbol)throw Error('Không xác minh được BTCUSDT perpetual');
   const filter=k=>symbol.filters?.find(x=>x.filterType===k);
-  const lot=filter('MARKET_LOT_SIZE'),price=filter('PRICE_FILTER'),minimum=filter('MIN_NOTIONAL');
-  const rules={step:occNumber(lot?.stepSize),min:occNumber(lot?.minQty),
+  const lot=filter('MARKET_LOT_SIZE'),limitLot=filter('LOT_SIZE'),price=filter('PRICE_FILTER'),minimum=filter('MIN_NOTIONAL');
+  const useLimit=this.cp.config.entryMode==='LIMIT_PULLBACK';
+  const size=useLimit?limitLot:lot;
+  const rules={step:occNumber(size?.stepSize),min:occNumber(size?.minQty),
    tick:occNumber(price?.tickSize),minNotional:occNumber(minimum?.notional)||5};
   if(!(rules.step>0&&rules.min>0&&rules.tick>0))throw Error('Thiếu filter Binance');
   return rules;
