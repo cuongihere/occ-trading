@@ -226,6 +226,14 @@ test('Operator BTCUSDT manual TP1 TP2 TP3 and close-all buttons require confirma
  assert.ok(js);assert.doesNotThrow(()=>new Function(js));
 });
 
+test('Windows portable bundles the LIMIT executor imported by Futures service',()=>{
+ const builder=read('BUILD_PORTABLE.ps1');
+ const service=read('futures-browser-service.mjs');
+ assert.match(builder,/'futures-limit-entry\.mjs'/);
+ assert.match(service,/import \{installLimitEntry\} from '\.\/futures-limit-entry\.mjs'/);
+ assert.match(read('server.mjs'),/browserFutures\.pollLimit\(\)/);
+});
+
 test('API, real Binance quote and minimized Auto config share a row without losing trading controls',()=>{
  const html=read('BINANCE_UI_PREVIEW.html');
  const apiStart=html.indexOf('<div class="panel apiPanel">');
