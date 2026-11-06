@@ -756,3 +756,36 @@ test('Market exit with a stale quantity or unknown external Algo never sends a c
   expectedEntryOrderId:initial.manual.entryOrderId,expectedRemainingBTC:.032}),/không thuộc OCC/);
  assert.equal(fx.calls.filter(x=>x.method==='POST'||x.method==='DELETE').length,before);
 });
+
+test('Fresh Binance websocket quote skips extra REST ticker and measures M15 Entry latency',async t=>{
+ const dir=tmp(t),fx=fake(),service=new BrowserFutures({
+  dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)
+ });
+ await service.connect(creds);service.saveConfig({marginUSDT:500,leverage:5});
+ await service.arm('CHAP NHAN BTC FUTURES',77000);
+ const openedAt=Date.now()-350;
+ await service.signal({side:'LONG',barTime:openedAt-900000,time:openedAt,observedAt:Date.now()},
+  true,()=>({symbol:'BTCUSDT',live:true,lastPrice:77000,lastReceivedAt:Date.now()}));
+ assert.equal(fx.calls.some(c=>c.method==='GET'&&c.path==='/fapi/v1/ticker/price'),false);
+ assert.equal(fx.calls.filter(c=>c.method==='POST'&&c.path==='/fapi/v1/order').length,1);
+ const timing=service.snapshot().lastEntryTiming;
+ assert.ok(timing&&timing.sentAt>=openedAt);
+ assert.ok(timing.signalToSendMs>=350&&Number.isFinite(timing.signalToSendMs));
+ assert.ok(timing.exchangeAckMs>=0&&Number.isFinite(timing.exchangeAckMs));
+ assert.ok(timing.ackAt>=timing.sentAt);
+});
+
+test('Stale websocket quote rejects Entry before mutation without retry/fabricated price',async t=>{
+ const dir=tmp(t),fx=fake(),service=new BrowserFutures({
+  dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)
+ });
+ await service.connect(creds);service.saveConfig({marginUSDT:500,leverage:5});
+ await service.arm('CHAP NHAN BTC FUTURES',77000);
+ await service.signal({side:'LONG',barTime:900000,time:1800000},true,
+  ()=>({symbol:'BTCUSDT',live:true,lastPrice:77000,lastReceivedAt:Date.now()-8500}));
+ assert.equal(fx.calls.filter(c=>c.method==='POST'&&c.path==='/fapi/v1/order').length,0);
+ assert.equal(fx.calls.filter(c=>c.method==='GET'&&c.path==='/fapi/v1/ticker/price').length,0);
+ assert.equal(service.snapshot().armed,true);
+ assert.equal(service.snapshot().halted,false);
+ assert.match(service.snapshot().error,/quá hạn/);
+});
