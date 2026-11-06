@@ -151,7 +151,8 @@ p.enter=async function(side,price,signalId,signalTime=null){
       order.side!==(side==='LONG'?'BUY':'SELL'))throw Error('Entry ACK/readback không khớp');
    const qty=Number(order.executedQty),avg=Number(order.avgPrice);
    if(!(avg>0)||!plus(qty,plan.qty))throw Error('Entry khớp sai lượng hoặc giá');
-   return this.activateFilledEntry({order,side,clientId,signalId,rules});
+   // Await inside this try block so failed STOP/TP readback enters the HALT path.
+   return await this.activateFilledEntry({order,side,clientId,signalId,rules});
   }catch(e){
    if(started){
     let extra='';
