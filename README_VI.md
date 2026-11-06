@@ -1,3 +1,11 @@
+## Hướng phát triển (06/11/2026)
+
+**Chỉ tiếp tục phát triển OCC Trading cho PC Windows.** Dừng phát triển tính năng và build tự động APK Android theo yêu cầu. Mã Android đã tạo vẫn lưu trên GitHub để tham khảo; workflow `android-apk.yml` chỉ còn chạy thủ công (không tự build mỗi khi push). Các thay đổi mới, sửa lỗi, kiểm thử và bản portable đều ưu tiên Windows PC.
+
+**Các chức năng PC đã đồng bộ:** giá BTCUSDT Futures LAST/Mark trực tiếp; OCC SMMA8 H4/M15; Auto Long/Short và đảo chiều có xác minh vị thế; tùy chọn Entry MARKET hoặc LIMIT hồi giá theo MA giao cắt / đóng nến M15; LIMIT có lệch giá %, thời gian chờ, nút hủy, chỉ đối soát khi lệnh hoàn tất; SL close-all và TP1/2/3 từ Binance thực; chốt MARKET reduceOnly; lịch sử fills/fees/funding và đối chiếu Income; khung Auto PC thu gọn hai hàng.
+
+**An toàn lệnh LIMIT:** khi mất ACK/hủy không rõ hoặc Windows khởi động lại ở checkpoint `LIMIT_CANCEL_SENDING`, bot không được gửi lại DELETE tự động. Cần kiểm tra lệnh Binance rồi đối soát. Giữ thư mục `data/` khi cập nhật bản portable để bảo toàn cấu hình và checkpoint.
+
 # OCC Trading — Hướng dẫn Windows Portable
 
 **Chỉ mô phỏng. Không đặt lệnh thật, không kết nối tài khoản Binance và không sử dụng API key.**
