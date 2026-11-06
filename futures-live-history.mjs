@@ -17,7 +17,7 @@ export async function discoverOCCOrderIds(api,ledger,{checkpoint=null,intent=nul
  for(const order of ordinary){
   const id=numericOrder(order?.orderId),client=String(order?.clientOrderId||'');
   if(!id||!ROOT.test(client)||order.symbol!=='BTCUSDT'||
-     order.type!=='MARKET'||order.positionSide!=='BOTH'||order.status!=='FILLED'||
+     !['MARKET','LIMIT'].includes(order.type)||order.positionSide!=='BOTH'||order.status!=='FILLED'||
      (order.reduceOnly===true||order.reduceOnly==='true')||!['BUY','SELL'].includes(order.side))continue;
   add({orderId:id,groupId:client,clientId:client,role:'ENTRY',side:order.side});
  }
@@ -28,7 +28,7 @@ export async function discoverOCCOrderIds(api,ledger,{checkpoint=null,intent=nul
    try{
     const o=await api.get('/fapi/v1/order',{symbol:'BTCUSDT',orderId:id});
     if(o?.symbol==='BTCUSDT'&&String(o.orderId)===id&&o.clientOrderId===prefix&&
-      o.type==='MARKET'&&o.status==='FILLED'&&o.positionSide==='BOTH'&&
+      ['MARKET','LIMIT'].includes(o.type)&&o.status==='FILLED'&&o.positionSide==='BOTH'&&
       o.side===sideFor(entry.side)&&Number(o.executedQty)>0)
      add({orderId:id,groupId:prefix,clientId:prefix,role:'ENTRY',side:o.side});
     else warnings.push('Entry OCC trong checkpoint không khớp lệnh Binance; không ghi lịch sử sai.');
