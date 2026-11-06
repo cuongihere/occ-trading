@@ -174,11 +174,15 @@ p.onSignal=async function(signal,price,healthy){
   try{
    await this.manualClose('ALL',{automaticReversal:true});
    if(this.cp.phase==='IDLE'&&this.auto&&!this.cp.halted)
-    return this.enter(signal.side,price,signal.id,signal.time);
+    return this.cp.config.entryMode==='LIMIT_PULLBACK'?
+     this.placeLimit(signal.side,price,signal):
+     this.enter(signal.side,price,signal.id,signal.time);
   }catch(e){this.event('Không đảo chiều: '+e.message);}
   return false;
  }
  if(this.cp.phase!=='IDLE')return false;
- return this.enter(signal.side,price,signal.id,signal.time);
+ return this.cp.config.entryMode==='LIMIT_PULLBACK'?
+     this.placeLimit(signal.side,price,signal):
+     this.enter(signal.side,price,signal.id,signal.time);
 };
 })();
