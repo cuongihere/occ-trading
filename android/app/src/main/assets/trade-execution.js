@@ -75,6 +75,44 @@ p.emergencyClose=async function(){
  this.cp.tps=[];this.persist();
  this.event('EMERGENCY: đã đóng BTC không có STOP, cần kiểm tra Binance');
 };
+p.activateFilledEntry=async function({order,side,clientId,signalId,rules}){
+ const qty=Number(order.executedQty),avg=Number(order.avgPrice);
+ if(!(avg>0&&qty>0)||!Number.isFinite(qty))throw Error('Binance Entry không có khớp hợp lệ');
+ const live=await this.getSnapshot();
+ if(live.side!==side||!plus(live.qty,qty)||live.openOrders.length)
+  throw Error('Vị thế Binance không trùng lượng Entry đã khớp / vẫn còn lệnh chờ');
+ this.cp.entry={orderId:String(order.orderId),clientId,side,qty,avg,signalId,
+  type:order.type};
+ this.cp.pendingLimit=null;
+ this.cp.phase='ENTRY_VERIFIED';this.cp.intent=null;this.persist();
+ const c=this.cp.config,isLong=side==='LONG',out=closeSide(side);
+ const common={algoType:'CONDITIONAL',symbol:'BTCUSDT',positionSide:'BOTH',
+  side:out,workingType:'CONTRACT_PRICE'};
+ const slPrice=occTick(avg*(1+(isLong?-1:1)*c.slPercent/100),rules.tick,!isLong);
+ await this.sendAlgo({...common,type:'STOP_MARKET',closePosition:'true',
+  triggerPrice:String(slPrice),clientAlgoId:clientId+'-SL'},
+  {role:'SL',clientId:clientId+'-SL',price:slPrice,qty,side:out});
+ const parts=[occFloor(qty*c.tp1Qty/100,rules.step),occFloor(qty*c.tp2Qty/100,rules.step)];
+ parts.push(occRound(qty-parts[0]-parts[1]));
+ if(parts.some(q=>q<rules.min)){
+  // Partially filled LIMIT can be too small for 3 Binance TP legs.
+  // Keep the verified exchange-side close-all STOP and let the user close.
+  this.cp.phase='PROTECTED';this.cp.intent=null;this.cp.halted=false;
+  this.auto=false;this.persist();
+  this.event('LIMIT khớp một phần '+qty+' BTC: đã đặt STOP, không đủ lot cho 3 TP; AUTO OFF.');
+  return true;
+ }
+ for(let i=0;i<3;i++){
+  const role='TP'+(i+1),target=occTick(
+   roleTarget(avg,side,c['tp'+(i+1)+'Val'],c.tpMode),rules.tick,isLong);
+  await this.sendAlgo({...common,type:'TAKE_PROFIT_MARKET',reduceOnly:'true',
+   quantity:String(parts[i]),triggerPrice:String(target),clientAlgoId:clientId+'-'+role},
+   {role,clientId:clientId+'-'+role,price:target,qty:parts[i],side:out});
+ }
+ this.cp.phase='PROTECTED';this.cp.intent=null;this.cp.halted=false;this.persist();
+ this.event('Đã xác nhận '+side+' '+qty+' BTC, SL và TP1/TP2/TP3');
+ return true;
+};
 p.enter=async function(side,price,signalId,signalTime=null){
  return this.locked(async()=>{
   if(!this.auto||this.cp.halted||this.cp.phase!=='IDLE'||
@@ -110,31 +148,7 @@ p.enter=async function(side,price,signalId,signalTime=null){
       order.side!==(side==='LONG'?'BUY':'SELL'))throw Error('Entry ACK/readback không khớp');
    const qty=Number(order.executedQty),avg=Number(order.avgPrice);
    if(!(avg>0)||!plus(qty,plan.qty))throw Error('Entry khớp sai lượng hoặc giá');
-   const live=await this.getSnapshot();
-   if(live.side!==side||!plus(live.qty,qty)||live.openOrders.length)
-    throw Error('Binance vị thế khác Entry sau khớp');
-   this.cp.entry={orderId:String(order.orderId),clientId,side,qty,avg,signalId};
-   this.cp.phase='ENTRY_VERIFIED';this.cp.intent=null;this.persist();
-   const c=this.cp.config,isLong=side==='LONG',out=closeSide(side);
-   const common={algoType:'CONDITIONAL',symbol:'BTCUSDT',positionSide:'BOTH',
-    side:out,workingType:'CONTRACT_PRICE'};
-   const slPrice=occTick(avg*(1+(isLong?-1:1)*c.slPercent/100),rules.tick,!isLong);
-   await this.sendAlgo({...common,type:'STOP_MARKET',closePosition:'true',
-     triggerPrice:String(slPrice),clientAlgoId:clientId+'-SL'},
-     {role:'SL',clientId:clientId+'-SL',price:slPrice,qty,side:out});
-   const parts=[occFloor(qty*c.tp1Qty/100,rules.step),occFloor(qty*c.tp2Qty/100,rules.step)];
-   parts.push(occRound(qty-parts[0]-parts[1]));
-   if(parts.some(q=>q<rules.min))throw Error('BTC thực nhận không đủ để tạo 3 TP');
-   for(let i=0;i<3;i++){
-    const role='TP'+(i+1),target=occTick(
-      roleTarget(avg,side,c['tp'+(i+1)+'Val'],c.tpMode),rules.tick,isLong);
-    await this.sendAlgo({...common,type:'TAKE_PROFIT_MARKET',reduceOnly:'true',
-      quantity:String(parts[i]),triggerPrice:String(target),clientAlgoId:clientId+'-'+role},
-      {role,clientId:clientId+'-'+role,price:target,qty:parts[i],side:out});
-   }
-   this.cp.phase='PROTECTED';this.cp.intent=null;this.cp.halted=false;this.persist();
-   this.event('Đã xác nhận '+side+' '+qty+' BTC, SL và TP1/TP2/TP3');
-   return true;
+   return this.activateFilledEntry({order,side,clientId,signalId,rules});
   }catch(e){
    if(started){
     let extra='';
