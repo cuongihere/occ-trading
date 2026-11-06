@@ -276,10 +276,17 @@ function connectFeed(){
    if(signal?.eligible&&opts.live){
     $('signal').textContent=signal.side;
     $('signal').className=signal.side==='LONG'?'positive':'negative';
-    $('signalAt').textContent=stamp(signal.time);
+    const lagMs=Math.max(0,Number(opts.observedAt)-Number(signal.time));
+    $('signalAt').textContent=stamp(signal.time)+' · nhận sau mở M15 '+
+     (Number.isFinite(lagMs)?Math.round(lagMs)+' ms':'—');
     if(trade.auto&&quoteIsFresh())
-     trade.onSignal(signal,lastTradePrice,true).then(()=>{showAuto();refresh()})
-      .catch(e=>{msg(e);showAuto()});
+     trade.onSignal(signal,lastTradePrice,true).then(()=>{
+       const timing=trade.lastEntryTiming;
+       if(timing&&timing.signalToSendMs!=null)
+        $('entryTiming').textContent='M15 → gửi MARKET '+timing.signalToSendMs+
+         ' ms · Binance ACK '+(timing.exchangeAckMs??'—')+' ms';
+       showAuto();refresh();
+     }).catch(e=>{msg(e);showAuto()});
    }
   }
  });
