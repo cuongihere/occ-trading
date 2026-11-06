@@ -6,7 +6,8 @@ const pending=new Map();
 let seq=0,feed=null,healthy=false,lastTrade=0,lastTradePrice=null,lastMark=null,connected=false,account=null,algos=[],
     trades=[],income=[],lastIncome=0,indicator=new OCCEngine(),busy=false;
 let stored={phase:'IDLE',config:{marginUSDT:20,leverage:5,side:'BOTH',slPercent:1,tpMode:'Percent',
- tp1Val:1,tp2Val:2,tp3Val:3,tp1Qty:33,tp2Qty:33,reverseOnSignal:false}};
+ tp1Val:1,tp2Val:2,tp3Val:3,tp1Qty:33,tp2Qty:33,reverseOnSignal:false,
+ entryMode:'MARKET',limitOffsetPct:0.05,limitWaitSeconds:90}};
 try{
  const x=JSON.parse(OCCAndroid.loadState()||'{}');
  stored={...stored,...x,config:{...stored.config,...x.config}};
@@ -70,7 +71,8 @@ function autoBlocker(){
 }
 function showAuto(){
  const blocked=autoBlocker();
- const state=trade.cp.halted?'AUTO KHÓA':trade.auto?'AUTO ON':'AUTO OFF';
+ const state=trade.cp.halted?'AUTO KHÓA':trade.cp.phase==='LIMIT_PENDING'?
+  'LIMIT ĐANG CHỜ':trade.auto?'AUTO ON':'AUTO OFF';
  $('autoState').textContent=state;
  $('autoState').className=trade.cp.halted?'negative':trade.auto?'positive':'muted';
  $('autoToggle').textContent=trade.busy||autoClickBusy?'Đang kiểm tra…':trade.auto?'Tắt Auto':'Bật Auto';
@@ -79,10 +81,18 @@ function showAuto(){
  $('autoToggle').disabled=trade.busy||autoClickBusy;
  $('autoCheck').disabled=trade.busy||autoClickBusy;
  $('closeAll').disabled=trade.busy||trade.cp.halted||trade.cp.phase!=='PROTECTED'||!account;
+ const limit=trade.cp.pendingLimit;
+ $('cancelLimit').disabled=!connected||trade.busy||!limit||
+  trade.cp.phase!=='LIMIT_PENDING';
+ $('limitPending').textContent=limit&&trade.cp.phase==='LIMIT_PENDING'?
+  limit.side+' · '+limit.qty+' BTC @'+limit.price+' USDT · '+Math.max(0,
+    Math.ceil((limit.expiresAt-Date.now())/1000))+' giây còn lại':
+  'Không có LIMIT OCC đang chờ';
  $('applyLeverage').disabled=trade.busy||trade.auto||trade.cp.halted||
     trade.cp.phase!=='IDLE'||!connected;
- $('safetyLine').textContent=trade.auto?
-  (healthy&&feed?.healthy()?'AUTO ON · CHỜ TÍN HIỆU OCC M15 MỚI':
+ $('safetyLine').textContent=trade.cp.phase==='LIMIT_PENDING'?
+  'LIMIT CHỜ GIÁ · SL/TP chỉ được đặt sau khi đối soát lượng BTC thực khớp':
+  trade.auto?(healthy&&feed?.healthy()?'AUTO ON · CHỜ TÍN HIỆU OCC M15 MỚI':
     'AUTO ON · CHỜ BINANCE KHÔI PHỤC GIÁ, KHÔNG GỬI LỆNH MỚI'):
   blocked||lastAutoDiagnostic||'AUTO OFF · Nhấn Kiểm tra Auto để đối chiếu Binance';
 }
@@ -93,21 +103,29 @@ function saveLocal(){
 function displayConfig(){
  const c=stored.config;
  for(const [id,v]of Object.entries({marginUSDT:c.marginUSDT,leverage:c.leverage,side:c.side,sl:c.slPercent,
-  mode:c.tpMode,tp1:c.tp1Val,tp2:c.tp2Val,tp3:c.tp3Val,q1:c.tp1Qty,q2:c.tp2Qty}))
+  mode:c.tpMode,tp1:c.tp1Val,tp2:c.tp2Val,tp3:c.tp3Val,q1:c.tp1Qty,q2:c.tp2Qty,
+  entryMode:c.entryMode,limitOffsetPct:c.limitOffsetPct,limitWaitSeconds:c.limitWaitSeconds}))
    $(id).value=v;
  $('reverse').checked=c.reverseOnSignal;
- $('summary').textContent=c.marginUSDT+'U · '+c.leverage+'x · SL '+c.slPercent+'% · TP '+c.tp1Val+'/'+c.tp2Val+'/'+c.tp3Val;
+ $('summary').textContent=(c.entryMode==='LIMIT_PULLBACK'?'LIMIT -'+c.limitOffsetPct+'%':'MARKET')+
+  ' · '+c.marginUSDT+'U · '+c.leverage+'x · SL '+c.slPercent+'% · TP '+c.tp1Val+'/'+c.tp2Val+'/'+c.tp3Val;
 }
 function readConfig(){
  const c={side:$('side').value,marginUSDT:Number($('marginUSDT').value),leverage:Number($('leverage').value),
   slPercent:Number($('sl').value),tpMode:$('mode').value,
   tp1Val:Number($('tp1').value),tp2Val:Number($('tp2').value),tp3Val:Number($('tp3').value),
-  tp1Qty:Number($('q1').value),tp2Qty:Number($('q2').value),reverseOnSignal:$('reverse').checked};
+  tp1Qty:Number($('q1').value),tp2Qty:Number($('q2').value),reverseOnSignal:$('reverse').checked,
+  entryMode:$('entryMode').value,limitOffsetPct:Number($('limitOffsetPct').value),
+  limitWaitSeconds:Number($('limitWaitSeconds').value)};
  if(!['BOTH','LONG','SHORT'].includes(c.side)||!['Percent','Points'].includes(c.tpMode)||
   !Number.isInteger(c.leverage)||c.leverage<1||c.leverage>20||!(c.marginUSDT>0&&c.marginUSDT<=1000)||
   !(c.slPercent>0&&c.slPercent<=10)||
   [c.tp1Val,c.tp2Val,c.tp3Val,c.tp1Qty,c.tp2Qty].some(v=>!Number.isFinite(v)||v<=0)||
-  c.tp1Qty+c.tp2Qty>=100)throw Error('Cấu hình không hợp lệ');
+  c.tp1Qty+c.tp2Qty>=100||
+  !['MARKET','LIMIT_PULLBACK'].includes(c.entryMode)||
+  !(c.limitOffsetPct>=0.01&&c.limitOffsetPct<=1)||
+  !Number.isInteger(c.limitWaitSeconds)||c.limitWaitSeconds<30||c.limitWaitSeconds>180)
+   throw Error('Cấu hình không hợp lệ');
  return c;
 }
 $('saveConfig').onclick=()=>{
