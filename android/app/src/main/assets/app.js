@@ -349,8 +349,16 @@ $('autoCheck').onclick=async()=>{
 };
 $('autoToggle').onclick=async()=>{
  if(trade.auto){
-  trade.disarm();lastAutoDiagnostic='AUTO OFF · SL/TP đang mở vẫn giữ nguyên trên Binance';
-  msg(lastAutoDiagnostic);showAuto();return;
+  trade.disarm();
+  if(trade.cp.phase==='LIMIT_PENDING'){
+   lastAutoDiagnostic='AUTO OFF · đang hủy LIMIT chưa khớp';showAuto();
+   try{await trade.locked(()=>trade.cancelPendingLimit());}
+   catch(e){trade.halt('LIMIT chưa xác nhận hủy: '+e.message);msg(e);}
+  }else{
+   lastAutoDiagnostic='AUTO OFF · SL/TP đang mở vẫn giữ nguyên trên Binance';
+   msg(lastAutoDiagnostic);
+  }
+  showAuto();return;
  }
  if(autoClickBusy)return;
  autoClickBusy=true;lastAutoDiagnostic='Đang kiểm tra điều kiện Binance…';showAuto();
@@ -372,6 +380,15 @@ $('autoToggle').onclick=async()=>{
  finally{autoClickBusy=false;showAuto()}
 };
 $('closeAll').onclick=()=>performManual('ALL');
+$('cancelLimit').onclick=async()=>{
+ if(!trade.cp.pendingLimit||trade.cp.phase!=='LIMIT_PENDING')return;
+ if(!confirm('Hủy LIMIT BTCUSDT đang chờ? Nếu đã khớp một phần, OCC sẽ bảo vệ phần đó.'))return;
+ trade.disarm();
+ try{await trade.locked(()=>trade.cancelPendingLimit());
+  msg('Đã xử lý LIMIT. Kiểm tra vị thế và STOP Binance.');await refresh();
+ }catch(e){trade.halt('LIMIT chưa xác nhận hủy: '+e.message);msg(e);}
+ finally{showAuto()}
+};
 $('reconcile').onclick=async()=>{
  if(!confirm('Kiểm tra vị thế và SL/TP trên Binance? AUTO vẫn OFF.'))return;
  try{await trade.reconcile();msg('Đã đối soát Binance');await refresh();}
@@ -408,5 +425,10 @@ setInterval(async()=>{
  if(!connected)return;
  await trade.monitor();await refresh();showAuto();
 },20000);
+// Pending LIMIT needs faster fill/expiry readbacks than the position display.
+setInterval(async()=>{
+ if(!connected||trade.busy||trade.cp.phase!=='LIMIT_PENDING')return;
+ await trade.monitor();showAuto();
+},2500);
 setInterval(()=>{if(connected&&Date.now()-lastIncome>300000)refreshHistory();},60000);
 authenticate('restore');
