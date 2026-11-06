@@ -6,7 +6,7 @@ const GETS=new Set(['/fapi/v1/time','/fapi/v1/exchangeInfo','/fapi/v1/ticker/pri
  '/fapi/v1/openOrders','/fapi/v1/openAlgoOrders','/fapi/v1/allOrders','/fapi/v1/allAlgoOrders',
  '/fapi/v1/order','/fapi/v1/algoOrder','/fapi/v1/userTrades','/fapi/v1/income']);
 const POSTS=new Set(['/fapi/v1/order','/fapi/v1/algoOrder','/fapi/v1/leverage']);
-const DELETES=new Set(['/fapi/v1/algoOrder']);
+const DELETES=new Set(['/fapi/v1/algoOrder','/fapi/v1/order']);
 export class FuturesTransport{
  constructor({apiKey,apiSecret,fetchFn=fetch,clock=Date.now,environment='demo',productionConsent=null}){
   if(!apiKey||!apiSecret)throw Error('Missing API credentials');
@@ -25,7 +25,26 @@ export class FuturesTransport{
       Object.keys(params).some(k=>!['symbol','leverage'].includes(k)))
     throw Error('BTCUSDT leverage must be an integer between 1x and 20x');
   }
-  if(method==='POST'&&path==='/fapi/v1/order'&&params.type!=='MARKET')throw Error('Only MARKET orders permitted');
+  if(method==='POST'&&path==='/fapi/v1/order'){
+   if(params.type==='LIMIT'){
+    const allowed=['symbol','side','positionSide','type','timeInForce','quantity','price',
+     'goodTillDate','newClientOrderId','newOrderRespType'];
+    const deadline=Number(params.goodTillDate),now=this.clock()+this.offset;
+    if(params.symbol!=='BTCUSDT'||!['BUY','SELL'].includes(params.side)||
+       params.positionSide!=='BOTH'||params.timeInForce!=='GTD'||
+       params.newOrderRespType!=='ACK'||!/^OCCBTC-[0-9a-f]{14}$/.test(params.newClientOrderId||'')||
+       !(Number(params.quantity)>0)||!(Number(params.price)>0)||
+       !Number.isFinite(deadline)||deadline<=now+600000||deadline>=now+1800000||
+       Object.keys(params).some(k=>!allowed.includes(k)))
+     throw Error('Unsafe BTCUSDT GTD LIMIT request');
+   }else if(params.type!=='MARKET')throw Error('Only MARKET or verified GTD LIMIT orders permitted');
+  }
+  if(method==='DELETE'&&path==='/fapi/v1/order'){
+   if(params.symbol!=='BTCUSDT'||!/^OCCBTC-[0-9a-f]{14}$/.test(params.origClientOrderId||'')||
+     !/^[0-9]{1,24}$/.test(String(params.orderId||''))||
+     Object.keys(params).some(k=>!['symbol','orderId','origClientOrderId'].includes(k)))
+    throw Error('Only exact OCC BTCUSDT LIMIT cancellation permitted');
+  }
   if(method==='POST'&&path==='/fapi/v1/algoOrder'){
    if(!['STOP_MARKET','TAKE_PROFIT_MARKET'].includes(params.type)||params.algoType!=='CONDITIONAL')
     throw Error('Only conditional stop-market or take-profit-market algorithms permitted');
@@ -39,9 +58,9 @@ export class FuturesTransport{
    qs.append('recvWindow','5000');qs.append('timestamp',String(Math.floor(this.clock()+this.offset)));
    qs.append('signature',createHmac('sha256',this.secret).update(qs.toString()).digest('hex'));
   }
-  const url=this.baseUrl+path+(method==='GET'?'?'+qs:'');
+  const url=this.baseUrl+path+((method==='GET'||method==='DELETE')?'?'+qs:'');
   const opts={method,headers:{'X-MBX-APIKEY':this.key},signal:AbortSignal.timeout(9000)};
-  if(method!=='GET'){opts.headers['Content-Type']='application/x-www-form-urlencoded';opts.body=qs.toString();}
+  if(method==='POST'){opts.headers['Content-Type']='application/x-www-form-urlencoded';opts.body=qs.toString();}
   let response;
   try{response=await this.fetchFn(url,opts);}
   catch{throw Error('Binance request outcome unknown; reconcile before any subsequent order');}
