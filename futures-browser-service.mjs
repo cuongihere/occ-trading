@@ -30,7 +30,7 @@ export class BrowserFutures{
   this.api=null;this.environment=null;this.account=null;this.filters=null;
   this.armed=false;this.busy=false;this.halted=false;this.error=null;this.events=[];this.activeProtection=null;
   this.recoveryStatus='idle';this.lastRecoveryCheck=null;this.restoreTask=null;
-  this.historySyncTask=null;this.lastHistorySync=0;this.lastIncomeSync=0;this.historyError=null;this.historyCount=0;
+  this.historySyncTask=null;this.lastHistorySync=0;this.lastIncomeSync=0;this.historyError=null;this.historyCount=0;this.lastEntryTiming=null;
   const unresolved=existsSync(this.intentPath)?JSON.parse(readFileSync(this.intentPath,'utf8')):null;
   const prior=existsSync(this.protectionPath)?new ProtectionCheckpoint(this.protectionPath).load():null;
   this.previousProtection=prior&&prior.phase!=='IDLE'?prior:null; // ID reference only, never resume order management.
@@ -110,7 +110,7 @@ export class BrowserFutures{
    historyError:this.historyError,historyCount:this.historyCount,
    protectedPosition:this.activeProtection?{entry:this.activeProtection.entry,stop:this.activeProtection.stop,tps:this.activeProtection.tps}:null,
    config:this.config,account:this.account,credentialSaved:this.vault.exists(),lastAccountSync:this.lastAccountSync,
-   events:this.events.slice(-20),
+   lastEntryTiming:this.lastEntryTiming,events:this.events.slice(-20),
    warning:'Giao dịch tiền thật có thể mất vốn. API Key/Secret chỉ giữ trong RAM; cần xác nhận mỗi khi bật Auto.'};
  }
  // Read-only exchange inspection works while AUTO is halted after restart.
@@ -654,7 +654,7 @@ export class BrowserFutures{
   this.log('REVERSE_FLAT','Đã đóng vị thế cũ và dọn SL/TP; Binance xác nhận FLAT');
   return true;
  }
- async signal(signal,feedHealthy){
+ async signal(signal,feedHealthy,quoteProvider=null){
   if(!this.armed||this.busy||this.halted||this.environment!=='production'||!feedHealthy||!signal?.side)return;
   const existing=this.activeProtection;
   if(existing&&(!this.config.reverseOnSignal||existing.entry.side===signal.side||
@@ -676,17 +676,46 @@ try{
   }
  }
  const a=await this.inspect();
- const quote=await this.api.get('/fapi/v1/ticker/price',{symbol:'BTCUSDT'});
-   const plan=draftProtectedOrder({side:signal.side,account:a,filters:this.filters,
-    quotePrice:Number(quote.price)},this.config);
+ // Fresh verified aggTrade removes one redundant Binance REST round trip.
+ // Fail closed on stale feed rather than using any price from a previous bar.
+ let quotePrice;
+ if(typeof quoteProvider==='function'){
+  const q=quoteProvider();
+  const age=Date.now()-Number(q?.lastReceivedAt);
+  if(q?.symbol!=='BTCUSDT'||q?.live!==true||
+     !Number.isFinite(q?.lastPrice)||q.lastPrice<=0||
+     !Number.isFinite(age)||age< -3000||age>5000)
+   throw Error('Giá Binance aggTrade đã quá hạn; bỏ qua tín hiệu, không đặt lệnh');
+  quotePrice=q.lastPrice;
+ }else{
+  // Retain compatibility with test/external callers that do not supply live stream.
+  const quote=await this.api.get('/fapi/v1/ticker/price',{symbol:'BTCUSDT'});
+  quotePrice=Number(quote.price);
+ }
+ const plan=draftProtectedOrder({side:signal.side,account:a,filters:this.filters,
+  quotePrice},this.config);
 const clientId='OCCBTC-'+randomBytes(7).toString('hex');
 // From this point an entry might be sent; unknown outcomes require a safety halt.
 entrySubmissionPossible=true;
 this.saveIntent({phase:'ENTRY_SENDING',clientId,side:signal.side,barTime:signal.barTime});
+const sentAt=Date.now(),signalTime=Number(signal.time);
+this.lastEntryTiming={barTime:signal.barTime,
+ signalTime:Number.isFinite(signalTime)?signalTime:null,
+ signalObservedAt:Number(signal.observedAt)||null,sentAt,ackAt:null,
+ signalToSendMs:Number.isFinite(signalTime)?Math.max(0,sentAt-signalTime):null,
+ exchangeAckMs:null};
+this.log('ENTRY_REQUEST_TIMING','M15 '+new Date(signal.barTime).toISOString()+
+ ' · sau mở nến '+this.lastEntryTiming.signalToSendMs+' ms (gồm kiểm tra Binance)');
    const response=await this.api.post('/fapi/v1/order',{symbol:'BTCUSDT',
     side:signal.side==='LONG'?'BUY':'SELL',positionSide:'BOTH',type:'MARKET',
     quantity:String(plan.qtyBTC),newClientOrderId:clientId,newOrderRespType:'RESULT'});
    if(!response?.orderId)throw Error('Binance không xác nhận orderId Entry');
+   const ackAt=Date.now();
+   this.lastEntryTiming.ackAt=ackAt;
+   this.lastEntryTiming.exchangeAckMs=Math.max(0,ackAt-sentAt);
+   this.log('ENTRY_ACK_TIMING','Binance ACK sau '+this.lastEntryTiming.exchangeAckMs+
+    ' ms · tổng sau mở nến '+(this.lastEntryTiming.signalToSendMs+
+      this.lastEntryTiming.exchangeAckMs)+' ms');
    this.saveIntent({phase:'ENTRY_ACK',clientId,orderId:String(response.orderId),side:signal.side});
    this.registerRealOrder({orderId:response.orderId,groupId:clientId,clientId,
     role:'ENTRY',side:signal.side==='LONG'?'BUY':'SELL'});
