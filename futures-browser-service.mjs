@@ -86,7 +86,7 @@ export class BrowserFutures{
  }
  setReverseOnSignal(enabled){
   if(typeof enabled!=='boolean')throw Error('Công tắc đảo chiều phải là ON hoặc OFF');
-  if(this.busy)throw Error('Đang xử lý giao dịch, không đổi chế độ đảo chiều lúc này');
+  if(this.busy||this.pendingLimit)throw Error('Đang xử lý/đợi LIMIT OCC, không đổi chế độ đảo chiều lúc này');
   const next=validateLiveConfig({...this.config,reverseOnSignal:enabled});
   mkdirSync(this.dir,{recursive:true});
   const temp=this.path+'.tmp';
@@ -96,7 +96,7 @@ export class BrowserFutures{
   return this.snapshot();
  }
  saveConfig(input){
-  if(this.armed||this.busy||this.activeProtection)throw Error('Tắt Auto và đóng hết vị thế Futures thật đang quản lý trước khi sửa cấu hình');
+  if(this.armed||this.busy||this.activeProtection||this.pendingLimit)throw Error('Tắt Auto và xử lý hết LIMIT/vị thế Futures trước khi sửa cấu hình');
   this.config=validateLiveConfig(input);
   mkdirSync(this.dir,{recursive:true});
   const temp=this.path+'.tmp';writeFileSync(temp,JSON.stringify(this.config,null,2),{mode:0o600});renameSync(temp,this.path);
