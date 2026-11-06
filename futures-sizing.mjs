@@ -1,15 +1,20 @@
 // BTCUSDT live sizing and exchange-price quantization, independent of API.
 const finite=(v,name)=>{const n=Number(v);if(!Number.isFinite(n))throw Error('Invalid '+name);return n;};
 export const defaultLiveConfig=Object.freeze({side:'BOTH',marginUSDT:20,leverage:5,
- slPercent:1,tpMode:'Percent',tp1Val:1,tp2Val:2,tp3Val:3,tp1Qty:33,tp2Qty:33,reverseOnSignal:false});
+ slPercent:1,tpMode:'Percent',tp1Val:1,tp2Val:2,tp3Val:3,tp1Qty:33,tp2Qty:33,reverseOnSignal:false,
+ entryMode:'MARKET',limitBasis:'OCC_CROSS',limitOffsetPct:0.05,limitWaitSeconds:90});
 export function validateLiveConfig(value){
  const c={...defaultLiveConfig,...value};
  if(typeof c.reverseOnSignal!=='boolean')throw Error('Invalid OCC reversal toggle');
- if(!['BOTH','LONG','SHORT'].includes(c.side)||!['Percent','Points'].includes(c.tpMode))throw Error('Invalid side/TP Mode');
- for(const k of ['marginUSDT','leverage','slPercent','tp1Val','tp2Val','tp3Val','tp1Qty','tp2Qty'])c[k]=finite(c[k],k);
+ if(!['BOTH','LONG','SHORT'].includes(c.side)||!['Percent','Points'].includes(c.tpMode)||
+ !['MARKET','LIMIT_PULLBACK'].includes(c.entryMode)||!['OCC_CROSS','M15_CLOSE'].includes(c.limitBasis))
+ throw Error('Invalid side/TP/entry mode');
+ for(const k of ['marginUSDT','leverage','slPercent','tp1Val','tp2Val','tp3Val','tp1Qty','tp2Qty','limitOffsetPct','limitWaitSeconds'])c[k]=finite(c[k],k);
  if(c.marginUSDT<=0||c.marginUSDT>1000||!Number.isInteger(c.leverage)||c.leverage<1||c.leverage>20||
  c.slPercent<=0||c.slPercent>10||[c.tp1Val,c.tp2Val,c.tp3Val].some(x=>x<=0)||
- c.tp1Qty<=0||c.tp2Qty<=0||c.tp1Qty+c.tp2Qty>=100)throw Error('Outside allowed BTC Futures settings');
+ c.tp1Qty<=0||c.tp2Qty<=0||c.tp1Qty+c.tp2Qty>=100||
+ c.limitOffsetPct<0.01||c.limitOffsetPct>1||!Number.isInteger(c.limitWaitSeconds)||
+ c.limitWaitSeconds<30||c.limitWaitSeconds>180)throw Error('Outside allowed BTC Futures settings');
  return c;
 }
 const digits=step=>{const s=String(step);if(s.includes('e-'))return Math.min(12,Number(s.split('e-')[1]));return (s.split('.')[1]||'').length;};
