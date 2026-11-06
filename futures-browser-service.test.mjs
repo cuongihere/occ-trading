@@ -877,3 +877,26 @@ test('PC partially filled LIMIT cancels unfilled remainder then verifies one red
  assert.equal(exit.length,1);
  assert.equal(exit[0].p.reduceOnly,'true');
 });
+
+test('PC restarted while LIMIT cancellation outcome was unknown must never send a duplicate DELETE',async t=>{
+ const dir=tmp(t),fx=fake();
+ const one=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await one.connect(creds);
+ one.saveConfig({marginUSDT:500,leverage:5,entryMode:'LIMIT_PULLBACK',
+  limitBasis:'OCC_CROSS',limitOffsetPct:.05,limitWaitSeconds:90});
+ await one.arm('CHAP NHAN BTC FUTURES',77000);
+ await one.signal({id:'S-LIMIT',side:'LONG',barTime:900000,crossPrice:77000},true);
+ assert.ok(one.pendingLimit);
+ one.saveIntent({phase:'LIMIT_CANCEL_SENDING',...one.pendingLimit});
+ const restarted=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,
+  credentialVault:makeVault(dir)});
+ assert.equal(restarted.armed,false);
+ assert.equal(restarted.halted,true);
+ assert.equal(restarted.limitCancelUncertain,true);
+ await restarted.connect(creds);
+ const before=fx.calls.filter(x=>x.method==='DELETE'&&x.path==='/fapi/v1/order').length;
+ await assert.rejects(restarted.cancelOpenLimit(),/không gửi hủy lần hai/i);
+ assert.equal(fx.calls.filter(x=>x.method==='DELETE'&&x.path==='/fapi/v1/order').length,before);
+ assert.equal(restarted.armed,false);
+ assert.equal(restarted.halted,true);
+});
