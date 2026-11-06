@@ -82,6 +82,7 @@ th{background:#22364d;color:#c8def1} .scroll{overflow-x:auto}
  <label>Đòn bẩy<input id="leverage" type="number" min="1" max="20"></label>
  <label>Chiều<select id="side"><option value="BOTH">Long &amp; Short</option><option value="LONG">Long</option><option value="SHORT">Short</option></select></label>
  <label>Kiểu vào lệnh<select id="entryMode"><option value="MARKET">MARKET hiện tại</option><option value="LIMIT_PULLBACK">LIMIT chờ hồi giá</option></select></label>
+ <label>Mốc giá LIMIT<select id="limitBasis"><option value="OCC_CROSS">Giá giao cắt MA OCC</option><option value="M15_CLOSE">Giá đóng nến tín hiệu M15</option></select></label>
  <label>Lệch giá LIMIT (%)<input id="limitOffsetPct" type="number" min="0.01" max="1" step="0.01"></label>
  <label>Chờ LIMIT tối đa (giây)<input id="limitWaitSeconds" type="number" min="30" max="180" step="5"></label>
  <label>SL (%)<input id="sl" type="number" step=".1"></label>
