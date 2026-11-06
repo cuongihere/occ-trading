@@ -44,7 +44,11 @@ p.placeLimit=async function(side,marketPrice,signal){
   try{
    const [snapshot,rules]=await Promise.all([this.getSnapshot(),this.getRules()]);
    this.verifyFlat(snapshot);
-   const signalPrice=Number(signal?.candleClose)||marketPrice;
+   // Pine crossPrice = (closeSeriesAlt + openSeriesAlt) / 2.
+   // The optional candle-close basis is closer to actual traded market prices.
+   const signalPrice=Number(this.cp.config.limitBasis==='OCC_CROSS'?
+     signal?.crossPrice:signal?.candleClose);
+   if(!(signalPrice>0))throw Error('Thiếu giá tham chiếu OCC của nến tín hiệu');
    const limitPrice=this.limitEntryPrice(side,signalPrice,marketPrice,rules.tick);
    const plan=this.plan(snapshot,limitPrice,rules);
    const clientId=this.newId();
