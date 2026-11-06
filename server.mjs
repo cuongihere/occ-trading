@@ -123,7 +123,15 @@ const server=createServer(async(req,res)=>{
     const quote=btcMarketQuote.snapshot({healthy:feed.healthy(),state:feed.state});
     await browserFutures.arm(p.acceptance,quote.lastPrice);
    }
-   else if(req.url==='/control/live/off'){browserFutures.disarm();}
+   else if(req.url==='/control/live/off'){
+    browserFutures.disarm();
+    if(browserFutures.pendingLimit)await browserFutures.monitorPendingLimit({cancelNow:true});
+   }
+   else if(req.url==='/control/live/limit-cancel'){
+    browserFutures.disarm();
+    if(!browserFutures.pendingLimit)throw Error('Không có LIMIT OCC đang chờ');
+    await browserFutures.monitorPendingLimit({cancelNow:true});
+   }
    else if(req.url==='/control/live/manual-exit'){
     return res.end(JSON.stringify(await browserFutures.manualMarketExit(p)));
    }
@@ -185,6 +193,7 @@ if(req.url==='/api/binance/live-status'){res.setHeader('Content-Type','applicati
 server.on('error',error=>{console.error(error.message);shutdown(1);});
 const port=Number(process.env.PORT||8080);if(!Number.isInteger(port)||port<1||port>65535)throw Error('Invalid PORT');
 const futuresMonitor=setInterval(()=>browserFutures.monitor().catch(e=>console.error('Futures position monitor:',e.message)),15000);futuresMonitor.unref();
+const limitMonitor=setInterval(()=>browserFutures.pollLimit().catch(e=>console.error('LIMIT BTC monitor:',e.message)),2500);limitMonitor.unref();
 const accountRefresh=setInterval(()=>browserFutures.refreshAccountOverview().catch(e=>{
   console.error('Futures account refresh:',e.message);
 }),25000);accountRefresh.unref();
@@ -198,7 +207,7 @@ server.listen(port,'127.0.0.1',()=>{
 });
 function shutdown(code=0){
  if(closing)return;closing=true;
- clearInterval(futuresMonitor);clearInterval(accountRefresh);clearInterval(liveHistoryRefresh);
+ clearInterval(futuresMonitor);clearInterval(limitMonitor);clearInterval(accountRefresh);clearInterval(liveHistoryRefresh);
  // Commit an explicit shutdown checkpoint. No pending orders are replayed later.
  if(code===0){try{commit('process_stop',{tradingEnabled:engine.tradingEnabled},null,Date.now(),()=>engine.setRunning(false));}
  catch(e){console.error('Failed to persist shutdown:',e.message);code=1;}}
