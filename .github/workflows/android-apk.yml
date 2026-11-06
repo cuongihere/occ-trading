@@ -1,11 +1,7 @@
 name: Android standalone OCC Trading APK
 
+# Android branch of OCC is archived; manual builds only, no automatic APK publishing.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'android/**'
-      - '.github/workflows/android-apk.yml'
   workflow_dispatch:
 
 permissions:
