@@ -13,7 +13,8 @@ const fakeCrypt=(buf,mode)=>mode==='protect'
 const makeVault=dir=>new WindowsCredentialVault(join(dir,'futures-api.dpapi.json'),{crypt:fakeCrypt});
 const tmp=t=>{const p=mkdtempSync(join(tmpdir(),'occ-browser-live-'));t.after(()=>rmSync(p,{force:true,recursive:true}));return p;};
 function fake({flatRiskRows=false,brokenConfig=false,failStop=false,leverage=5,leverageAckMismatch=false}={}){
- const calls=[],algo=[],normal=[],position={qty:0,entryOrderId:100,nextEntryOrderId:100},mode={dualSidePosition:false},leverageState={value:leverage};
+ const calls=[],algo=[],normal=[],position={qty:0,entryOrderId:100,nextEntryOrderId:100},
+ mode={dualSidePosition:false},leverageState={value:leverage},limit={order:null};
  const api={
   close(){calls.push('closed');},
   async syncClock(){calls.push('time');},
@@ -26,10 +27,12 @@ function fake({flatRiskRows=false,brokenConfig=false,failStop=false,leverage=5,l
    if(path==='/fapi/v1/openOrders')return normal;
    if(path==='/fapi/v1/openAlgoOrders')return algo;
    if(path==='/fapi/v1/exchangeInfo')return {symbols:[{symbol:'BTCUSDT',contractType:'PERPETUAL',
-    status:'TRADING',filters:[{filterType:'MARKET_LOT_SIZE',stepSize:'.001',minQty:'.001'},
+    status:'TRADING',filters:[{filterType:'LOT_SIZE',stepSize:'.001',minQty:'.001'},
+    {filterType:'MARKET_LOT_SIZE',stepSize:'.001',minQty:'.001'},
     {filterType:'PRICE_FILTER',tickSize:'.1'},{filterType:'MIN_NOTIONAL',notional:'5'}]}]};
    if(path==='/fapi/v1/ticker/price')return {symbol:'BTCUSDT',price:'77000'};
    if(path==='/fapi/v1/order'){
+    if(limit.order&&String(p.orderId)===String(limit.order.orderId))return {...limit.order};
     const entry=calls.filter(x=>x.method==='POST'&&x.path==='/fapi/v1/order'&&x.p.reduceOnly!=='true').at(-1)?.p;
     return {symbol:'BTCUSDT',side:entry?.side||'BUY',positionSide:'BOTH',
      status:'FILLED',type:'MARKET',executedQty:'.032',avgPrice:'77000',orderId:position.entryOrderId,
@@ -45,6 +48,12 @@ function fake({flatRiskRows=false,brokenConfig=false,failStop=false,leverage=5,l
     return {symbol:'BTCUSDT',leverage:leverageAckMismatch?p.leverage+1:p.leverage,maxNotionalValue:'1000000'};
    }
    if(path==='/fapi/v1/order'){
+    if(p.type==='LIMIT'){
+     limit.order={symbol:'BTCUSDT',orderId:9991,clientOrderId:p.newClientOrderId,
+      positionSide:'BOTH',side:p.side,type:'LIMIT',timeInForce:'GTD',
+      status:'NEW',origQty:p.quantity,executedQty:'0',price:p.price,avgPrice:'0'};
+     return {orderId:9991,clientOrderId:p.newClientOrderId};
+    }
     if(p.reduceOnly==='true'){position.qty=0;return {orderId:999,status:'FILLED'};}
     position.entryOrderId=position.nextEntryOrderId++;
     position.qty=p.side==='BUY'?.032:-.032;return {orderId:position.entryOrderId,status:'FILLED'};
@@ -59,9 +68,17 @@ function fake({flatRiskRows=false,brokenConfig=false,failStop=false,leverage=5,l
    }
    throw Error('Unexpected POST');
   },
-  async del(path,p){calls.push({method:'DELETE',path,p});const idx=algo.findIndex(x=>String(x.algoId)===String(p.algoId));if(idx>=0)algo.splice(idx,1);return {};}
+  async del(path,p){
+   calls.push({method:'DELETE',path,p});
+   if(path==='/fapi/v1/order'){
+    if(!limit.order||String(limit.order.orderId)!==String(p.orderId))throw Error('Unknown LIMIT');
+    limit.order.status='CANCELED';return {...limit.order};
+   }
+   const idx=algo.findIndex(x=>String(x.algoId)===String(p.algoId));
+   if(idx>=0)algo.splice(idx,1);return {};
+  }
  };
- return {api,calls,algo,normal,position,mode,leverageState};
+ return {api,calls,algo,normal,position,mode,leverageState,limit};
 }
 const creds={apiKey:'dummy-api-key',apiSecret:'dummy-secret',environment:'production'};
 test('UI backend accepts credentials in memory, stores only harmless configuration, restarts OFF',async t=>{
