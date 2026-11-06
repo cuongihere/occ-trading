@@ -36,6 +36,9 @@ export class BrowserFutures{
   const unresolved=existsSync(this.intentPath)?JSON.parse(readFileSync(this.intentPath,'utf8')):null;
   if(['LIMIT_PENDING','LIMIT_CANCEL_SENDING'].includes(unresolved?.phase))
    this.pendingLimit={...unresolved};
+  // A previous cancel may have reached Binance. Never send a second DELETE
+  // when the process restarts with an unknown cancellation acknowledgement.
+  this.limitCancelUncertain=unresolved?.phase==='LIMIT_CANCEL_SENDING';
   const prior=existsSync(this.protectionPath)?new ProtectionCheckpoint(this.protectionPath).load():null;
   this.previousProtection=prior&&prior.phase!=='IDLE'?prior:null; // ID reference only, never resume order management.
   if((unresolved&&unresolved.phase!=='CLEARED')||(prior&&prior.phase!=='IDLE')){
