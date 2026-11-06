@@ -398,6 +398,23 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
 #occScopeWarning{margin:0 0 6px;color:#a7bcd4;line-height:1.4}
 #incomeReconcileSummary{color:#e2c192}
 @media(max-width:650px){#realStats .statLine{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* OCC compact settings, desktop two rows */
+.autoConfigBody{padding:7px 10px 9px}
+.configPanel .configPrimary{display:grid;grid-template-columns:1.05fr .60fr 1.08fr 1.12fr 1.16fr .68fr .72fr;gap:6px;align-items:end}
+.configPanel .configTargets{display:grid;grid-template-columns:.68fr 1.12fr repeat(6,minmax(0,.75fr));gap:6px;margin-top:6px}
+.configPanel .configPrimary>label,.configPanel .configTargets>label{grid-column:auto!important;min-width:0}
+.configPanel label:not(.reverseMode){gap:2px;font-size:10px}
+.configPanel input:not([type=checkbox]),.configPanel select{height:29px;padding:3px 6px;font-size:11px}
+.configPanel .reverseMode{min-height:28px;padding:4px 8px;margin:6px 0 4px}
+.configPanel .sizingAlert{font-size:10px;padding:4px 7px;margin:4px 0}
+.configPanel .settingActions{margin-top:5px;gap:5px}
+.configPanel .settingActions button{min-height:28px;padding:5px 9px}
+.autoConfigSummary{padding:8px 11px;gap:3px 8px}
+.autoConfigHeading{font-size:13px}
+.autoConfigSnapshot{font-size:10px;line-height:1.35}
+.autoConfigControl{padding:4px 8px}
+@media(max-width:1150px){.configPanel .configPrimary{grid-template-columns:repeat(4,minmax(0,1fr))}.configPanel .configTargets{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:630px){.configPanel .configPrimary{grid-template-columns:repeat(2,minmax(0,1fr))}.configPanel .configTargets{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 </head>
 <body>
@@ -451,19 +468,23 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
    </summary>
    <div class="autoConfigBody">
   <div class="configPrimary">
-   <label>Ký quỹ (USDT)<input id="marginUSDT" type="number" step="any" min=".01"></label>
+   <label>Ký quỹ USDT<input id="marginUSDT" type="number" step="any" min=".01"></label>
    <label>Đòn bẩy<input id="leverage" type="number" step="1" min="1" max="20"></label>
    <label>Chiều<select id="side"><option value="BOTH">Long &amp; Short</option><option value="LONG">Chỉ Long</option><option value="SHORT">Chỉ Short</option></select></label>
-   <label>SL (%)<input id="sl" type="number" min=".1" max="10" step=".1"></label>
-   <label>Kiểu TP<select id="mode"><option value="Percent">Percent (%)</option><option value="Points">Points (USDT)</option></select></label>
+   <label>Vào lệnh<select id="entryMode"><option value="MARKET">Market</option><option value="LIMIT_PULLBACK">Limit hồi giá</option></select></label>
+   <label>Mốc LIMIT<select id="limitBasis"><option value="OCC_CROSS">Giá giao cắt OCC</option><option value="M15_CLOSE">Đóng nến M15</option></select></label>
+   <label>Lệch (%)<input id="limitOffsetPct" type="number" min=".01" max="1" step=".01"></label>
+   <label>Chờ (s)<input id="limitWaitSeconds" type="number" min="30" max="180" step="5"></label>
   </div>
   <div class="configTargets">
+   <label>SL (%)<input id="sl" type="number" min=".1" max="10" step=".1"></label>
+   <label>Kiểu TP<select id="mode"><option value="Percent">Percent (%)</option><option value="Points">Points (USDT)</option></select></label>
    <label>TP1<input id="tp1" type="number" step="any" min=".001"></label>
    <label>TP2<input id="tp2" type="number" step="any" min=".001"></label>
    <label>TP3<input id="tp3" type="number" step="any" min=".001"></label>
-   <label>Chốt TP1 (%)<input id="q1" type="number" step="any" min="0" max="100"></label>
-   <label>Chốt TP2 (%)<input id="q2" type="number" step="any" min="0" max="100"></label>
-   <label>TP3 còn (%)<input id="q3" type="text" disabled></label>
+   <label>TP1 (%)<input id="q1" type="number" step="any" min="0" max="100"></label>
+   <label>TP2 (%)<input id="q2" type="number" step="any" min="0" max="100"></label>
+   <label>TP3 (%)<input id="q3" type="text" disabled></label>
   </div>
  <label class="reverseMode" style="flex-direction:row" title="ON: đóng vị thế cũ và đảo chiều theo tín hiệu OCC sau khi Binance xác minh an toàn. OFF: giữ đến SL/TP.">
    <input id="reverseToggle" type="checkbox">
@@ -549,7 +570,7 @@ const $=id=>document.getElementById(id);
 const fmt=(n,d=3)=>n===null||n===undefined||!Number.isFinite(Number(n))?'—':Number(n).toLocaleString('en-US',{maximumFractionDigits:d});
 const color=(el,n)=>{el.classList.remove('positive','negative');if(Number(n)>0)el.classList.add('positive');if(Number(n)<0)el.classList.add('negative');};
 const vn=t=>t==null?'—':new Date(t).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',hour12:false});
-const numbers=['marginUSDT','leverage','sl','tp1','tp2','tp3','q1','q2'];
+const numbers=['marginUSDT','leverage','sl','tp1','tp2','tp3','q1','q2','limitOffsetPct','limitWaitSeconds'];
 let setupLoaded=false,autoBusy=false,editingUntil=0,saveTimer=null,liveReport=null;
 let incomeLastCheckedAt=null,incomeIsConnected=false;
 function renderBinanceIncomeKpi(){
@@ -569,11 +590,15 @@ let sizingStatus='unavailable',sizingSequence=0,sizingTimer=null,reverseBusy=fal
 const val=id=>$(id).value.trim()===''?NaN:Number($(id).value);
 function config(){return {side:$('side').value,marginUSDT:val('marginUSDT'),leverage:val('leverage'),
  slPercent:val('sl'),tpMode:$('mode').value,tp1Val:val('tp1'),tp2Val:val('tp2'),
- tp3Val:val('tp3'),tp1Qty:val('q1'),tp2Qty:val('q2'),reverseOnSignal:$('reverseToggle').checked};}
+ tp3Val:val('tp3'),tp1Qty:val('q1'),tp2Qty:val('q2'),reverseOnSignal:$('reverseToggle').checked,
+ entryMode:$('entryMode').value,limitBasis:$('limitBasis').value,
+ limitOffsetPct:val('limitOffsetPct'),limitWaitSeconds:val('limitWaitSeconds')};}
 function applyConfig(c){
  for(const [id,value] of Object.entries({side:c.side,marginUSDT:c.marginUSDT,leverage:c.leverage,
-  sl:c.slPercent,mode:c.tpMode,tp1:c.tp1Val,tp2:c.tp2Val,tp3:c.tp3Val,q1:c.tp1Qty,q2:c.tp2Qty}))
-  if($(id))$(id).value=value??'';
+ sl:c.slPercent,mode:c.tpMode,tp1:c.tp1Val,tp2:c.tp2Val,tp3:c.tp3Val,q1:c.tp1Qty,q2:c.tp2Qty,
+ entryMode:c.entryMode??'MARKET',limitBasis:c.limitBasis??'OCC_CROSS',
+ limitOffsetPct:c.limitOffsetPct??.05,limitWaitSeconds:c.limitWaitSeconds??90}))
+   if($(id))$(id).value=value??'';
  $('reverseToggle').checked=c.reverseOnSignal===true;
  $('reverseState').textContent=c.reverseOnSignal===true?'ON':'OFF';
  quantities();
@@ -586,7 +611,9 @@ function updateAutoConfigSnapshot(){
   display(val('marginUSDT'))+' USDT · '+display(val('leverage'),0)+'x · '+direction+
   ' · SL '+display(val('sl'))+'% · TP '+
   [val('tp1'),val('tp2'),val('tp3')].map(v=>display(v)).join('/')+unit+
-  ' · Đảo chiều '+($('reverseToggle').checked?'ON':'OFF');
+  ' · Đảo chiều '+($('reverseToggle').checked?'ON':'OFF')+
+ ' · '+($('entryMode').value==='LIMIT_PULLBACK'?
+ 'LIMIT '+fmt(val('limitOffsetPct'),2)+'%/'+fmt(val('limitWaitSeconds'),0)+'s':'MARKET');
 }
 function quantities(){
  const x=val('q1'),y=val('q2');
@@ -634,7 +661,7 @@ async function saveConfig(force=false){
  try{await request('config',config());$('settingStatus').textContent='Đã lưu vào máy ✓';return true;}
  catch(e){$('settingStatus').textContent='Chưa lưu: '+e.message;return false;}
 }
-for(const id of [...numbers,'side','mode']){
+for(const id of [...numbers,'side','mode','entryMode','limitBasis']){
  $(id).addEventListener('input',()=>{
   editingUntil=Date.now()+1500;quantities();scheduleSizingValidation();
   $('settingStatus').textContent='Đang sửa…';
