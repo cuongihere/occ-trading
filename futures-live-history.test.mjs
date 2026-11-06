@@ -24,7 +24,7 @@ function reader(){
   calls.push({path,p});
   if(path==='/fapi/v1/allOrders')return [
    {symbol:'BTCUSDT',orderId:101,clientOrderId:prefix,type:'MARKET',
-    positionSide:'BOTH',status:'FILLED',side:'BUY',reduceOnly:false},
+    positionSide:'BOTH',status:'FILLED',executedQty:'.004',side:'BUY',reduceOnly:false},
    {symbol:'BTCUSDT',orderId:999,clientOrderId:'manual',type:'MARKET',
     positionSide:'BOTH',status:'FILLED',side:'BUY',reduceOnly:false}
   ];
@@ -133,5 +133,27 @@ test('Binance Income audit calls read-only income endpoint and persists Realized
  assert.equal(r.report.summary.closed,1);
  const second=await syncOCCLiveHistory(api,ledger,{syncIncome:true});
  assert.equal(second.newIncome,0);
+ ledger.close();
+});
+
+test('Terminal partially-filled canceled OCC LIMIT is discovered by actual executed quantity',async t=>{
+ const ledger=new LiveStatsLedger(pathFor(t)),base=reader(),old=base.get.bind(base);
+ const limitId='OCCBTC-3456789012abcd';
+ base.get=async(path,p={})=>{
+  if(path==='/fapi/v1/allOrders')return [{
+   symbol:'BTCUSDT',orderId:4242,clientOrderId:limitId,type:'LIMIT',
+   positionSide:'BOTH',status:'CANCELED',executedQty:'.001',
+   origQty:'.004',side:'BUY',reduceOnly:false
+  }];
+  if(path==='/fapi/v1/userTrades'&&String(p.orderId)==='4242')
+   return [trade(42,4242,'BUY',.001,0,.03,77000)];
+  return old(path,p);
+ };
+ const result=await syncOCCLiveHistory(base,ledger);
+ assert.ok(result.discovered>=2);
+ const order=ledger.orders().find(o=>o.order_id==='4242');
+ assert.ok(order);
+ assert.equal(order.role,'ENTRY');
+ assert.equal(order.group_id,limitId);
  ledger.close();
 });
