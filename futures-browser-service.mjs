@@ -215,7 +215,7 @@ export class BrowserFutures{
   return this.account;
  }
  async connect({apiKey,apiSecret,environment='production',remember=true}){
-  if(this.armed||this.busy||this.activeProtection)throw Error('Tắt Auto và xử lý vị thế đang quản lý trước khi đổi API');
+  if(this.armed||this.busy||this.activeProtection||this.pendingLimit)throw Error('Tắt Auto và hủy LIMIT trước khi đổi API');
   if(environment!=='production')throw Error('Chỉ sử dụng Binance Futures thật');
   if(typeof apiKey!=='string'||typeof apiSecret!=='string'||apiKey.length<8||apiSecret.length<8)
    throw Error('Nhập đầy đủ API Key và Secret');
@@ -363,7 +363,7 @@ export class BrowserFutures{
  }
 
  forgetSavedCredentials(){
-  if(this.armed||this.busy)throw Error('Tắt Auto trước khi xóa thông tin API');
+  if(this.armed||this.busy||this.pendingLimit)throw Error('Tắt Auto và hủy LIMIT trước khi xóa API');
   this.vault.delete();this.close();return this.snapshot();
  }
  async refreshAccountOverview(){
@@ -390,7 +390,7 @@ export class BrowserFutures{
  }
  async applyExchangeLeverage({requestedLeverage,confirmation}={}){
   if(!this.api||this.environment!=='production')throw Error('Cần kết nối Binance Futures thật');
-  if(this.armed||this.busy||this.halted||this.activeProtection)
+  if(this.armed||this.busy||this.halted||this.activeProtection||this.pendingLimit)
    throw Error('Tắt Auto và xử lý hết lệnh/vị thế BTC trước khi thay đòn bẩy');
   const requested=Number(requestedLeverage);
   if(confirmation!=='SYNC_BTCUSDT_LEVERAGE'||!Number.isInteger(requested)||
@@ -439,7 +439,10 @@ export class BrowserFutures{
   this.armed=true;this.recoveryStatus='idle';this.log('AUTO_ON','BẬT AUTO TIỀN THẬT, chờ tín hiệu BTCUSDT');return this.snapshot();
  }
  disarm(){this.armed=false;this.log('AUTO_OFF','Không mở lệnh mới; giữ lệnh SL/TP đã đặt trên Futures thật');return this.snapshot();}
- close(){this.disarm();this.api?.close();this.api=null;this.account=null;this.recoveryStatus='idle';}
+ close(){
+  if(this.pendingLimit)throw Error('Còn LIMIT Binance đang chờ; hủy trước khi ngắt API');
+  this.disarm();this.api?.close();this.api=null;this.account=null;this.recoveryStatus='idle';
+ }
  // On failed exchange-side STOP, reduce-only MARKET can close a confirmed unprotected BTC position.
  // Never retry an ambiguous order and never submit opposite-opening quantity.
  async emergencyCloseIfUnprotected(){
