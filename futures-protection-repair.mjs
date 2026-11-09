@@ -18,7 +18,11 @@ export function installProtectionRepair(BrowserFutures){
   if(!this.api||this.environment!=='production')throw Error('Kết nối Binance Futures thật trước khi khôi phục SL/TP');
   if(this.busy&&!internalLock)throw Error('OCC đang xử lý giao dịch; không thể kiểm tra khôi phục');
   if(this.pendingLimit)throw Error('Vẫn có LIMIT OCC đang chờ; không thể khôi phục SL/TP');
-  if(this.activeProtection)throw Error('OCC đã có checkpoint vị thế đang quản lý. Không tạo bộ SL/TP thứ hai.');
+  // A healthy managed trade must not get a second protection group.
+  // If monitor HALTED because the old group vanished, continue only through
+  // the full canceled-Algo history audit below.
+  if(this.activeProtection&&!this.halted)
+   throw Error('OCC đã có checkpoint vị thế đang quản lý. Không tạo bộ SL/TP thứ hai.');
   const [a,b]=await Promise.all([this.inspect(),this.inspect()]);
   if(!a.canTrade||a.dualSidePosition!==false||a.marginType!=='ISOLATED'||
     a.leverage!==this.config.leverage||a.hasOtherPositions||a.openOrders!==0||
