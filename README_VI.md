@@ -1,3 +1,14 @@
+## Khôi phục SL/TP từ vị thế Binance thực (PC Windows · 09/11/2026)
+
+Khi BTCUSDT còn vị thế trên Binance nhưng **không có lệnh SL/TP đang mở**, giao diện PC có thêm nút **Khôi phục SL/TP** trong mục *Vị thế BTCUSDT*. Nút này thực hiện hai bước tách biệt:
+
+1. **Kiểm tra chỉ đọc:** OCC đọc Binance Futures hai lượt để xác nhận vị thế/giá Entry không đổi, không có lệnh thường/Algo mở, chế độ One-way, ISOLATED và đúng leverage. Sau đó đối chiếu **Order ID và Client Order ID dạng OCCBTC-...**, khối lượng thực khớp, giá Entry bình quân và lịch sử Algo (không coi vị thế thủ công là OCC chỉ vì khối lượng giống cấu hình). Lấy giá Entry và số BTC còn lại từ Binance để tính lại giá SL/TP và 3 khối lượng chốt theo thông số đã lưu.
+2. **Khôi phục có xác nhận:** Hộp thoại hiển thị lệnh Entry, SL close-all, TP1/TP2/TP3 và số BTC từng TP. Người dùng phải nhập `KHOI PHUC SL TP BTCUSDT` mới gửi lệnh thật. Backend **tắt Auto trước** và dùng checkpoint bền vững, gửi STOP trước, xác minh Algo ID/Client Algo ID trên Binance, rồi mới đặt từng TP. Nếu bất kỳ kết quả nào không chắc chắn, bot HALT, không thử lại mù.
+   
+Nếu lịch sử cho thấy nhóm SL/TP trước đã **bị hủy/expired/rejected xác minh**, OCC dùng nhóm Algo Client ID **mới** để tránh trùng mã lịch sử, nhưng vẫn giữ nguyên Client ID Entry ban đầu cho quyền sở hữu vị thế, thao tác chốt và thống kê. Nếu SL/TP cũ từng `FINISHED`, đang active, chưa rõ trạng thái hoặc checkpoint còn lệnh `inFlight`, chức năng **từ chối** thay vì đặt lệnh trùng. Lệnh nhập thủ công hoặc không xác minh được là của OCC sẽ không tự bị quản lý.
+
+**Không an toàn để chờ:** Nếu Binance đang có vị thế nhưng không có STOP thật, hãy đặt SL trực tiếp trên Binance trước; cập nhật app không tự bảo vệ vị thế đang mở ngay lập tức. Tính năng mới chưa được kiểm thử trên tài khoản Production; GitHub Actions chỉ kiểm thử bằng Binance giả lập. Không bật đồng thời hai phiên OCC dùng cùng một tài khoản BTCUSDT.
+
 ## Hướng phát triển (06/11/2026)
 
 **Chỉ tiếp tục phát triển OCC Trading cho PC Windows.** Dừng phát triển tính năng và build tự động APK Android theo yêu cầu. Mã Android đã tạo vẫn lưu trên GitHub để tham khảo; workflow `android-apk.yml` chỉ còn chạy thủ công (không tự build mỗi khi push). Các thay đổi mới, sửa lỗi, kiểm thử và bản portable đều ưu tiên Windows PC.
