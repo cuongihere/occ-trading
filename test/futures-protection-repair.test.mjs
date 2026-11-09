@@ -10,11 +10,12 @@ const ROOT='OCCBTC-a1234567890abc';
 const ENTRY={symbol:'BTCUSDT',positionSide:'BOTH',side:'BUY',type:'MARKET',
   status:'FILLED',orderId:15151,clientOrderId:ROOT,executedQty:'0.004',
   origQty:'0.004',avgPrice:'75390.4',updateTime:1762718000000};
-function fixture(t,{manual=false,algoHistory=[],failStop=false,otherOrders=[]}={}){
+function fixture(t,{manual=false,algoHistory=[],failStop=false,otherOrders=[],legacyLimit=false,limitStatus='FILLED'}={}){
  const dir=mkdtempSync(join(tmpdir(),'occ-repair-'));
  t.after(()=>rmSync(dir,{force:true,recursive:true}));
  const calls=[],algos=[],position={qty:.004,entry:75390.4},history=algoHistory;
- const rootOrder={...ENTRY,clientOrderId:manual?'manual-123':ROOT};
+ const rootOrder={...ENTRY,clientOrderId:manual?'manual-123':ROOT,
+  ...(legacyLimit?{type:'LIMIT',timeInForce:'GTD',price:'75390.4',status:limitStatus}:{})};
  const api={
   async syncClock(){},
   close(){},
@@ -63,6 +64,11 @@ function fixture(t,{manual=false,algoHistory=[],failStop=false,otherOrders=[]}={
  const currentConfig={marginUSDT:70,leverage:5,side:'BOTH',slPercent:.8,tpMode:'Percent',
   tp1Val:1.5,tp2Val:3,tp3Val:5,tp1Qty:33,tp2Qty:33,reverseOnSignal:true};
  service.saveConfig(currentConfig);
+ if(legacyLimit){
+  service.pendingLimit={orderId:String(ENTRY.orderId),clientId:ROOT,side:'LONG',
+   price:75390.4,qty:.004};
+  service.saveIntent({phase:'LIMIT_PENDING',...service.pendingLimit});
+ }
  // Simulate a halted OCC app after an otherwise filled entry with no open stops.
  service.halted=true;service.error='Binance STOP chưa xác minh';
  return {service,api,calls,algos,position,dir};
@@ -103,6 +109,29 @@ test('Approved repair places STOP first then TP1-3 using actual Binance Entry an
   expectedOrderId:p.orderId,expectedQty:p.qty,expectedEntryPrice:p.entryPrice,expectedSide:p.side}),
  /đã có checkpoint|không có lệnh|tồn tại/i);
  assert.equal(x.calls.filter(v=>v.method==='POST').length,4);
+});
+test('Operator repairs legacy fully FILLED LIMIT even when HALTED left stale pendingLimit',async t=>{
+ const x=fixture(t,{legacyLimit:true});
+ const before=x.service.snapshot();
+ assert.equal(before.pendingLimit.orderId,String(ENTRY.orderId));
+ const p=await x.service.inspectProtectionRepair();
+ assert.equal(p.pendingLimitRecovered,true);
+ assert.equal(x.calls.some(c=>c.method==='POST'),false);
+ const result=await x.service.repairMissingProtection({
+  confirmation:'KHOI PHUC SL TP BTCUSDT',expectedOrderId:p.orderId,
+  expectedQty:p.qty,expectedEntryPrice:p.entryPrice,expectedSide:p.side});
+ assert.equal(result.protected,true);
+ assert.equal(x.service.snapshot().pendingLimit,null);
+ assert.equal(x.service.snapshot().halted,false);
+ assert.equal(x.service.snapshot().protectedPosition.entry.entryPrice,75390.4);
+ assert.deepEqual(x.calls.filter(c=>c.method==='POST').map(c=>c.p.type),
+  ['STOP_MARKET','TAKE_PROFIT_MARKET','TAKE_PROFIT_MARKET','TAKE_PROFIT_MARKET']);
+ assert.equal(JSON.parse(readFileSync(join(x.dir,'futures-live-intent.json'),'utf8')).phase,'PROTECTED');
+});
+test('Legacy LIMIT still NEW must not be given stop/TP by the repair path',async t=>{
+ const x=fixture(t,{legacyLimit:true,limitStatus:'NEW'});
+ await assert.rejects(x.service.inspectProtectionRepair(),/chưa FILLED đầy đủ/);
+ assert.equal(x.calls.some(c=>c.method==='POST'),false);
 });
 test('Wrong confirmation or stale expected Entry does not create Binance orders',async t=>{
  const x=fixture(t);
