@@ -7,7 +7,7 @@ export function validateLiveConfig(value){
  const c={...defaultLiveConfig,...value};
  if(typeof c.reverseOnSignal!=='boolean')throw Error('Invalid OCC reversal toggle');
  if(!['BOTH','LONG','SHORT'].includes(c.side)||!['Percent','Points'].includes(c.tpMode)||
- !['MARKET','LIMIT_PULLBACK'].includes(c.entryMode)||!['OCC_CROSS','M15_CLOSE'].includes(c.limitBasis))
+ !['MARKET','LIMIT_PULLBACK'].includes(c.entryMode)||!['OCC_CROSS','M15_CLOSE','OCC_TRIGGER'].includes(c.limitBasis))
  throw Error('Invalid side/TP/entry mode');
  for(const k of ['marginUSDT','leverage','slPercent','tp1Val','tp2Val','tp3Val','tp1Qty','tp2Qty','limitOffsetPct','limitWaitSeconds'])c[k]=finite(c[k],k);
  if(c.marginUSDT<=0||c.marginUSDT>1000||!Number.isInteger(c.leverage)||c.leverage<1||c.leverage>20||
