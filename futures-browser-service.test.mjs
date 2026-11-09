@@ -857,6 +857,53 @@ test('PC fully FILLED LIMIT waits for verified position, installs STOP before TP
  assert.equal(posted[1].p.closePosition,'true');
 });
 
+test('Exact OCC BTC trigger LIMIT uses triggerPrice, not MA crossPrice or M15 close',async t=>{
+ const dir=tmp(t),fx=fake(),svc=new BrowserFutures({
+  dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await svc.connect(creds);
+ svc.saveConfig({marginUSDT:500,leverage:5,entryMode:'LIMIT_PULLBACK',
+  limitBasis:'OCC_TRIGGER',limitOffsetPct:0.05,limitWaitSeconds:90});
+ await svc.arm('CHAP NHAN BTC FUTURES',77000);
+ await svc.signal({id:'EXACT',side:'LONG',barTime:900000,
+  crossPrice:78000,candleClose:76500,triggerPrice:76000},true);
+ assert.equal(svc.snapshot().pendingLimit.price,76000);
+ assert.equal(fx.limit.order.price,'76000');
+ await svc.cancelOpenLimit();
+});
+test('Exact OCC trigger skips a now-marketable LONG LIMIT without sending to Binance',async t=>{
+ const dir=tmp(t),fx=fake(),svc=new BrowserFutures({
+  dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await svc.connect(creds);
+ svc.saveConfig({marginUSDT:500,leverage:5,entryMode:'LIMIT_PULLBACK',
+  limitBasis:'OCC_TRIGGER',limitWaitSeconds:90});
+ await svc.arm('CHAP NHAN BTC FUTURES',77000);
+ await svc.signal({id:'STALE',side:'LONG',barTime:900000,triggerPrice:78000},true);
+ assert.equal(fx.calls.filter(x=>x.method==='POST'&&x.path==='/fapi/v1/order').length,0);
+ assert.equal(svc.snapshot().pendingLimit,null);
+});
+test('FILLED LIMIT with rejected STOP clears pending but stays HALTED and does not duplicate STOP',async t=>{
+ const dir=tmp(t),fx=fake({failStop:true}),svc=new BrowserFutures({
+  dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await svc.connect(creds);
+ svc.saveConfig({marginUSDT:500,leverage:5,entryMode:'LIMIT_PULLBACK',
+  limitBasis:'OCC_CROSS',limitWaitSeconds:90});
+ await svc.arm('CHAP NHAN BTC FUTURES',77000);
+ await svc.signal({id:'FAILED-STOP',side:'LONG',barTime:900000,crossPrice:77000},true);
+ const order=fx.limit.order;
+ fx.limit.order={...order,status:'FILLED',executedQty:order.origQty,avgPrice:order.price};
+ fx.position.qty=Number(order.origQty);
+ await svc.pollLimit();
+ assert.equal(svc.snapshot().pendingLimit,null);
+ assert.equal(svc.snapshot().halted,true);
+ assert.equal(svc.snapshot().protectedPosition,null);
+ assert.equal(JSON.parse(readFileSync(join(dir,'futures-live-intent.json'),'utf8')).phase,'LIMIT_FILLED');
+ const cp=JSON.parse(readFileSync(join(dir,'futures-live-protection.json'),'utf8'));
+ assert.equal(cp.inFlight.role,'SL');
+ const posted=fx.calls.filter(x=>x.method==='POST'&&x.path==='/fapi/v1/algoOrder');
+ assert.equal(posted.length,1);
+ await svc.pollLimit();
+ assert.equal(fx.calls.filter(x=>x.method==='POST'&&x.path==='/fapi/v1/algoOrder').length,1);
+});
 test('PC partially filled LIMIT cancels unfilled remainder then verifies one reduceOnly MARKET FLAT',async t=>{
  const dir=tmp(t),fx=fake(),svc=new BrowserFutures({
   dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});

@@ -22,18 +22,21 @@ function checkOrder(o,p){
   throw Error('Binance LIMIT không đúng orderId/clientId/giá/khối lượng OCC');
  return o;
 }
-async function read(s,p){
+export async function readVerifiedLimit(s,p){
  return checkOrder(await s.api.get('/fapi/v1/order',
   {symbol:'BTCUSDT',orderId:p.orderId}),p);
 }
 export function installLimitEntry(BrowserFutures){
  BrowserFutures.prototype.submitLimit=async function(signal,account,marketPrice){
+  this.limitSubmissionStarted=false;
   const c=this.config,side=signal.side;
   if(this.pendingLimit||this.activeProtection||this.halted||!this.armed)
    throw Error('Có vị thế hoặc LIMIT chưa đối soát');
   if(!['LONG','SHORT'].includes(side))throw Error('Sai chiều LIMIT');
-  const basis=Number(c.limitBasis==='M15_CLOSE'?signal.candleClose:signal.crossPrice);
+  const basis=Number(c.limitBasis==='M15_CLOSE'?signal.candleClose:
+   c.limitBasis==='OCC_TRIGGER'?signal.triggerPrice:signal.crossPrice);
   if(!(basis>0)||!(marketPrice>0))throw Error('Thiếu giá giao cắt OCC/nến M15 xác minh');
+  const exactTrigger=c.limitBasis==='OCC_TRIGGER';
   const reference=side==='LONG'?Math.min(basis,marketPrice):Math.max(basis,marketPrice);
   const data=await this.api.get('/fapi/v1/exchangeInfo');
   const symbol=data?.symbols?.find(x=>x.symbol==='BTCUSDT'&&x.status==='TRADING'&&x.contractType==='PERPETUAL');
@@ -42,10 +45,14 @@ export function installLimitEntry(BrowserFutures){
   const minNotional=Number(symbol?.filters?.find(x=>x.filterType==='MIN_NOTIONAL')?.notional)||5;
   if(!(Number(lot?.stepSize)>0&&Number(lot?.minQty)>0&&tick>0))
    throw Error('Không xác minh được LOT_SIZE/PRICE_FILTER Binance');
-  const desired=reference*(1+(side==='LONG'?-1:1)*c.limitOffsetPct/100);
+  // Exact OCC trigger is the BTC price threshold, not the crossing SMMA value.
+  const desired=exactTrigger?basis:
+   reference*(1+(side==='LONG'?-1:1)*c.limitOffsetPct/100);
   const price=roundTick(desired,tick,side==='LONG'?'down':'up');
   if(!(price>0)||(side==='LONG'&&price>=marketPrice)||
-     (side==='SHORT'&&price<=marketPrice))throw Error('LIMIT không còn giá tốt hơn LAST');
+     (side==='SHORT'&&price<=marketPrice))
+   throw Error(exactTrigger?'Giá kích hoạt OCC không còn là LIMIT chờ tốt hơn LAST; bỏ qua tín hiệu':
+    'LIMIT không còn giá tốt hơn LAST');
   const plan=draftProtectedOrder({side,account,
    filters:{stepSize:Number(lot.stepSize),minQty:Number(lot.minQty),
     minNotional,tickSize:tick},quotePrice:price},c);
@@ -54,6 +61,8 @@ export function installLimitEntry(BrowserFutures){
   const p={clientId,side,qty:plan.qtyBTC,price,signalId:signal.id,
    orderId:null,startedAt:now,expiresAt:now+c.limitWaitSeconds*1000,goodTillDate,
    stepSize:Number(lot.stepSize),tickSize:tick};
+  // From this durable checkpoint onwards a Binance order may have been sent.
+  this.limitSubmissionStarted=true;
   this.saveIntent({phase:'LIMIT_SENDING',...p});
   // Never retry a mutation if ACK is lost.
   const ack=await this.api.post('/fapi/v1/order',{
@@ -65,7 +74,7 @@ export function installLimitEntry(BrowserFutures){
   p.orderId=String(ack.orderId);
   this.pendingLimit=p;
   this.saveIntent({phase:'LIMIT_PENDING',...p});
-  const o=await read(this,p);
+  const o=await readVerifiedLimit(this,p);
   if(!live.has(o.status)&&!completed.has(o.status))
    throw Error('LIMIT Binance trả trạng thái chưa rõ '+o.status);
   this.log('LIMIT_PENDING','LIMIT '+side+' '+plan.qtyBTC+' BTC @'+price+
@@ -91,10 +100,12 @@ export function installLimitEntry(BrowserFutures){
   if(Math.sign(snap.positionBTC)!==(p.side==='LONG'?1:-1)||
      !near(Math.abs(snap.positionBTC),qty))
    throw Error('Binance BTC vị thế khác lượng LIMIT đã khớp');
-  this.registerRealOrder({orderId:p.orderId,groupId:p.clientId,
-   clientId:p.clientId,role:'ENTRY',side:p.side==='LONG'?'BUY':'SELL'});
   if(o.status==='FILLED'&&near(qty,p.qty)){
+   // The exchange has definitively finished this LIMIT. Persist and clear
+   // pending BEFORE protection; failed STOP must not strand an already
+   // filled position behind a stale pendingLimit guard.
    this.saveIntent({phase:'LIMIT_FILLED',...p,filledQty:qty});
+   this.pendingLimit=null;this.limitCancelUncertain=false;
    const coordinator=new ProtectionCoordinator({api:this.api,
     checkpoint:new ProtectionCheckpoint(this.protectionPath),
     settings:this.config,notify:n=>this.log('CRITICAL',n.reason)});
@@ -103,7 +114,10 @@ export function installLimitEntry(BrowserFutures){
     tickSize:p.tickSize,clientPrefix:p.clientId});
    this.saveIntent({phase:'PROTECTED',clientId:p.clientId,orderId:p.orderId});
    this.activeProtection=result;
-   this.pendingLimit=null;this.limitCancelUncertain=false;
+   // History DB errors must never block the STOP/TP protection path.
+   try{this.registerRealOrder({orderId:p.orderId,groupId:p.clientId,
+    clientId:p.clientId,role:'ENTRY',side:p.side==='LONG'?'BUY':'SELL'});}
+   catch(e){this.log('HISTORY_FAILED','LIMIT đã bảo vệ nhưng chưa ghi lịch sử: '+e.message);}
    this.log('LIMIT_PROTECTED','LIMIT khớp đủ '+qty+' BTC; xác nhận STOP + 3 TP');
    return;
   }
@@ -141,7 +155,7 @@ export function installLimitEntry(BrowserFutures){
   const p=this.pendingLimit;
   let mutated=false;
   try{
-   let o=await read(this,p);
+   let o=await readVerifiedLimit(this,p);
    if(completed.has(o.status))return await this.finalizeLimit(o);
    if(!live.has(o.status))throw Error('Binance LIMIT trạng thái không rõ '+o.status);
    if(this.limitCancelUncertain)
@@ -154,7 +168,7 @@ export function installLimitEntry(BrowserFutures){
    mutated=true;
    await this.api.del('/fapi/v1/order',{
     symbol:'BTCUSDT',orderId:p.orderId,origClientOrderId:p.clientId});
-   o=await read(this,p);
+   o=await readVerifiedLimit(this,p);
    if(!completed.has(o.status))throw Error('LIMIT chưa dừng sau cancel');
    await this.finalizeLimit(o);
   }catch(e){

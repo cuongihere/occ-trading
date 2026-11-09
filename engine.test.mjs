@@ -10,6 +10,13 @@ function candle(e,offset,close,live=true){return e.onCandle(bar(start+offset*M15
 test('SMMA uses SMA seed and one recurrence',()=>{assert.equal(smma([1,2,3,4,5,6,7]),null);assert.equal(smma([1,2,3,4,5,6,7,8]),4.5);assert.equal(smma([1,2,3,4,5,6,7,8,9]),5.0625);});
 test('warmup is causal and creates no historical signals/orders',()=>{const e=engine();assert.equal(e.snapshot().trades.length,0);assert.equal(e.snapshot().signals.length,0);assert.equal(e.snapshot().history[0].closeSeries,100);const future=bar(9*H4,100,100000,H4);const f=new OCCEngine();f.warmup([...h,future],[bar(start,100,100)],start+M15);assert.equal(f.snapshot().history[0].closeSeries,100);});
 test('provisional closes do not compound and cross compares M15 samples',()=>{const e=engine();const s=candle(e,1,108);assert.equal(s.side,'LONG');assert.equal(e.snapshot().history.at(-1).closeSeries,101);assert.equal(candle(e,2,108),null);assert.equal(e.snapshot().history.at(-1).closeSeries,101);assert.equal(candle(e,3,92).side,'SHORT');});
+test('OCC trigger BTC price is the underlying threshold, not the visual MA crossPrice',()=>{
+ const e=engine(),s=candle(e,1,108);
+ assert.equal(s.triggerPrice,100);
+ assert.equal(s.candleClose,108);
+ assert.notEqual(s.crossPrice,s.candleClose);
+ assert.equal(s.openSeries,s.closeSeries-(s.candleClose-s.triggerPrice)/8);
+});
 test('H4 commits only at boundary; next H4 open initializes once',()=>{const e=engine();for(let i=1;i<=15;i++)candle(e,i,108,false);assert.equal(e.baseClose,101);candle(e,16,116,false);assert.equal(e.snapshot().history.at(-1).closeSeries,102.875);assert.equal(e.baseClose,101);});
 test('confirmed signals open only when flat; opposite signal cannot reverse and new cross is required after SL',()=>{
  const e=engine(),s=candle(e,1,108);
