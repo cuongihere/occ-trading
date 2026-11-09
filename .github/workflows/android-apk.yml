@@ -1,7 +1,11 @@
 name: Android standalone OCC Trading APK
 
-# Android branch of OCC is archived; manual builds only, no automatic APK publishing.
+# OCC Android 0.4.1: test/build on PR and publish APK on main updates.
 on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -27,12 +31,14 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
+      - name: Test Android JS trading and entry protection
+        run: node --test test/android-trading.test.mjs test/android-limit.test.mjs test/android-auto-button.test.mjs test/android-preview.test.mjs
       - name: Build OCC Android standalone APK
         run: gradle -p android --no-daemon :app:assembleDebug
       - name: Publish installable debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: OCC_Android_Standalone_v0_3_3_APK
+          name: OCC_Android_Standalone_v0_4_1_APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30

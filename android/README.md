@@ -1,4 +1,13 @@
-# OCC Trading Android · v0.3.3
+# OCC Trading Android · v0.4.1
+
+## Android 0.4.1 · OCC BTC Trigger LIMIT và AUTO giám sát vị thế cũ
+
+- **Mốc LIMIT thứ ba – Giá BTC kích hoạt OCC** (`OCC_TRIGGER`): dùng ngưỡng giá BTC khiến hai đường SMMA8 H4 bằng nhau trên nến M15 xác nhận, không lấy giá đường MA `OCC_CROSS`, không áp dụng lệch 0,05%. LONG chỉ đặt BUY LIMIT nếu mốc thấp hơn LAST, SHORT chỉ đặt SELL LIMIT nếu mốc cao hơn LAST; nếu đã trở thành lệnh ăn ngay thì bỏ tín hiệu, không đổi thành MARKET.
+- **LIMIT khớp trên Binance:** chỉ sau khi xác minh order FILLED/CANCELED với lượng thực đã khớp, OCC xóa pending LIMIT và đặt STOP close-all trước rồi mới đặt TP1–TP3 từ `avgPrice` thực; chưa đủ lot chia TP thì giữ STOP và Auto OFF. Không tự thử lại STOP/TP nếu chưa rõ ACK. Nếu mất kết nối lúc đang chờ LIMIT, vẫn có thể tồn tại vị thế không có STOP trên Binance.
+- **Bật AUTO khi còn vị thế OCC cũ:** Chỉ khi checkpoint OCC `PROTECTED` không có intent đang gửi hoặc lỗi an toàn chưa xử lý, và Binance xác minh lại Entry Order ID, giá/khối lượng, ISOLATED/One-way/đòn bẩy, STOP close-all cùng lượng TP reduceOnly phù hợp. AUTO chuyển sang **giám sát**, bỏ qua tín hiệu đảo chiều hoặc thêm lệnh khi vị thế cũ còn mở, kể cả `Đảo chiều OCC ON`. Sau khi xác minh BTC FLAT và dọn SL/TP cũ, chỉ đón giao cắt M15 mới.
+- Không nhận vị thế BTC mở thủ công/ngoài OCC; không tạo lại SL/TP có trạng thái chưa rõ; AUTO luôn OFF khi khởi động lại.
+- APK mới có `versionName=0.4.1`, `versionCode=8`, package `com.occtrading.mobile`. Bản debug ký bằng khóa tự sinh của runner GitHub; có thể không cài đè bản APK ký khác khóa. **Không gỡ bản trước nếu đang có LIMIT chờ hoặc vị thế chưa đối soát** vì dữ liệu Keystore/checkpoint có thể mất; sao lưu và kiểm tra Binance trước mọi thao tác gỡ cài đặt.
+- Không chạy Auto đồng thời trên Android và PC cho cùng tài khoản BTCUSDT. Kiểm thử Node và build Android SDK 35 không thay thế kiểm chứng Binance Production thực tế.
 
 ## Sửa giá LAST và Auto (v0.3.3)
 

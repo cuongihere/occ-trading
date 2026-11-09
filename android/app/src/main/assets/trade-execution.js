@@ -74,7 +74,7 @@ p.emergencyClose=async function(){
   throw Error('Không xác nhận được emergency reduceOnly');
  const flat=await this.getSnapshot();
  if(flat.side||flat.algos.length||flat.openOrders.length)throw Error('Emergency chưa FLAT');
- this.cp.phase='IDLE';this.cp.entry=null;this.cp.intent=null;this.cp.stop=null;
+ this.cp.phase='IDLE';this.observeExistingOnly=false;this.cp.entry=null;this.cp.intent=null;this.cp.stop=null;
  this.cp.tps=[];this.persist();
  this.event('EMERGENCY: đã đóng BTC không có STOP, cần kiểm tra Binance');
 };
@@ -173,6 +173,8 @@ p.onSignal=async function(signal,price,healthy){
  if(this.lastSignalTime!=null&&signal.barTime<=this.lastSignalTime)return false;
  this.lastSignalTime=signal.barTime;
  if(this.cp.phase==='PROTECTED'){
+  // Resumed positions must never reverse or open overlapping entries.
+  if(this.observeExistingOnly)return false;
   if(!this.cp.config.reverseOnSignal||this.cp.entry?.side===signal.side)return false;
   const expected=this.cp.entry;
   try{

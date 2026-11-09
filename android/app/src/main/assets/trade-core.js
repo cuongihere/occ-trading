@@ -18,7 +18,7 @@ function occValidateConfig(raw){
   c[key]=occNumber(c[key]);
  if(!['BOTH','LONG','SHORT'].includes(c.side)||!['Percent','Points'].includes(c.tpMode)||
     !['MARKET','LIMIT_PULLBACK'].includes(c.entryMode)||
-    !['OCC_CROSS','M15_CLOSE'].includes(c.limitBasis)||
+    !['OCC_CROSS','M15_CLOSE','OCC_TRIGGER'].includes(c.limitBasis)||
     !Number.isFinite(c.limitOffsetPct)||c.limitOffsetPct<0.01||c.limitOffsetPct>1||
     !Number.isInteger(c.limitWaitSeconds)||c.limitWaitSeconds<30||c.limitWaitSeconds>180||
     typeof c.reverseOnSignal!=='boolean'||!Number.isInteger(c.leverage)||c.leverage<1||
@@ -34,7 +34,7 @@ class OCCMobileTrade {
   try{stored=JSON.parse(load()||'{}')}catch{}
   this.cp={phase:'IDLE',entry:null,stop:null,tps:[],intent:null,halted:false,
    config:OCC_DEFAULT,...stored,config:occValidateConfig(stored.config||{})};
-  this.auto=false;this.busy=false;this.connected=false;this.lastSnapshot=null;this.lastError='';
+  this.auto=false;this.observeExistingOnly=false;this.busy=false;this.connected=false;this.lastSnapshot=null;this.lastError='';
   // A process crash or app exit never resumes submitting live orders.
   if(this.cp.phase!=='IDLE')this.cp.halted=true;
   this.persist();
@@ -150,8 +150,47 @@ class OCCMobileTrade {
   }
   return {qty,parts};
  }
+ canResumeProtected(){
+  const cp=this.cp;
+  // A PROTECTED restart requires explicit operator consent and fresh Binance proof.
+  // Never accept a HALT with a known error or an in-flight mutation.
+  return cp.phase==='PROTECTED'&&!!cp.entry&&!!cp.stop&&
+   Array.isArray(cp.tps)&&cp.tps.length>0&&cp.intent==null&&
+   !cp.error&&!cp.pendingLimit;
+ }
+ async verifyExistingProtected(){
+  if(!this.canResumeProtected())
+   throw Error('Checkpoint OCC không đủ điều kiện tiếp tục giám sát; kiểm tra Binance thủ công');
+  const s=await this.getSnapshot(),c=this.cp.config,e=this.cp.entry;
+  if(s.marginType!=='ISOLATED'||s.leverage!==c.leverage||
+     s.otherPositions.length||s.openOrders.length||
+     !s.side||s.side!==e.side||(c.side!=='BOTH'&&c.side!==s.side)||
+     !(s.entryPrice>0&&s.qty>0))
+   throw Error('Vị thế OCC chưa khớp Binance: chiều, ISOLATED, leverage hoặc có lệnh ngoài');
+  const order=await this.verifyOwnership();
+  const avg=Number(order.avgPrice);
+  const tick=(await this.getRules()).tick;
+  if(!(avg>0)||Math.abs(avg-e.avg)>tick||Math.abs(avg-s.entryPrice)>tick)
+   throw Error('Giá Entry thực tế Binance khác checkpoint OCC, không nhận giám sát');
+  // May persist confirmed TP fills only, never modify Binance orders.
+  await this.validateProtected(s);
+  const active=this.cp.tps;
+  if(!active.length||Math.abs(active.reduce((v,x)=>v+x.qty,0)-s.qty)>1e-8)
+   throw Error('TP OCC đang mở không phủ đủ BTC còn lại; không bật AUTO');
+  if(s.algos.length!==active.length+1)
+   throw Error('SL/TP Binance không trùng nhóm Algo OCC đang bảo vệ');
+  const stop=s.algos.find(x=>String(x.algoId)===String(this.cp.stop.id));
+  if(!stop||stop.clientAlgoId!==this.cp.stop.clientId||
+     stop.orderType!=='STOP_MARKET'||!occTrue(stop.closePosition)||
+     !OCC_ACTIVE.has(String(stop.algoStatus)))
+   throw Error('STOP close-all OCC chưa được xác minh đang hoạt động');
+  return {mode:'MONITOR',quantityBTC:s.qty,legsBTC:active.map(x=>x.qty),
+   marginUSDT:c.marginUSDT,leverage:c.leverage,side:s.side,
+   entryOrderId:e.orderId,checkedAt:Date.now()};
+ }
  async preflight({price,healthy}){
   if(!this.connected)throw Error('Chưa kết nối Binance Futures API');
+  if(this.canResumeProtected())return this.verifyExistingProtected();
   if(this.cp.halted)throw Error('OCC đang khóa an toàn: '+(this.cp.error||'cần đối soát Binance'));
   if(this.cp.phase!=='IDLE')throw Error('OCC còn lệnh/checkpoint: '+this.cp.phase);
   if(!healthy)throw Error('Giá BTCUSDT chưa LIVE hoặc quá hạn');
@@ -167,12 +206,20 @@ class OCCMobileTrade {
   return this.locked(async()=>{
    if(confirmation!=='CHAP NHAN BTC FUTURES')throw Error('Chưa xác nhận giao dịch Futures tiền thật');
    const check=await this.preflight({price,healthy});
-   // Keep Binance checks read-only until the explicit confirmation has been given.
-   this.auto=true;this.event('AUTO ON · BTC '+check.quantityBTC+' · chờ tín hiệu M15 mới');
+   // A resumed OCC position is watch-only even if reverseOnSignal is ON.
+   if(check.mode==='MONITOR'){
+    this.cp.halted=false;this.cp.error=null;this.persist();
+    this.observeExistingOnly=true;this.auto=true;
+    this.event('AUTO ON · CHỈ GIÁM SÁT '+check.quantityBTC+
+     ' BTC OCC; không đảo/vào thêm cho đến khi Binance FLAT');
+   }else{
+    this.observeExistingOnly=false;this.auto=true;
+    this.event('AUTO ON · BTC '+check.quantityBTC+' · chờ tín hiệu M15 mới');
+   }
    return true;
   });
  }
- disarm(){this.auto=false;this.event('AUTO OFF · giữ lệnh bảo vệ trên Binance');}
+ disarm(){this.auto=false;this.observeExistingOnly=false;this.event('AUTO OFF · giữ lệnh bảo vệ trên Binance');}
  async setLeverage(value){
   return this.locked(async()=>{
    if(this.auto||this.cp.phase!=='IDLE'||this.cp.halted)

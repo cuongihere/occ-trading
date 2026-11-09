@@ -74,6 +74,43 @@ test('LONG pullback is below both signal candle and market, SHORT above both',()
  assert.equal(bot.cp.config.entryMode,'LIMIT_PULLBACK');
  assert.equal(bot.cp.config.limitOffsetPct,.05);
 });
+test('Exact OCC BTC trigger LIMIT uses triggerPrice without the old 0.05% offset',async()=>{
+ const h=fixture();h.bot.setConfig({marginUSDT:70,entryMode:'LIMIT_PULLBACK',
+  limitBasis:'OCC_TRIGGER',limitOffsetPct:0.05});
+ await h.bot.arm({price:78000,healthy:true,confirmation:'CHAP NHAN BTC FUTURES'});
+ const signal={...h.signal,triggerPrice:77500,crossPrice:78500,candleClose:77900};
+ await h.bot.placeLimit('LONG',78000,signal);
+ assert.equal(Number(h.pending.price),77500);
+ assert.equal(h.bot.cp.phase,'LIMIT_PENDING');
+ assert.equal(h.calls.filter(x=>x.method==='POST'&&x.path==='/fapi/v1/order').length,1);
+});
+
+test('Exact trigger refuses marketable LIMIT without any Binance mutation',async()=>{
+ const h=fixture();h.bot.setConfig({marginUSDT:70,entryMode:'LIMIT_PULLBACK',
+  limitBasis:'OCC_TRIGGER'});
+ await h.bot.arm({price:78000,healthy:true,confirmation:'CHAP NHAN BTC FUTURES'});
+ await assert.rejects(h.bot.placeLimit('LONG',78000,{...h.signal,triggerPrice:78100}),
+  /LIMIT không còn/);
+ assert.equal(h.bot.cp.phase,'IDLE');
+ assert.equal(h.calls.filter(x=>x.method!=='GET').length,0);
+});
+
+test('Filled exact-trigger LIMIT places STOP before TP1/TP2/TP3 from Binance avgPrice',async()=>{
+ const h=fixture();h.bot.setConfig({marginUSDT:70,entryMode:'LIMIT_PULLBACK',
+  limitBasis:'OCC_TRIGGER',limitWaitSeconds:90});
+ await h.bot.arm({price:78000,healthy:true,confirmation:'CHAP NHAN BTC FUTURES'});
+ await h.bot.placeLimit('LONG',78000,{...h.signal,triggerPrice:77500});
+ h.fill(.004,true);
+ await h.bot.monitor();
+ assert.equal(h.bot.cp.phase,'PROTECTED');
+ assert.equal(h.bot.cp.pendingLimit,null);
+ const posts=h.calls.filter(x=>x.method==='POST');
+ assert.deepEqual(posts.map(x=>x.p.type),
+  ['LIMIT','STOP_MARKET','TAKE_PROFIT_MARKET','TAKE_PROFIT_MARKET','TAKE_PROFIT_MARKET']);
+ assert.equal(h.bot.cp.entry.avg,77500);
+ assert.equal(h.bot.cp.stop.price,76725);
+});
+
 test('LIMIT sits NEW without Binance STOP until actual execution; never sends MARKET fallback',async()=>{
  const h=fixture();await h.bot.arm({price:78000,healthy:true,
   confirmation:'CHAP NHAN BTC FUTURES'});

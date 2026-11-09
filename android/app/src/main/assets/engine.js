@@ -104,6 +104,8 @@ class OCCEngine {
   if(this.baseOpen===null||this.baseClose===null)throw Error('Warmup required');
   const openSeries=(this.baseOpen*7+this.currentH4.open)/8, closeSeries=(this.baseClose*7+b.close)/8;
   const diff=closeSeries-openSeries;
+  // BTC price at which provisional H4 SMMA8 open/close lines would be equal.
+  const triggerPrice=this.currentH4.open+7*(this.baseOpen-this.baseClose);
   const side=this.previous!==null?(diff>0&&this.previous<=0?'LONG':diff<0&&this.previous>=0?'SHORT':null):null;
   this.history.push({time:b.time,closeTime:b.closeTime,close:b.close,openSeries,closeSeries});
   if(this.history.length>1200)this.history.shift();
@@ -113,7 +115,7 @@ class OCCEngine {
   if(side&&live){
    const id=`${this.sessionId}:BTCUSDT:M15:${b.time}:${side}`;
    if(!this.signals.some(s=>s.id===id)){
-    signal={id,time:b.closeTime+1,barTime:b.time,observedAt,side,candleClose:b.close,crossPrice:(openSeries+closeSeries)/2,openSeries,closeSeries,eligible:this.running&&this.healthy&&(!this.position||(this.config.reverseOnSignal&&this.position.side!==side)),source:'Binance USD-M BTCUSDT',mode:'delay0',h4Provisional:(b.closeTime!==ht+H4-1)};
+    signal={id,time:b.closeTime+1,barTime:b.time,observedAt,side,candleClose:b.close,crossPrice:(openSeries+closeSeries)/2,triggerPrice,openSeries,closeSeries,eligible:this.running&&this.healthy&&(!this.position||(this.config.reverseOnSignal&&this.position.side!==side)),source:'Binance USD-M BTCUSDT',mode:'delay0',h4Provisional:(b.closeTime!==ht+H4-1)};
     this.signals.push(Object.freeze(signal));
     if(signal.eligible)this.pending={...signal};
    }

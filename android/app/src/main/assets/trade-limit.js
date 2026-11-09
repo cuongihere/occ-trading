@@ -7,13 +7,14 @@ const same=(a,b)=>String(a)===String(b);
 const near=(a,b)=>Number.isFinite(Number(a))&&Number.isFinite(Number(b))&&
  Math.abs(Number(a)-Number(b))<=1e-8;
 const terminal=new Set(['FILLED','CANCELED','EXPIRED','EXPIRED_IN_MATCH']);
-p.limitEntryPrice=function(side,signalPrice,marketPrice,tick){
+p.limitEntryPrice=function(side,signalPrice,marketPrice,tick,exactTrigger=false){
  const pct=this.cp.config.limitOffsetPct;
  if(!['LONG','SHORT'].includes(side)||!(signalPrice>0&&marketPrice>0&&tick>0))
   throw Error('Không đủ giá để đặt LIMIT');
  // Anchor to the M15 signal close, but never chase beyond the current LAST.
  const reference=side==='LONG'?Math.min(signalPrice,marketPrice):Math.max(signalPrice,marketPrice);
- const target=reference*(1+(side==='LONG'?-1:1)*pct/100);
+ // Exact OCC BTC trigger is not the SMMA line cross; ignore the offset.
+ const target=exactTrigger?signalPrice:reference*(1+(side==='LONG'?-1:1)*pct/100);
  const price=occTick(target,tick,side==='SHORT');
  if(!(price>0)||(side==='LONG'&&price>=marketPrice)||
     (side==='SHORT'&&price<=marketPrice))
@@ -46,10 +47,11 @@ p.placeLimit=async function(side,marketPrice,signal){
    this.verifyFlat(snapshot);
    // Pine crossPrice = (closeSeriesAlt + openSeriesAlt) / 2.
    // The optional candle-close basis is closer to actual traded market prices.
-   const signalPrice=Number(this.cp.config.limitBasis==='OCC_CROSS'?
-     signal?.crossPrice:signal?.candleClose);
+   const signalPrice=Number(this.cp.config.limitBasis==='OCC_CROSS'?signal?.crossPrice:
+     this.cp.config.limitBasis==='OCC_TRIGGER'?signal?.triggerPrice:signal?.candleClose);
    if(!(signalPrice>0))throw Error('Thiếu giá tham chiếu OCC của nến tín hiệu');
-   const limitPrice=this.limitEntryPrice(side,signalPrice,marketPrice,rules.tick);
+   const limitPrice=this.limitEntryPrice(side,signalPrice,marketPrice,rules.tick,
+    this.cp.config.limitBasis==='OCC_TRIGGER');
    const plan=this.plan(snapshot,limitPrice,rules);
    const clientId=this.newId();
    if(!occValidId(clientId))throw Error('Không tạo được Client Order ID');
