@@ -136,6 +136,9 @@ const server=createServer(async(req,res)=>{
     return res.end(JSON.stringify(await browserFutures.manualMarketExit(p)));
    }
    else if(req.url==='/control/live/reconcile'){await browserFutures.checkBinanceAndReconcile();}
+   else if(req.url==='/control/live/protection-repair'){
+    return res.end(JSON.stringify(await browserFutures.repairMissingProtection(p)));
+   }
    else if(req.url==='/control/live/history-refresh'){await browserFutures.refreshRealHistory({force:true});}
    else if(req.url==='/control/live/disconnect'){browserFutures.close();}
    else if(req.url==='/control/live/forget'){browserFutures.forgetSavedCredentials();}
