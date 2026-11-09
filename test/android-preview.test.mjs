@@ -37,7 +37,7 @@ test('Android native Keystore signs only allowlisted checkpoint-leased mutations
  assert.match(java,/API = "https:\/\/fapi\.binance\.com"/);
 });
 test('Android indicator retains its frozen original engine; PC-only OCC trigger metadata is excluded',()=>{
- const pcSource=src('engine.mjs');
+ const pcSource=src('engine.mjs').replace(/\r\n/g,'\n');
  // Android is discontinued. Keep its historical bundle unchanged while PC
  // adds a read-only BTC trigger threshold field for live LIMIT orders.
  const source=pcSource
