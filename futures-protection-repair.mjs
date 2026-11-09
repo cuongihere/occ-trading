@@ -13,9 +13,9 @@ const qtyToSide=amount=>amount>0?'LONG':amount<0?'SHORT':null;
 const sideToBinance=side=>side==='LONG'?'BUY':'SELL';
 
 export function installProtectionRepair(BrowserFutures){
- BrowserFutures.prototype.inspectProtectionRepair=async function(){
+ BrowserFutures.prototype.inspectProtectionRepair=async function({internalLock=false}={}){
   if(!this.api||this.environment!=='production')throw Error('Kết nối Binance Futures thật trước khi khôi phục SL/TP');
-  if(this.busy)throw Error('OCC đang xử lý giao dịch; không thể kiểm tra khôi phục');
+  if(this.busy&&!internalLock)throw Error('OCC đang xử lý giao dịch; không thể kiểm tra khôi phục');
   if(this.pendingLimit)throw Error('Vẫn có LIMIT OCC đang chờ; không thể khôi phục SL/TP');
   if(this.activeProtection)throw Error('OCC đã có checkpoint vị thế đang quản lý. Không tạo bộ SL/TP thứ hai.');
   const [a,b]=await Promise.all([this.inspect(),this.inspect()]);
@@ -101,11 +101,8 @@ export function installProtectionRepair(BrowserFutures){
   this.recoveryStatus='checking';
   let mayHaveMutated=false;
   try{
-   // inspectProtectionRepair must be free to run within this operator-owned lock.
-   this.busy=false;
-   let preview;
-   try{preview=await this.inspectProtectionRepair();}
-   finally{this.busy=true;}
+   // Preserve the operator lock across all signed readbacks and mutations.
+   const preview=await this.inspectProtectionRepair({internalLock:true});
    if(String(expectedOrderId)!==preview.orderId||
       !near(expectedQty,preview.qty)||!near(expectedEntryPrice,preview.entryPrice,
        Math.max(this.filters.tickSize,0.00000001))||
