@@ -28,6 +28,7 @@ export async function readVerifiedLimit(s,p){
 }
 export function installLimitEntry(BrowserFutures){
  BrowserFutures.prototype.submitLimit=async function(signal,account,marketPrice){
+  this.limitSubmissionStarted=false;
   const c=this.config,side=signal.side;
   if(this.pendingLimit||this.activeProtection||this.halted||!this.armed)
    throw Error('Có vị thế hoặc LIMIT chưa đối soát');
@@ -60,6 +61,8 @@ export function installLimitEntry(BrowserFutures){
   const p={clientId,side,qty:plan.qtyBTC,price,signalId:signal.id,
    orderId:null,startedAt:now,expiresAt:now+c.limitWaitSeconds*1000,goodTillDate,
    stepSize:Number(lot.stepSize),tickSize:tick};
+  // From this durable checkpoint onwards a Binance order may have been sent.
+  this.limitSubmissionStarted=true;
   this.saveIntent({phase:'LIMIT_SENDING',...p});
   // Never retry a mutation if ACK is lost.
   const ack=await this.api.post('/fapi/v1/order',{
