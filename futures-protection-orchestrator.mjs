@@ -72,7 +72,7 @@ export class ProtectionCoordinator {
   return order;
  }
  // Caller MUST provide the order ID from a prior MARKET Entry; do not place entry here.
- async protectConfirmedEntry({entryOrderId,side,stepSize,tickSize,clientPrefix}){
+ async protectConfirmedEntry({entryOrderId,side,stepSize,tickSize,clientPrefix,algoPrefix=clientPrefix}){
   if(this.state.phase!=='IDLE'||this.state.halted||this.state.inFlight)
    throw Error('Cannot protect a second trade or resume uncertain state automatically');
   if(!['LONG','SHORT'].includes(side)||!/^OCCBTC-[A-Za-z0-9_-]{1,25}$/.test(clientPrefix||''))
@@ -87,9 +87,10 @@ export class ProtectionCoordinator {
    const qty=Number(o.executedQty),entryPrice=Number(o.avgPrice);
    await this.verifiedPosition(side,qty);
    const request=protectionRequests({side,entryPrice,filledQty:qty,
-     stepSize,tickSize,clientPrefix},this.settings);
+     stepSize,tickSize,clientPrefix:algoPrefix},this.settings);
    this.persist({phase:'ENTRY_VERIFIED',entry:{orderId:String(entryOrderId),side,
-     qty,entryPrice,clientPrefix},tps:[],stop:null});
+     qty,entryPrice,clientPrefix,
+     ...(algoPrefix!==clientPrefix?{algoPrefix}:{})},tps:[],stop:null});
    await this.submitAndVerify('SL',request.stop);
    for(let i=0;i<request.tps.length;i++){
     await this.verifiedPosition(side,qty); // Reject position mutation while constructing TP group.
