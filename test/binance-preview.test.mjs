@@ -324,3 +324,19 @@ test('BTC position is one full-width horizontal panel BELOW API and Auto setting
  const js=html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
  assert.ok(js);assert.doesNotThrow(()=>new Function(js));
 });
+
+test('Missing 0/4 SL-TP on Binance offers consented recovery from actual OCC fills',()=>{
+ const html=read('BINANCE_UI_PREVIEW.html'),server=read('server.mjs');
+ const svc=read('futures-browser-service.mjs'),build=read('BUILD_PORTABLE.ps1');
+ assert.match(html,/id="repairProtection"/);
+ assert.match(html,/id="repairProtectionStatus"/);
+ assert.match(html,/\/api\/binance\/protection-repair-preview/);
+ assert.match(html,/request\('protection-repair',\{/);
+ assert.match(html,/KHOI PHUC SL TP BTCUSDT/);
+ assert.match(html,/data\.algoCount===0&&data\.normalOrderCount===0/);
+ assert.match(server,/\/control\/live\/protection-repair/);
+ assert.match(server,/\/api\/binance\/protection-repair-preview/);
+ assert.match(svc,/import \{installProtectionRepair\} from '\.\/futures-protection-repair\.mjs'/);
+ assert.match(build,/'futures-protection-repair\.mjs'/);
+ assert.doesNotMatch(html,/autoRepair\(\)|sendStopOnRender/);
+});
