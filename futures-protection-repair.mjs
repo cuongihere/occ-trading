@@ -6,6 +6,7 @@ import {randomBytes} from 'node:crypto';
 import {ProtectionCheckpoint} from './futures-protection-checkpoint.mjs';
 import {ProtectionCoordinator} from './futures-protection-orchestrator.mjs';
 import {protectionRequests} from './futures-protection-plan.mjs';
+import {readVerifiedLimit} from './futures-limit-entry.mjs';
 
 const ROOT=/^OCCBTC-[0-9a-f]{14}$/;
 const near=(a,b,tol=1e-8)=>Number.isFinite(Number(a))&&
@@ -17,7 +18,17 @@ export function installProtectionRepair(BrowserFutures){
  BrowserFutures.prototype.inspectProtectionRepair=async function({internalLock=false}={}){
   if(!this.api||this.environment!=='production')throw Error('Kết nối Binance Futures thật trước khi khôi phục SL/TP');
   if(this.busy&&!internalLock)throw Error('OCC đang xử lý giao dịch; không thể kiểm tra khôi phục');
-  if(this.pendingLimit)throw Error('Vẫn có LIMIT OCC đang chờ; không thể khôi phục SL/TP');
+  // A legacy HALTED checkpoint can retain pendingLimit after the LIMIT was
+  // fully filled. Only signed readbacks may establish that status. Repair
+  // remains operator-confirmed and refuses partial, new, or unknown orders.
+  let completedLimit=null;
+  if(this.pendingLimit){
+   completedLimit=await readVerifiedLimit(this,this.pendingLimit);
+   if(completedLimit.status!=='FILLED'||
+      !near(completedLimit.executedQty,this.pendingLimit.qty)||
+      !near(completedLimit.origQty,this.pendingLimit.qty))
+    throw Error('LIMIT OCC chưa FILLED đầy đủ trên Binance; không thể khôi phục SL/TP');
+  }
   // A healthy managed trade must not get a second protection group.
   // If monitor HALTED because the old group vanished, continue only through
   // the full canceled-Algo history audit below.
@@ -58,6 +69,9 @@ export function installProtectionRepair(BrowserFutures){
    throw Error(matches.length?'Nhiều Entry OCC cùng khớp vị thế; cần kiểm tra thủ công':
     'Không xác minh được Entry OCC duy nhất theo Order ID, khối lượng và giá khớp thực tế trên Binance');
   const chosen=matches[0],clientId=String(chosen.clientOrderId);
+  if(completedLimit&&(String(chosen.orderId)!==String(completedLimit.orderId)||
+    clientId!==completedLimit.clientOrderId))
+   throw Error('LIMIT đã khớp không trùng Order ID Entry OCC; cần kiểm tra thủ công');
   const order=await this.api.get('/fapi/v1/order',{symbol:'BTCUSDT',orderId:chosen.orderId});
   if(order.symbol!=='BTCUSDT'||String(order.orderId)!==String(chosen.orderId)||
     order.clientOrderId!==clientId||order.status!=='FILLED'||
@@ -102,7 +116,7 @@ export function installProtectionRepair(BrowserFutures){
 
   return {symbol:'BTCUSDT',side,orderId:String(order.orderId),
    clientId,qty,entryPrice:a.entryPrice,leverage:a.leverage,
-   useFreshAlgoPrefix,
+   useFreshAlgoPrefix,pendingLimitRecovered:Boolean(completedLimit),
    stopPrice:Number(requests.stop.triggerPrice),tps:requests.tps.map((x,i)=>({
     role:'TP'+(i+1),price:Number(x.triggerPrice),qty:Number(x.quantity)
    })),status:'VERIFIED_OCC_UNPROTECTED',checkedAt:Date.now()};
@@ -132,6 +146,8 @@ export function installProtectionRepair(BrowserFutures){
    this.saveIntent({phase:'PROTECTION_REPAIR_START',clientId:preview.clientId,
     algoPrefix,orderId:preview.orderId,side:preview.side,qty:preview.qty,
     entryPrice:preview.entryPrice,at:Date.now()});
+   // Persist operator-approved repair before releasing the old pending state.
+   this.pendingLimit=null;this.limitCancelUncertain=false;
    mayHaveMutated=true;
    const disk=new ProtectionCheckpoint(this.protectionPath);
    // The previous HALTED checkpoint was read and audited above. The coordinator
@@ -143,11 +159,12 @@ export function installProtectionRepair(BrowserFutures){
     entryOrderId:preview.orderId,side:preview.side,
     stepSize:this.filters.stepSize,tickSize:this.filters.tickSize,
     clientPrefix:preview.clientId,algoPrefix});
-   this.registerRealOrder({orderId:preview.orderId,groupId:preview.clientId,
-    clientId:preview.clientId,role:'ENTRY',side:sideToBinance(preview.side)});
    this.saveIntent({phase:'PROTECTED',clientId:preview.clientId,
     orderId:preview.orderId,repair:true,at:Date.now()});
    this.activeProtection=result;this.previousProtection=null;
+   try{this.registerRealOrder({orderId:preview.orderId,groupId:preview.clientId,
+    clientId:preview.clientId,role:'ENTRY',side:sideToBinance(preview.side)});}
+   catch(e){this.log('HISTORY_FAILED','SL/TP đã khôi phục nhưng chưa ghi lịch sử: '+e.message);}
    this.halted=false;this.error=null;this.armed=false;
    this.recoveryStatus='recovered';this.lastRecoveryCheck=Date.now();
    this.log('PROTECTION_REPAIRED','Binance xác nhận '+preview.qty+' BTC Entry '+preview.entryPrice+
