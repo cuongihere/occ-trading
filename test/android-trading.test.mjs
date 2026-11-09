@@ -8,7 +8,10 @@ function harness(initial=null,options={}){
  for(const name of ['trade-core.js','trade-execution.js','trade-recovery.js'])
   runInNewContext(read(name),context,{filename:name});
  let persistent=initial||'',index=0;
- const calls=[],orders=[],algos=[],finished=[],pos={qty:0,entry:78000,side:null},cfg={leverage:5};
+ const shared=options.exchange||null;
+ const calls=shared?.calls||[],orders=shared?.orders||[],algos=shared?.algos||[],
+  finished=shared?.finished||[],pos=shared?.pos||{qty:0,entry:78000,side:null},
+  cfg=shared?.cfg||{leverage:5};
  const api=async(method,path,params={})=>{
   calls.push({method,path,params:{...params}});
   if(method==='GET'){
@@ -69,7 +72,7 @@ function harness(initial=null,options={}){
  report:()=>{}});
  bot.connected=true;
  if(bot.cp.phase==='IDLE')bot.setConfig({marginUSDT:70});
- return {bot,calls,algos,finished,pos,orders,getSaved:()=>JSON.parse(persistent)};
+ return {bot,calls,algos,finished,pos,orders,cfg,getSaved:()=>JSON.parse(persistent)};
 }
 async function ready(h){
  await h.bot.arm({price:78000,healthy:true,confirmation:'CHAP NHAN BTC FUTURES'});
@@ -185,4 +188,68 @@ test('Android records actual M15 signal-to-MARKET latency and Binance ACK withou
  assert.ok(timing.ackAt>=timing.sentAt);
  assert.equal(h.bot.cp.phase,'PROTECTED');
  assert.equal(h.bot.cp.stop.role,'SL');
+});
+
+test('AUTO can re-arm solely to monitor its existing OCC position with verified STOP and TP',async()=>{
+ const h=harness();await ready(h);h.bot.disarm();
+ const before=h.calls.filter(x=>x.method==='POST'||x.method==='DELETE').length;
+ const preview=await h.bot.preflight({price:0,healthy:false});
+ assert.equal(preview.mode,'MONITOR');
+ assert.equal(preview.quantityBTC,.004);
+ await h.bot.arm({price:0,healthy:false,confirmation:'CHAP NHAN BTC FUTURES'});
+ assert.equal(h.bot.auto,true);
+ assert.equal(h.bot.observeExistingOnly,true);
+ assert.equal(h.calls.filter(x=>x.method==='POST'||x.method==='DELETE').length,before);
+ h.bot.cp.config.reverseOnSignal=true;
+ assert.equal(await h.bot.onSignal({side:'SHORT',eligible:true,barTime:900000},78000,true),false);
+ assert.equal(h.calls.filter(x=>x.method==='POST'||x.method==='DELETE').length,before);
+ h.pos.qty=0;h.pos.side=null;
+ await h.bot.monitor();
+ assert.equal(h.bot.cp.phase,'IDLE');
+ assert.equal(h.bot.observeExistingOnly,false);
+ assert.equal(h.bot.auto,true);
+ assert.equal(h.algos.length,0);
+ await h.bot.onSignal({side:'SHORT',eligible:true,barTime:1800000},78000,true);
+ assert.equal(h.bot.cp.phase,'PROTECTED');
+ assert.equal(h.bot.cp.entry.side,'SHORT');
+});
+
+test('After restart AUTO stays OFF; operator may re-arm the owned OCC position only',async()=>{
+ const h=harness();await ready(h);h.bot.disarm();
+ const again=harness(JSON.stringify(h.getSaved()),{exchange:h});
+ assert.equal(again.bot.auto,false);assert.equal(again.bot.cp.halted,true);
+ assert.equal(again.bot.canResumeProtected(),true);
+ const count=h.calls.filter(x=>x.method==='POST'||x.method==='DELETE').length;
+ const check=await again.bot.preflight({price:0,healthy:false});
+ assert.equal(check.mode,'MONITOR');
+ await again.bot.arm({price:0,healthy:false,confirmation:'CHAP NHAN BTC FUTURES'});
+ assert.equal(again.bot.cp.halted,false);
+ assert.equal(again.bot.observeExistingOnly,true);
+ assert.equal(h.calls.filter(x=>x.method==='POST'||x.method==='DELETE').length,count);
+});
+
+test('AUTO resume refuses missing STOP, foreign Algo and unknown in-flight checkpoint',async()=>{
+ const h=harness();await ready(h);h.bot.disarm();
+ const again=harness(JSON.stringify(h.getSaved()),{exchange:h});
+ const mutations=h.calls.filter(x=>x.method!=='GET').length;
+ h.algos.splice(h.algos.findIndex(x=>x.orderType==='STOP_MARKET'),1);
+ await assert.rejects(again.bot.arm({price:78000,healthy:true,
+  confirmation:'CHAP NHAN BTC FUTURES'}),/STOP|SL/TP/);
+ assert.equal(again.bot.auto,false);
+ assert.equal(h.calls.filter(x=>x.method!=='GET').length,mutations);
+ const before=harness(JSON.stringify(h.getSaved()),{exchange:h});
+ before.bot.cp.intent={kind:'ALGO',sent:true};
+ before.bot.cp.phase='PROTECTION_SENDING';
+ assert.equal(before.bot.canResumeProtected(),false);
+ await assert.rejects(before.bot.arm({price:78000,healthy:true,
+  confirmation:'CHAP NHAN BTC FUTURES'}),/khóa an toàn|checkpoint/i);
+ assert.equal(before.bot.auto,false);
+});
+
+test('Existing manual Binance position never becomes a managed OCC checkpoint',async()=>{
+ const h=harness();h.pos.qty=.004;h.pos.side='LONG';
+ assert.equal(h.bot.canResumeProtected(),false);
+ await assert.rejects(h.bot.arm({price:78000,healthy:true,
+  confirmation:'CHAP NHAN BTC FUTURES'}),/đang có vị thế BTCUSDT/);
+ assert.equal(h.calls.filter(x=>x.method!=='GET').length,0);
 });
