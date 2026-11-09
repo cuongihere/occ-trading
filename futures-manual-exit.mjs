@@ -8,7 +8,7 @@ export function validateManagedExit({managed,account,algos,entryOrder,filters,ro
  if(!managed?.entry||!managed?.stop||!Array.isArray(managed.tps)||
    !name.test(String(managed.entry.clientPrefix||''))||!['LONG','SHORT'].includes(managed.entry.side))
   throw Error('Không có checkpoint OCC hợp lệ cho lệnh này');
- const entry=managed.entry,prefix=entry.clientPrefix;
+ const entry=managed.entry,prefix=entry.clientPrefix,algoPrefix=entry.algoPrefix||prefix;
  if(expectedEntryOrderId!==null&&String(expectedEntryOrderId)!==String(entry.orderId))
   throw Error('Lệnh trên màn hình đã thay đổi; cập nhật lại trước khi chốt');
  if(!account||!account.canTrade||account.dualSidePosition!==false||
@@ -34,7 +34,7 @@ export function validateManagedExit({managed,account,algos,entryOrder,filters,ro
  if(!Array.isArray(algos))throw Error('Không đọc được các lệnh SL/TP trên Binance');
  const expected=new Map();
  for(const x of [managed.stop,...managed.tps]){
-  if(!x?.id||!x.role||!x.clientId||x.clientId!==prefix+'-'+x.role||
+  if(!x?.id||!x.role||!x.clientId||x.clientId!==algoPrefix+'-'+x.role||
      expected.has(String(x.id)))throw Error('Checkpoint SL/TP thiếu hoặc trùng ID');
   expected.set(String(x.id),x);
  }
