@@ -726,7 +726,6 @@ try{
   quotePrice=Number(quote.price);
  }
  if(this.config.entryMode==='LIMIT_PULLBACK'){
-  entrySubmissionPossible=true;
   await this.submitLimit(signal,a,quotePrice);
   return;
  }
@@ -771,11 +770,11 @@ this.log('PROTECTED','Futures thật entry '+response.orderId+' có SL và '+res
   // Unknown close/cancel outcomes: never retry or send an opposite-opening order.
   this.halted=true;this.error='Đảo chiều chưa được xác nhận: '+e.message;
   this.log('REVERSE_HALTED',this.error+' — kiểm tra vị thế và SL/TP trên Binance.');
- }else if(reverseCompleted&&!entrySubmissionPossible){
+ }else if(reverseCompleted&&!entrySubmissionPossible&&!this.limitSubmissionStarted){
   // Old position is confirmed flat, but a new entry preflight failed.
   this.halted=true;this.error='Đã đóng lệnh cũ nhưng không thể mở chiều mới: '+e.message;
   this.log('REVERSE_HALTED',this.error);
- }else if(!entrySubmissionPossible){
+ }else if(!entrySubmissionPossible&&!this.limitSubmissionStarted){
   // No entry was sent: transient preflight/quote errors must not toggle Auto OFF.
   this.error='Bỏ qua tín hiệu trước khi đặt lệnh: '+e.message;
   this.log('SIGNAL_SKIPPED','Auto vẫn ON, chưa đặt lệnh: '+e.message);
@@ -787,7 +786,7 @@ this.log('PROTECTED','Futures thật entry '+response.orderId+' có SL và '+res
   catch(recovery){this.log('CRITICAL','Không thể xác nhận đóng vị thế thiếu SL: '+recovery.message);}
   this.error+=' — Kiểm tra BTCUSDT và SL/TP trực tiếp trên Binance.';
  }
-  }finally{this.busy=false;}
+  }finally{this.limitSubmissionStarted=false;this.busy=false;}
  } 
  // Monitor only the position and orders that OCC placed; never cancel unknown orders.
  async monitor(){
