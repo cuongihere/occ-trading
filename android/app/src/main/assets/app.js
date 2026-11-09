@@ -63,6 +63,7 @@ function quoteStaleReason(){
 }
 function autoBlocker(){
  if(!connected)return 'Chưa kết nối API Binance Futures. Mở mục API Binance để kết nối.';
+ if(trade.canResumeProtected?.())return ''; // Binance is verified again by preflight
  if(trade.cp.halted)return 'OCC đang KHÓA: '+(trade.cp.error||'checkpoint cần đối soát Binance');
  if(trade.cp.phase!=='IDLE')return 'OCC còn '+trade.cp.phase+'; cần xử lý vị thế/checkpoint trước khi bật Auto.';
  if(!indicator.ready)return 'Chưa đồng bộ xong chỉ báo OCC H4/M15.';
@@ -71,10 +72,12 @@ function autoBlocker(){
 }
 function showAuto(){
  const blocked=autoBlocker();
- const state=trade.cp.halted?'AUTO KHÓA':trade.cp.phase==='LIMIT_PENDING'?
+ const state=trade.auto&&trade.observeExistingOnly?'AUTO ON · GIÁM SÁT OCC':
+  !trade.auto&&trade.canResumeProtected?.()?'AUTO OFF · CÓ VỊ THẾ OCC':
+  trade.cp.halted?'AUTO KHÓA':trade.cp.phase==='LIMIT_PENDING'?
   'LIMIT ĐANG CHỜ':trade.auto?'AUTO ON':'AUTO OFF';
  $('autoState').textContent=state;
- $('autoState').className=trade.cp.halted?'negative':trade.auto?'positive':'muted';
+ $('autoState').className=trade.auto?'positive':trade.canResumeProtected?.()?'muted':trade.cp.halted?'negative':'muted';
  $('autoToggle').textContent=trade.busy||autoClickBusy?'Đang kiểm tra…':trade.auto?'Tắt Auto':'Bật Auto';
  // Keep the toggle tappable even when Binance is offline: explain the blocker
  // instead of silently disabling the only control in the dashboard.
@@ -90,7 +93,11 @@ function showAuto(){
   'Không có LIMIT OCC đang chờ';
  $('applyLeverage').disabled=trade.busy||trade.auto||trade.cp.halted||
     trade.cp.phase!=='IDLE'||!connected;
- $('safetyLine').textContent=trade.cp.phase==='LIMIT_PENDING'?
+ $('safetyLine').textContent=trade.auto&&trade.observeExistingOnly?
+  'AUTO GIÁM SÁT · không đảo/vào thêm; sau Binance FLAT mới xét tín hiệu M15 mới':
+  !trade.auto&&trade.canResumeProtected?.()?
+  'VỊ THẾ OCC CŨ · bấm Kiểm tra Auto để đối chiếu SL/TP rồi bật giám sát':
+  trade.cp.phase==='LIMIT_PENDING'?
   'LIMIT CHỜ GIÁ · SL/TP chỉ được đặt sau khi đối soát lượng BTC thực khớp':
   trade.auto?(healthy&&feed?.healthy()?'AUTO ON · CHỜ TÍN HIỆU OCC M15 MỚI':
     'AUTO ON · CHỜ BINANCE KHÔI PHỤC GIÁ, KHÔNG GỬI LỆNH MỚI'):
@@ -107,7 +114,9 @@ function displayConfig(){
   entryMode:c.entryMode,limitBasis:c.limitBasis,limitOffsetPct:c.limitOffsetPct,limitWaitSeconds:c.limitWaitSeconds}))
    $(id).value=v;
  $('reverse').checked=c.reverseOnSignal;
- $('summary').textContent=(c.entryMode==='LIMIT_PULLBACK'?'LIMIT -'+c.limitOffsetPct+'%':'MARKET')+
+ $('limitOffsetPct').disabled=c.limitBasis==='OCC_TRIGGER';
+ $('summary').textContent=(c.entryMode==='LIMIT_PULLBACK'?
+  (c.limitBasis==='OCC_TRIGGER'?'LIMIT giá BTC kích hoạt OCC':'LIMIT -'+c.limitOffsetPct+'%'):'MARKET')+
   ' · '+c.marginUSDT+'U · '+c.leverage+'x · SL '+c.slPercent+'% · TP '+c.tp1Val+'/'+c.tp2Val+'/'+c.tp3Val;
 }
 function readConfig(){
@@ -123,7 +132,7 @@ function readConfig(){
   [c.tp1Val,c.tp2Val,c.tp3Val,c.tp1Qty,c.tp2Qty].some(v=>!Number.isFinite(v)||v<=0)||
   c.tp1Qty+c.tp2Qty>=100||
   !['MARKET','LIMIT_PULLBACK'].includes(c.entryMode)||
-  !['OCC_CROSS','M15_CLOSE'].includes(c.limitBasis)||
+  !['OCC_CROSS','M15_CLOSE','OCC_TRIGGER'].includes(c.limitBasis)||
   !(c.limitOffsetPct>=0.01&&c.limitOffsetPct<=1)||
   !Number.isInteger(c.limitWaitSeconds)||c.limitWaitSeconds<30||c.limitWaitSeconds>180)
    throw Error('Cấu hình không hợp lệ');
@@ -322,8 +331,10 @@ async function inspectAuto(){
  const blocker=autoBlocker();
  if(blocker)throw Error(blocker);
  if(trade.busy)throw Error('OCC đang đối soát Binance; thử lại sau khi hoàn thành.');
- try{trade.setConfig(readConfig());displayConfig();}
- catch(e){$('configDetails').open=true;throw e;}
+ if(!trade.canResumeProtected?.()){
+  try{trade.setConfig(readConfig());displayConfig();}
+  catch(e){$('configDetails').open=true;throw e;}
+ }
  return trade.preflight({price:lastTradePrice,
   healthy:quoteIsFresh()});
 }
@@ -342,8 +353,10 @@ $('autoCheck').onclick=async()=>{
  autoClickBusy=true;lastAutoDiagnostic='Đang kiểm tra điều kiện Binance Futures…';showAuto();
  try{
   const result=await inspectAuto();
-  lastAutoDiagnostic='BINANCE ĐÃ XÁC MINH · '+result.quantityBTC+' BTC · TP '+
-   result.legsBTC.join(' / ')+' BTC · ký quỹ '+result.marginUSDT+' USDT / '+result.leverage+'x';
+  lastAutoDiagnostic=result.mode==='MONITOR'?
+   'BINANCE ĐÃ XÁC MINH · GIÁM SÁT OCC '+result.quantityBTC+' BTC · SL/TP hợp lệ':
+   'BINANCE ĐÃ XÁC MINH · '+result.quantityBTC+' BTC · TP '+
+    result.legsBTC.join(' / ')+' BTC · ký quỹ '+result.marginUSDT+' USDT / '+result.leverage+'x';
   $('message').textContent='';showAuto();
  }catch(e){showPreflightError(e)}
  finally{autoClickBusy=false;showAuto()}
@@ -365,9 +378,13 @@ $('autoToggle').onclick=async()=>{
  autoClickBusy=true;lastAutoDiagnostic='Đang kiểm tra điều kiện Binance…';showAuto();
  try{
   const check=await inspectAuto();
-  lastAutoDiagnostic='BINANCE ĐÃ XÁC MINH · '+check.quantityBTC+' BTC · 3 TP hợp lệ';
+  lastAutoDiagnostic=check.mode==='MONITOR'?
+   'ĐÃ XÁC MINH VỊ THẾ OCC · chỉ giám sát '+check.quantityBTC+' BTC':
+   'BINANCE ĐÃ XÁC MINH · '+check.quantityBTC+' BTC · 3 TP hợp lệ';
   showAuto();
-  if(trade.cp.config.entryMode==='LIMIT_PULLBACK'&&!confirm(
+  if(check.mode==='MONITOR'&&!confirm(
+   'AUTO sẽ chỉ GIÁM SÁT vị thế OCC cũ, không đảo/vào thêm dù đảo chiều ON. Sau khi FLAT và dọn SL/TP sẽ chờ giao cắt M15 mới. Tiếp tục?'))return;
+  if(check.mode!=='MONITOR'&&trade.cp.config.entryMode==='LIMIT_PULLBACK'&&!confirm(
    'LIMIT chờ giá có thể không khớp hoặc khớp một phần. Nếu điện thoại mất mạng/tắt app, '+
    'Binance có thể giữ lệnh tối đa khoảng 11 phút trước khi tự hết hạn; '+
    'phần khớp trong lúc app tắt có thể CHƯA CÓ STOP. Chỉ tiếp tục khi bạn chấp nhận rủi ro.'))return;
@@ -380,7 +397,9 @@ $('autoToggle').onclick=async()=>{
   await trade.arm({price:lastTradePrice,
    healthy:quoteIsFresh(),confirmation});
   lastAutoDiagnostic='';
-  msg('AUTO ON · Đã xác minh Binance, chờ tín hiệu OCC M15 MỚI.');
+  msg(check.mode==='MONITOR'?
+   'AUTO ON · GIÁM SÁT OCC; không đảo chiều, chờ Binance FLAT rồi tín hiệu M15 mới.':
+   'AUTO ON · Đã xác minh Binance, chờ tín hiệu OCC M15 MỚI.');
  }catch(e){showPreflightError(e)}
  finally{autoClickBusy=false;showAuto()}
 };
