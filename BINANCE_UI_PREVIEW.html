@@ -756,10 +756,18 @@ $('enabled').onchange=async()=>{
  try{
   if(wantsOn){
    clearTimeout(saveTimer);clearTimeout(sizingTimer);
-   const check=await validateSizing();
-   if(check.status!=='valid')throw Error('Không thể bật AUTO: '+check.message);
-   if(!await saveConfig(true))throw Error('Cấu hình chưa hợp lệ hoặc chưa lưu được');
-   if($('entryMode').value==='LIMIT_PULLBACK'&&!confirm(
+   const statusResponse=await fetch('/api/binance/live-status',{cache:'no-store'});
+   if(!statusResponse.ok)throw Error('Không đọc được trạng thái Binance hiện tại');
+   const current=await statusResponse.json(),monitoringExisting=!!current.canResumeManaged;
+   if(monitoringExisting){
+    if(!confirm('Binance đang có vị thế OCC được ghi nhận. AUTO sẽ chỉ GIÁM SÁT vị thế cũ, KHÔNG đảo chiều dù bật đảo chiều OCC. Sau khi FLAT và dọn SL/TP mới chờ giao cắt M15 tiếp theo. Vẫn phải xác minh Binance thực tế. Tiếp tục?'))
+     throw Error('Đã hủy bật Auto giám sát');
+   }else{
+    const check=await validateSizing();
+    if(check.status!=='valid')throw Error('Không thể bật AUTO: '+check.message);
+    if(!await saveConfig(true))throw Error('Cấu hình chưa hợp lệ hoặc chưa lưu được');
+   }
+   if(!monitoringExisting&&$('entryMode').value==='LIMIT_PULLBACK'&&!confirm(
     'LIMIT có thể khớp lúc OCC mất mạng/tắt; STOP/TP chưa có đến khi app xác minh khớp. '+
     'GTD dự phòng Binance khoảng 11 phút. Bạn chấp nhận rủi ro này?'))throw Error('Đã hủy LIMIT');
    if(!confirm('BẬT BOT BTCUSDT FUTURES BẰNG TIỀN THẬT? Có thể thua lỗ hoặc thanh lý.'))throw Error('Đã hủy bật Auto');
@@ -799,8 +807,10 @@ async function refreshLive(){
   const desiredLeverage=Number(s.config?.leverage);
   const leverageMismatch=!!a&&Number.isInteger(desiredLeverage)&&Number(a.leverage)!==desiredLeverage;
 // OFF remains available even when the exchange is disconnected or safety-halted.
-$('enabled').disabled=autoBusy||(!s.armed&&(!s.connected||s.halted||leverageMismatch||sizingStatus!=='valid'));
-$('autoLabel').textContent=s.halted?(s.armed?'AUTO ON · KHÓA AN TOÀN':'HALTED'):
+$('enabled').disabled=autoBusy||(!s.armed&&(!s.connected||leverageMismatch||(!s.canResumeManaged&&(s.halted||sizingStatus!=='valid'))));
+$('autoLabel').textContent=!s.armed&&s.canResumeManaged?'AUTO OFF · VỊ THẾ OCC':
+ s.halted?(s.armed?'AUTO ON · KHÓA AN TOÀN':'HALTED'):
+ s.armed&&s.observeExistingOnly?'AUTO ON · THEO DÕI VỊ THẾ OCC':
  s.armed?(s.marketHealthy?'AUTO ON · THẬT':'AUTO ON · CHỜ GIÁ'):'AUTO OFF';
   $('autoWrap').className='auto'+(s.armed?' on':'')+(s.halted?' halted':'');
   const labels={wallet:'walletUSDT',available:'availableUSDT',equity:'equityUSDT',unrealized:'unrealizedUSDT',btcPosition:'positionBTC'};
@@ -826,10 +836,15 @@ $('autoLabel').textContent=s.halted?(s.armed?'AUTO ON · KHÓA AN TOÀN':'HALTED
    !leverageMismatch||a.positionBTC!==0||a.openOrders>0||a.openAlgos>0;
   $('openOrderCount').textContent=a?String(a.openOrders):'—';
   $('openAlgoCount').textContent=a?String(a.openAlgos):'—';
-$('botState').textContent=s.halted?'KHÓA AN TOÀN · KHÔNG ĐẶT LỆNH':s.armed?(s.marketHealthy?'Đang chạy':'Chờ Binance đồng bộ'):'Tạm dừng';
-$('autoHint').textContent=s.halted?'Auto vẫn ON nhưng đang khóa lệnh để bảo vệ tài khoản. Nhấn OFF, kiểm tra Binance và đối soát trước khi bật lại.':
+$('botState').textContent=!s.armed&&s.canResumeManaged?'VỊ THẾ OCC · CHỜ BẬT GIÁM SÁT':
+ s.halted?'KHÓA AN TOÀN · KHÔNG ĐẶT LỆNH':
+ s.armed&&s.observeExistingOnly?'GIÁM SÁT VỊ THẾ OCC · CHỜ FLAT':s.armed?(s.marketHealthy?'Đang chạy':'Chờ Binance đồng bộ'):'Tạm dừng';
+$('autoHint').textContent=!s.armed&&s.canResumeManaged?'AUTO OFF · có thể bật giám sát vị thế OCC hiện tại sau khi app kiểm tra Entry, STOP và các TP trực tiếp từ Binance.':
+ s.halted?'Auto đang khóa lệnh do trạng thái Binance chưa chắc chắn; kiểm tra và đối soát trước khi bật.':
+ s.armed&&s.observeExistingOnly?'Đang theo dõi vị thế OCC đã xác minh, không đảo lệnh hoặc mở thêm. Sau khi Binance FLAT và sạch SL/TP, chờ tín hiệu OCC M15 mới.':
  s.armed?(s.marketHealthy?'Bot có thể mở lệnh BTCUSDT theo tín hiệu OCC.':'Auto vẫn ON, tạm ngừng lệnh mới đến khi dữ liệu giá Binance khỏe và nến được đồng bộ lại.'):
    leverageMismatch?'Đòn bẩy sàn '+a.leverage+'x khác cấu hình '+desiredLeverage+'x. Cần áp dụng trước khi bật Auto.':
+   s.canResumeManaged?'Auto OFF · có thể bật để theo dõi vị thế OCC cũ nếu Binance xác minh đủ Entry và SL/TP.':
    'Auto OFF, không mở lệnh mới.';
   // Allow a manual API reconnect with the Windows DPAPI key even if startup failed.
   repairConnected=!!s.connected;

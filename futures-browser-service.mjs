@@ -32,7 +32,7 @@ export class BrowserFutures{
   this.api=null;this.environment=null;this.account=null;this.filters=null;
   this.armed=false;this.busy=false;this.halted=false;this.error=null;this.events=[];this.activeProtection=null;
   this.recoveryStatus='idle';this.lastRecoveryCheck=null;this.restoreTask=null;
-  this.pendingLimit=null;
+  this.pendingLimit=null;this.observeExistingOnly=false;
   this.historySyncTask=null;this.lastHistorySync=0;this.lastIncomeSync=0;this.historyError=null;this.historyCount=0;this.lastEntryTiming=null;
   const unresolved=existsSync(this.intentPath)?JSON.parse(readFileSync(this.intentPath,'utf8')):null;
   if(['LIMIT_PENDING','LIMIT_CANCEL_SENDING'].includes(unresolved?.phase))
@@ -100,7 +100,7 @@ export class BrowserFutures{
   return this.snapshot();
  }
  saveConfig(input){
-  if(this.armed||this.busy||this.activeProtection||this.pendingLimit)throw Error('Tắt Auto và xử lý hết LIMIT/vị thế Futures trước khi sửa cấu hình');
+  if(this.armed||this.busy||this.activeProtection||this.previousProtection||this.pendingLimit)throw Error('Tắt Auto và xử lý hết LIMIT/vị thế Futures trước khi sửa cấu hình');
   this.config=validateLiveConfig(input);
   mkdirSync(this.dir,{recursive:true});
   const temp=this.path+'.tmp';writeFileSync(temp,JSON.stringify(this.config,null,2),{mode:0o600});renameSync(temp,this.path);
@@ -118,6 +118,7 @@ export class BrowserFutures{
    historyError:this.historyError,historyCount:this.historyCount,
    protectedPosition:this.activeProtection?{entry:this.activeProtection.entry,stop:this.activeProtection.stop,tps:this.activeProtection.tps}:null,
    config:this.config,account:this.account,credentialSaved:this.vault.exists(),lastAccountSync:this.lastAccountSync,
+   canResumeManaged:this.canResumeManagedPosition(),observeExistingOnly:this.observeExistingOnly,
    lastEntryTiming:this.lastEntryTiming,
    pendingLimit:this.pendingLimit?{
     side:this.pendingLimit.side,price:this.pendingLimit.price,qty:this.pendingLimit.qty,
@@ -328,7 +329,7 @@ export class BrowserFutures{
     phase:'IDLE',entry:null,stop:null,tps:[],inFlight:null,halted:false
    });
    this.saveIntent({phase:'CLEARED',at:Date.now()});
-   this.activeProtection=null;this.previousProtection=null;this.halted=false;
+   this.activeProtection=null;this.previousProtection=null;this.observeExistingOnly=false;this.halted=false;
    this.error=null;this.recoveryStatus='recovered';this.lastRecoveryCheck=Date.now();
    this.log('STALE_ALGO_CLEARED','Binance FLAT, đã dọn '+toCancel.length+
     ' SL/TP OCC còn treo. AUTO vẫn OFF; chờ người dùng bật lại.');
@@ -436,20 +437,107 @@ export class BrowserFutures{
    throw e;
   }finally{this.busy=false;}
  }
+ // A saved OCC protection checkpoint permits read-only, operator-approved
+ // adoption of the position; it never authorizes recreating a missing STOP.
+ canResumeManagedPosition(){
+  const saved=this.activeProtection||this.previousProtection;
+  if(!saved?.entry||!saved?.stop||!Array.isArray(saved.tps)||!saved.tps.length||
+     saved.inFlight||saved.halted||this.pendingLimit||
+     (saved.phase&&saved.phase!=='PROTECTED'))return false;
+  const intent=existsSync(this.intentPath)?
+   JSON.parse(readFileSync(this.intentPath,'utf8')):null;
+  return intent?.phase==='PROTECTED'&&intent.clientId===saved.entry.clientPrefix&&
+   String(intent.orderId)===String(saved.entry.orderId);
+ }
+ async verifyManagedPositionForResume(){
+  if(!this.canResumeManagedPosition())throw Error('Không có OCC PROTECTED checkpoint hợp lệ để tiếp tục theo dõi');
+  const saved=this.activeProtection||this.previousProtection,entry=saved.entry;
+  const a=await this.inspect(),qty=Math.abs(a.positionBTC),side=a.positionBTC>0?'LONG':'SHORT';
+  if(!a.canTrade||a.dualSidePosition!==false||a.marginType!=='ISOLATED'||
+     a.leverage!==this.config.leverage||a.hasOtherPositions||a.openOrders!==0||
+     !(qty>0)||side!==entry.side||(this.config.side!=='BOTH'&&this.config.side!==side)||
+     !(a.entryPrice>0)||!(this.filters?.tickSize>0))
+   throw Error('Vị thế Binance không khớp cấu hình OCC, hoặc còn lệnh thường/vị thế khác');
+  const [order,algos]=await Promise.all([
+   this.api.get('/fapi/v1/order',{symbol:'BTCUSDT',orderId:entry.orderId}),
+   this.api.get('/fapi/v1/openAlgoOrders',{symbol:'BTCUSDT'})
+  ]);
+  const tick=this.filters.tickSize;
+  if(order?.symbol!=='BTCUSDT'||String(order.orderId)!==String(entry.orderId)||
+     order.clientOrderId!==entry.clientPrefix||order.status!=='FILLED'||
+     !['MARKET','LIMIT'].includes(order.type)||order.positionSide!=='BOTH'||
+     order.side!==(side==='LONG'?'BUY':'SELL')||
+     !(Number(order.executedQty)>=qty-1e-8)||
+     Math.abs(Number(order.executedQty)-Number(entry.qty))>1e-8||
+     !(Number(order.avgPrice)>0)||
+     Math.abs(Number(order.avgPrice)-a.entryPrice)>tick||
+     Math.abs(Number(entry.entryPrice)-a.entryPrice)>tick)
+   throw Error('Không xác minh được Entry OCC duy nhất, khối lượng hoặc giá vào thực tế trên Binance');
+  if(!Array.isArray(algos)||algos.length!==a.openAlgos||algos.length===0)
+   throw Error('Không xác minh được danh sách SL/TP Binance');
+  const expected=new Map();
+  for(const o of [saved.stop,...saved.tps]){
+   if(!o?.id||!o.clientId||!['SL','TP1','TP2','TP3'].includes(o.role)||
+      o.clientId!==(entry.algoPrefix||entry.clientPrefix)+'-'+o.role||
+      expected.has(String(o.id)))throw Error('Checkpoint OCC SL/TP không đủ hoặc bị trùng ID');
+   expected.set(String(o.id),o);
+  }
+  const active=new Set(['NEW','ACCEPTED','PENDING_NEW']),closeSide=side==='LONG'?'SELL':'BUY';
+  let foundStop=false,tpQty=0;
+  for(const o of algos){
+   const savedOrder=expected.get(String(o?.algoId));
+   if(o?.symbol!=='BTCUSDT'||!savedOrder||o.clientAlgoId!==savedOrder.clientId||
+      o.positionSide!=='BOTH'||o.side!==closeSide||
+      !active.has(String(o.algoStatus))||
+      (o.workingType&&o.workingType!=='CONTRACT_PRICE')||
+      !(Number(o.triggerPrice)>0)||
+      Math.abs(Number(o.triggerPrice)-Number(savedOrder.triggerPrice))>tick)
+    throw Error('Lệnh SL/TP Binance không trùng OCC Algo ID, trạng thái, giá hoặc chiều');
+   if(savedOrder.role==='SL'){
+    if(o.orderType!=='STOP_MARKET'||o.closePosition!==true||foundStop)
+     throw Error('Không xác minh được STOP close-all của OCC');
+    foundStop=true;
+   }else{
+    if(o.orderType!=='TAKE_PROFIT_MARKET'||o.reduceOnly!==true||
+       !(Number(o.quantity)>0)||Math.abs(Number(o.quantity)-Number(savedOrder.qty))>1e-8)
+     throw Error('Không xác minh được TP reduceOnly OCC');
+    tpQty+=Number(o.quantity);
+   }
+  }
+  if(!foundStop||Math.abs(tpQty-qty)>1e-8)
+   throw Error('SL hoặc tổng TP còn chờ không phủ đúng vị thế BTC trên Binance');
+  return saved;
+ }
  async arm(acceptance,marketPrice){
   if(!this.api)throw Error('Kết nối API trên trang Binance trước');
   if(this.environment!=='production')throw Error('Chỉ sử dụng Binance Futures thật');
   if(acceptance!=='CHAP NHAN BTC FUTURES')throw Error('Chưa xác nhận giao dịch tiền thật');
-  if(this.halted||this.busy||this.activeProtection||this.pendingLimit)
-    throw Error(this.error||'Lệnh hoặc LIMIT tồn đọng chưa đối soát; không bật Auto');
-  const a=await this.inspect();
-  if(!a.canTrade||a.hasOtherPositions||a.dualSidePosition!==false||a.marginType!=='ISOLATED'||
-   a.leverage!==this.config.leverage||a.hasUnknownOrders||a.positionBTC!==0)
-   throw Error('Yêu cầu BTCUSDT One-way, ISOLATED, đúng đòn bẩy, không có vị thế/lệnh cũ');
-  // Enforce on the server even if browser-side validation was bypassed.
-  const sizing=this.sizingPreview(this.config,marketPrice);
-  if(sizing.status!=='valid')throw Error('Chưa thể bật AUTO: '+sizing.message);
-  this.armed=true;this.recoveryStatus='idle';this.log('AUTO_ON','BẬT AUTO TIỀN THẬT, chờ tín hiệu BTCUSDT');return this.snapshot();
+  if(this.armed)throw Error('AUTO đã bật');
+  if(this.busy||this.pendingLimit)
+   throw Error(this.error||'OCC đang xử lý hoặc còn LIMIT chưa đối soát');
+  this.busy=true;
+  try{
+   if(this.canResumeManagedPosition()){
+    const saved=await this.verifyManagedPositionForResume();
+    this.activeProtection=saved;this.previousProtection=null;
+    this.observeExistingOnly=true;this.armed=true;this.halted=false;this.error=null;
+    this.recoveryStatus='monitoring';
+    this.log('AUTO_OBSERVE_EXISTING','OCC Entry '+saved.entry.orderId+
+     ': chỉ theo dõi vị thế và SL/TP, không đảo chiều; chờ tín hiệu M15 mới sau FLAT.');
+    return this.snapshot();
+   }
+   if(this.halted||this.activeProtection||this.previousProtection)
+    throw Error(this.error||'OCC có vị thế/chốt bảo vệ chưa đối soát; không bật Auto');
+   const a=await this.inspect();
+   if(!a.canTrade||a.hasOtherPositions||a.dualSidePosition!==false||a.marginType!=='ISOLATED'||
+      a.leverage!==this.config.leverage||a.hasUnknownOrders||a.positionBTC!==0)
+    throw Error('Yêu cầu BTCUSDT One-way, ISOLATED, đúng đòn bẩy, không có vị thế/lệnh cũ');
+   const sizing=this.sizingPreview(this.config,marketPrice);
+   if(sizing.status!=='valid')throw Error('Chưa thể bật AUTO: '+sizing.message);
+   this.observeExistingOnly=false;
+   this.armed=true;this.recoveryStatus='idle';
+   this.log('AUTO_ON','BẬT AUTO TIỀN THẬT, chờ tín hiệu BTCUSDT');return this.snapshot();
+  }finally{this.busy=false;}
  }
  disarm(){this.armed=false;this.log('AUTO_OFF','Không mở lệnh mới; giữ lệnh SL/TP đã đặt trên Futures thật');return this.snapshot();}
  close(){
@@ -593,7 +681,7 @@ export class BrowserFutures{
      phase:'IDLE',entry:null,stop:null,tps:[],inFlight:null,halted:false
     });
     this.saveIntent({phase:'CLEARED',at:Date.now()});
-    this.activeProtection=null;this.previousProtection=null;
+    this.activeProtection=null;this.previousProtection=null;this.observeExistingOnly=false;
     this.halted=false;this.error=null;
     this.log('MANUAL_EXIT_ALL','Đã đóng BTCUSDT toàn bộ bằng MARKET và dọn sạch SL/TP OCC.');
    }else{
@@ -690,6 +778,10 @@ export class BrowserFutures{
  async signal(signal,feedHealthy,quoteProvider=null){
   if(!this.armed||this.busy||this.halted||this.pendingLimit||this.environment!=='production'||!feedHealthy||!signal?.side)return;
   const existing=this.activeProtection;
+  if(existing&&this.observeExistingOnly){
+   this.log('SIGNAL_IGNORED_EXISTING','Vị thế OCC cũ còn mở: bỏ qua tín hiệu mới cho đến khi Binance xác nhận FLAT.');
+   return;
+  }
   if(existing&&(!this.config.reverseOnSignal||existing.entry.side===signal.side||
    (this.config.side!=='BOTH'&&this.config.side!==signal.side))){
    this.log('SIGNAL_IGNORED_POSITION','Bỏ qua tín hiệu '+signal.side+': đảo chiều OFF, cùng chiều hoặc bị lọc.');
@@ -800,21 +892,38 @@ this.log('PROTECTED','Futures thật entry '+response.orderId+' có SL và '+res
    const algo=await this.api.get('/fapi/v1/openAlgoOrders',{symbol:'BTCUSDT'});
    if(!Array.isArray(algo))throw Error('Không xác minh được danh sách SL/TP');
    const managed=this.activeProtection;
-   const ids=new Set([managed.stop.id,...managed.tps.map(x=>x.id)].map(String));
+   const expected=new Map([managed.stop,...managed.tps].map(x=>[String(x.id),x.clientId]));
+   if(algo.some(o=>o.symbol!=='BTCUSDT'||!expected.has(String(o.algoId))||
+      o.clientAlgoId!==expected.get(String(o.algoId))))
+    throw Error('Algo không trùng OCC checkpoint; không tự hủy lệnh');
+   const ids=new Set(expected.keys());
    const ours=algo.filter(o=>ids.has(String(o.algoId)));
    if(amt===0){
-    // Position already FLAT: remove OCC-owned stale conditional orders. No new entry until confirmed cleared.
-    for(const item of ours)await this.api.del('/fapi/v1/algoOrder',{symbol:'BTCUSDT',algoId:item.algoId});
+    // Verify FLAT twice before modifying exchange-side protective orders.
+    const verified=await this.inspect();
+    if(verified.positionBTC!==0||verified.openOrders!==0||
+       verified.openAlgos!==algo.length)
+     throw Error('Binance chưa xác nhận BTC FLAT và số SL/TP ổn định');
+    for(const item of ours){
+     const current=await this.inspect();
+     if(current.positionBTC!==0||current.openOrders!==0)
+      throw Error('Vị thế BTC thay đổi trước khi hủy Algo');
+     this.saveIntent({phase:'STALE_ALGO_CANCEL_SENDING',
+      oldClientId:managed.entry.clientPrefix,removingAlgoId:String(item.algoId),at:Date.now()});
+     await this.api.del('/fapi/v1/algoOrder',{symbol:'BTCUSDT',algoId:item.algoId});
+    }
     const left=await this.api.get('/fapi/v1/openAlgoOrders',{symbol:'BTCUSDT'});
     if(!Array.isArray(left)||left.some(x=>ids.has(String(x.algoId))))throw Error('Còn lệnh SL/TP cũ chưa hủy sau khi vị thế đóng');
     const other=left.length?left.length:0;
     if(other)throw Error('Có lệnh điều kiện ngoài OCC, không mở lệnh mới');
     new ProtectionCheckpoint(this.protectionPath).save({phase:'IDLE',entry:null,stop:null,tps:[],inFlight:null,halted:false});
     this.saveIntent({phase:'CLEARED',at:Date.now()});
-    this.activeProtection=null;this.previousProtection=null;this.log('FLAT','Đã đóng BTCUSDT Futures thật, hủy lệnh cũ và xác nhận sạch');
+    this.activeProtection=null;this.previousProtection=null;this.observeExistingOnly=false;this.log('FLAT','Đã đóng BTCUSDT Futures thật, hủy lệnh cũ và xác nhận sạch');
    }else{
     if(Math.sign(amt)!==(managed.entry.side==='LONG'?1:-1)||
-       !ours.some(x=>String(x.algoId)===String(managed.stop.id)))
+       !ours.some(x=>String(x.algoId)===String(managed.stop.id)&&
+         x.clientAlgoId===managed.stop.clientId&&x.orderType==='STOP_MARKET'&&
+         x.closePosition===true&&['NEW','ACCEPTED','PENDING_NEW'].includes(x.algoStatus)))
      throw Error('Vị thế BTC đổi chiều hoặc lệnh SL đã mất; cần xử lý trên Binance Futures thật ngay');
    }
   }catch(e){
@@ -835,7 +944,7 @@ this.log('HALTED','Auto vẫn ON nhưng khóa giao dịch; cần kiểm tra Bina
     throw Error('Binance Futures thật còn vị thế hoặc lệnh BTCUSDT, không thể xác nhận đã sạch');
    new ProtectionCheckpoint(this.protectionPath).save({phase:'IDLE',entry:null,stop:null,tps:[],inFlight:null,halted:false});
    this.saveIntent({phase:'CLEARED',at:Date.now()});
-   this.activeProtection=null;this.previousProtection=null;this.halted=false;this.error=null;this.log('RECOVERED','Đã xác minh vị thế và lệnh BTCUSDT Futures thật hoàn toàn sạch');
+   this.activeProtection=null;this.previousProtection=null;this.observeExistingOnly=false;this.halted=false;this.error=null;this.log('RECOVERED','Đã xác minh vị thế và lệnh BTCUSDT Futures thật hoàn toàn sạch');
    return this.snapshot();
   }finally{this.busy=false;}
  }

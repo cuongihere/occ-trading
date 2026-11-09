@@ -23,7 +23,7 @@ function fake({flatRiskRows=false,brokenConfig=false,failStop=false,leverage=5,l
    if(path==='/fapi/v2/account')return {canTrade:true,totalWalletBalance:'800',totalMarginBalance:'812',totalUnrealizedProfit:'12',totalInitialMargin:'60',assets:[{asset:'USDT',walletBalance:'800',availableBalance:'800'}]};
    if(path==='/fapi/v1/positionSide/dual')return mode;
    if(path==='/fapi/v1/symbolConfig')return brokenConfig?[]:[{symbol:'BTCUSDT',marginType:'ISOLATED',leverage:leverageState.value}];
-   if(path==='/fapi/v3/positionRisk')return flatRiskRows&&position.qty===0?[]:[{symbol:'BTCUSDT',positionSide:'BOTH',positionAmt:String(position.qty)}];
+   if(path==='/fapi/v3/positionRisk')return flatRiskRows&&position.qty===0?[]:[{symbol:'BTCUSDT',positionSide:'BOTH',positionAmt:String(position.qty),entryPrice:position.qty?'77000':'0'}];
    if(path==='/fapi/v1/openOrders')return normal;
    if(path==='/fapi/v1/openAlgoOrders')return algo;
    if(path==='/fapi/v1/exchangeInfo')return {symbols:[{symbol:'BTCUSDT',contractType:'PERPETUAL',
@@ -140,10 +140,11 @@ test('Production Auto mock sends MARKET then confirmed STOP and three TP, never 
  assert.equal(service.snapshot().protectedPosition?.entry.side,'SHORT');
  service.disarm();
 });
-test('Live unfinished intent after restart blocks arming until exchange confirmed FLAT',async t=>{
+test('Unfinished entry intent blocks restart adoption until Binance confirms FLAT',async t=>{
  const dir=tmp(t),fx=fake(),service=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
  await service.connect(creds);service.saveConfig({marginUSDT:500,leverage:5});await service.arm('CHAP NHAN BTC FUTURES',77000);
  await service.signal({side:'LONG',barTime:900000},true);
+ service.saveIntent({phase:'ENTRY_SENDING',clientId:'OCCBTC-unresolved',at:Date.now()});
  const again=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
  assert.equal(again.snapshot().armed,false);assert.equal(again.snapshot().halted,true);
  await again.connect(creds);
@@ -154,6 +155,98 @@ test('Live unfinished intent after restart blocks arming until exchange confirme
  assert.equal(again.snapshot().armed,true);
 });
 
+test('Re-arm a protected OCC position after restart: watch only until FLAT, then NEW crossover',async t=>{
+ const dir=tmp(t),fx=fake(),one=new BrowserFutures({
+  dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await one.connect(creds);one.saveConfig({marginUSDT:500,leverage:5,reverseOnSignal:true});
+ await one.arm('CHAP NHAN BTC FUTURES',77000);
+ await one.signal({id:'ORIGINAL',side:'LONG',barTime:900000},true);
+ assert.equal(fx.position.qty,.032);
+ one.disarm();
+ const two=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,
+  credentialVault:makeVault(dir)});
+ assert.equal(two.snapshot().armed,false);
+ assert.equal(two.snapshot().halted,true);
+ await two.connect(creds);
+ assert.equal(two.snapshot().canResumeManaged,true);
+ const before=fx.calls.filter(x=>x.method==='POST'||x.method==='DELETE').length;
+ await two.arm('CHAP NHAN BTC FUTURES',77000);
+ assert.equal(two.snapshot().armed,true);
+ assert.equal(two.snapshot().observeExistingOnly,true);
+ assert.equal(two.snapshot().halted,false);
+ assert.equal(two.snapshot().protectedPosition.entry.side,'LONG');
+ assert.equal(fx.calls.filter(x=>x.method==='POST'||x.method==='DELETE').length,before);
+ await two.signal({side:'SHORT',barTime:1800000},true);
+ assert.equal(fx.calls.filter(x=>x.method==='POST'||x.method==='DELETE').length,before);
+ assert.ok(two.snapshot().events.some(e=>e.type==='SIGNAL_IGNORED_EXISTING'));
+ fx.position.qty=0;
+ await two.monitor();
+ assert.equal(two.snapshot().observeExistingOnly,false);
+ assert.equal(two.snapshot().armed,true);
+ assert.equal(two.snapshot().protectedPosition,null);
+ assert.equal(fx.algo.length,0);
+ const afterFlat=fx.calls.filter(x=>x.method==='POST').length;
+ await two.signal({side:'SHORT',barTime:2700000},true);
+ assert.equal(fx.calls.filter(x=>x.method==='POST').length,afterFlat+5);
+ assert.equal(two.snapshot().protectedPosition.entry.side,'SHORT');
+});
+test('Re-enable monitor-only on an OCC position without restart, even when available margin is low',async t=>{
+ const dir=tmp(t),fx=fake(),svc=new BrowserFutures({
+  dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await svc.connect(creds);svc.saveConfig({marginUSDT:500,leverage:5,reverseOnSignal:true});
+ await svc.arm('CHAP NHAN BTC FUTURES',77000);
+ await svc.signal({side:'LONG',barTime:900000},true);
+ svc.disarm();
+ assert.equal(svc.snapshot().canResumeManaged,true);
+ await svc.arm('CHAP NHAN BTC FUTURES',77000);
+ assert.equal(svc.snapshot().observeExistingOnly,true);
+ await svc.signal({side:'SHORT',barTime:1800000},true);
+ assert.equal(fx.calls.filter(x=>x.method==='POST'&&x.path==='/fapi/v1/order').length,1);
+});
+test('Missing STOP or unrecognized Binance Algo prevents unsafe adoption and does not mutate orders',async t=>{
+ const dir=tmp(t),fx=fake(),one=new BrowserFutures({
+  dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await one.connect(creds);one.saveConfig({marginUSDT:500,leverage:5});
+ await one.arm('CHAP NHAN BTC FUTURES',77000);await one.signal({side:'LONG',barTime:900000},true);
+ one.disarm();
+ const two=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,
+  credentialVault:makeVault(dir)});
+ await two.connect(creds);
+ const before=fx.calls.filter(x=>x.method==='POST'||x.method==='DELETE').length;
+ const stopIndex=fx.algo.findIndex(x=>x.orderType==='STOP_MARKET');
+ fx.algo.splice(stopIndex,1);
+ await assert.rejects(two.arm('CHAP NHAN BTC FUTURES',77000),/SL|STOP/);
+ assert.equal(two.snapshot().armed,false);assert.equal(two.snapshot().halted,true);
+ assert.equal(fx.calls.filter(x=>x.method==='POST'||x.method==='DELETE').length,before);
+ fx.algo.push({algoId:900001,clientAlgoId:'FOREIGN',symbol:'BTCUSDT',
+  positionSide:'BOTH',algoStatus:'NEW',orderType:'STOP_MARKET',side:'SELL',
+  triggerPrice:'74000',closePosition:true});
+ await assert.rejects(two.arm('CHAP NHAN BTC FUTURES',77000),/SL|Algo|ID/);
+ assert.equal(fx.calls.filter(x=>x.method==='POST'||x.method==='DELETE').length,before);
+});
+test('Position not owned by OCC cannot be adopted or traded while occupied',async t=>{
+ const dir=tmp(t),fx=fake(),svc=new BrowserFutures({
+  dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await svc.connect(creds);
+ fx.position.qty=.004;
+ await assert.rejects(svc.arm('CHAP NHAN BTC FUTURES',77000),/không có vị thế\/lệnh cũ/);
+ assert.equal(fx.calls.filter(x=>x.method==='POST').length,0);
+});
+test('After one TP filled, OCC resumes only if remaining active TP amounts equal remaining BTC',async t=>{
+ const dir=tmp(t),fx=fake(),one=new BrowserFutures({
+  dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await one.connect(creds);one.saveConfig({marginUSDT:500,leverage:5});
+ await one.arm('CHAP NHAN BTC FUTURES',77000);await one.signal({side:'LONG',barTime:900000},true);
+ one.disarm();
+ const firstTp=fx.algo.findIndex(x=>x.clientAlgoId.endsWith('-TP1'));
+ fx.algo.splice(firstTp,1);fx.position.qty=.022;
+ const two=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await two.connect(creds);
+ await two.arm('CHAP NHAN BTC FUTURES',77000);
+ assert.equal(two.snapshot().observeExistingOnly,true);
+ assert.equal(two.snapshot().protectedPosition.entry.qty,.032);
+ assert.equal(fx.position.qty,.022);
+});
 test('Binance production API accepts V3 positionRisk [] when account is FLAT',async t=>{
  const dir=tmp(t),fx=fake({flatRiskRows:true});
  const service=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});

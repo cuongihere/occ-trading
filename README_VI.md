@@ -73,6 +73,9 @@ Tỷ lệ thắng = số vị thế thắng chia tổng số vị thế đóng, 
 - Cấu hình LIMIT, STOP và TP là chức năng đặt lệnh tiền thật. Bộ thử nghiệm GitHub Actions dùng Binance giả lập, **chưa được kiểm chứng end-to-end trên Binance Production**. Không chạy đồng thời Auto PC và Android.
 
 **BTCUSDT perpetual · M15/H4 · SMMA 8 · delay 0 · BOTH · Multi TP v5**.
+
+**AUTO khi đã có vị thế OCC trên Binance (chế độ chỉ giám sát):** Từ bản PC mới, có thể bật AUTO khi BTCUSDT vẫn đang mở **chỉ nếu** checkpoint PROTECTED của OCC và intent PROTECTED cùng Entry Order ID, và Binance xác minh vị thế One-way/ISOLATED/đúng leverage, Order ID Entry đã FILLED, giá khớp/khối lượng phù hợp, không có lệnh thường/lệnh lạ, còn SL close-all hợp lệ và các TP reduceOnly đang chờ khớp đúng tổng số BTC còn lại. Tất cả đối chiếu từ signed Binance readbacks; không nhận vị thế thủ công hoặc không đủ hồ sơ OCC. Khi bật từ vị thế cũ: **chỉ theo dõi**, bỏ qua toàn bộ tín hiệu trong lúc vị thế mở kể cả đảo chiều OCC ON, không gửi Entry/REVERSE hay đặt lại SL/TP. Khi Binance xác minh FLAT và dọn xong SL/TP cũ, trạng thái giám sát được gỡ, AUTO tiếp tục chờ **giao cắt M15 mới** (không hồi tố tín hiệu cũ). AUTO vẫn OFF mặc định sau khi mở lại ứng dụng; cần người dùng xác nhận mỗi lần bật. Nếu bất cứ readback/checkpoint/SL thiếu hoặc không rõ ràng, AUTO không được bật và phải đối soát trực tiếp với Binance.
+
 - **Mô phỏng (Paper):** Engine hỗ trợ cờ `reverseOnSignal` (OFF mặc định) để tái hiện cách đóng vị thế cũ và mở theo tín hiệu đối nghịch như bản đầu; OFF tiếp tục giữ đến SL/TP. Chế độ Futures thật điều khiển độc lập bằng công tắc trên trang Binance.
 
 
