@@ -152,7 +152,7 @@ test('Failed STOP forces HALT, no TPs, no automatic retry and durable inFlight c
  assert.match(x.service.snapshot().error,/KHÔI PHỤC SL\/TP CHƯA XÁC MINH/);
  const cp=new ProtectionCheckpoint(join(x.dir,'futures-live-protection.json')).load();
  assert.equal(cp.phase,'HALTED');assert.equal(cp.inFlight.role,'SL');
- await assert.rejects(x.service.inspectProtectionRepair(),/Checkpoint đã từng gửi/);
+ await assert.rejects(x.service.inspectProtectionRepair(),/Checkpoint có SL\/TP đã gửi/);
  assert.equal(x.calls.filter(v=>v.method==='POST').length,1);
 });
 test('Ambiguous multiple OCC entries or mismatched checkpoint disallow repair',async t=>{
