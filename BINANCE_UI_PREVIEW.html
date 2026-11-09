@@ -472,7 +472,7 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
    <label>Đòn bẩy<input id="leverage" type="number" step="1" min="1" max="20"></label>
    <label>Chiều<select id="side"><option value="BOTH">Long &amp; Short</option><option value="LONG">Chỉ Long</option><option value="SHORT">Chỉ Short</option></select></label>
    <label>Vào lệnh<select id="entryMode"><option value="MARKET">Market</option><option value="LIMIT_PULLBACK">Limit hồi giá</option></select></label>
-   <label>Mốc LIMIT<select id="limitBasis"><option value="OCC_CROSS">Giá giao cắt OCC</option><option value="M15_CLOSE">Đóng nến M15</option></select></label>
+   <label>Mốc LIMIT<select id="limitBasis"><option value="OCC_CROSS">Giá giao cắt OCC</option><option value="M15_CLOSE">Đóng nến M15</option><option value="OCC_TRIGGER">Giá BTC kích hoạt OCC (LIMIT chính xác)</option></select></label>
    <label>Lệch (%)<input id="limitOffsetPct" type="number" min=".01" max="1" step=".01"></label>
    <label>Chờ (s)<input id="limitWaitSeconds" type="number" min="30" max="180" step="5"></label>
   </div>
@@ -603,9 +603,15 @@ function applyConfig(c){
  entryMode:c.entryMode??'MARKET',limitBasis:c.limitBasis??'OCC_CROSS',
  limitOffsetPct:c.limitOffsetPct??.05,limitWaitSeconds:c.limitWaitSeconds??90}))
    if($(id))$(id).value=value??'';
+ updateLimitPriceControls();
  $('reverseToggle').checked=c.reverseOnSignal===true;
  $('reverseState').textContent=c.reverseOnSignal===true?'ON':'OFF';
  quantities();
+}
+function updateLimitPriceControls(){
+ const exact=$('limitBasis').value==='OCC_TRIGGER';
+ $('limitOffsetPct').disabled=exact;
+ $('limitOffsetPct').title=exact?'Đặt LIMIT tại giá BTC kích hoạt OCC; không áp dụng lệch (%)':'Lệch giá so với mốc LIMIT';
 }
 function updateAutoConfigSnapshot(){
  const display=(v,d=2)=>Number.isFinite(v)?fmt(v,d):'—';
@@ -617,7 +623,8 @@ function updateAutoConfigSnapshot(){
   [val('tp1'),val('tp2'),val('tp3')].map(v=>display(v)).join('/')+unit+
   ' · Đảo chiều '+($('reverseToggle').checked?'ON':'OFF')+
  ' · '+($('entryMode').value==='LIMIT_PULLBACK'?
- 'LIMIT '+fmt(val('limitOffsetPct'),2)+'%/'+fmt(val('limitWaitSeconds'),0)+'s':'MARKET');
+ ($('limitBasis').value==='OCC_TRIGGER'?'LIMIT giá kích hoạt OCC/'+fmt(val('limitWaitSeconds'),0)+'s':
+ 'LIMIT '+fmt(val('limitOffsetPct'),2)+'%/'+fmt(val('limitWaitSeconds'),0)+'s'):'MARKET');
 }
 function quantities(){
  const x=val('q1'),y=val('q2');
@@ -667,7 +674,7 @@ async function saveConfig(force=false){
 }
 for(const id of [...numbers,'side','mode','entryMode','limitBasis']){
  $(id).addEventListener('input',()=>{
-  editingUntil=Date.now()+1500;quantities();scheduleSizingValidation();
+  editingUntil=Date.now()+1500;updateLimitPriceControls();quantities();scheduleSizingValidation();
   $('settingStatus').textContent='Đang sửa…';
   clearTimeout(saveTimer);saveTimer=setTimeout(saveConfig,900);
  });
