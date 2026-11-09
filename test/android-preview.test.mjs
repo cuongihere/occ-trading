@@ -36,14 +36,8 @@ test('Android native Keystore signs only allowlisted checkpoint-leased mutations
  assert.match(java,/private static final Set<String> SIGNED_GET/);
  assert.match(java,/API = "https:\/\/fapi\.binance\.com"/);
 });
-test('Android indicator retains its frozen original engine; PC-only OCC trigger metadata is excluded',()=>{
- const pcSource=src('engine.mjs').replace(/\r\n/g,'\n');
- // Android is discontinued. Keep its historical bundle unchanged while PC
- // adds a read-only BTC trigger threshold field for live LIMIT orders.
- const source=pcSource
-  .replace('  // BTC price at which provisional H4 SMMA8 open/close lines would be equal.\n'+
-   '  const triggerPrice=this.currentH4.open+7*(this.baseOpen-this.baseClose);\n','')
-  .replace(',triggerPrice,openSeries,closeSeries,eligible:',',openSeries,closeSeries,eligible:');
+test('Android OCC engine matches PC signal and BTC trigger-price calculation',()=>{
+ const source=src('engine.mjs').replace(/\r\n/g,'\n');
  const expected=source.replace(/^export const M15/m,'const M15')
   .replace(/^export function smma/m,'function smma')
   .replace(/^export class OCCEngine/m,'class OCCEngine')+'\nwindow.OCCEngine = OCCEngine;\n';
@@ -79,6 +73,6 @@ test('Android reads account and Income, drives verified Auto execution and manua
 test('Android workflow publishes installable debug APK',()=>{
  const yml=src('.github/workflows/android-apk.yml');
  assert.match(yml,/gradle -p android --no-daemon :app:assembleDebug/);
- assert.match(yml,/OCC_Android_Standalone_v0_3_3_APK/);
+ assert.match(yml,/OCC_Android_Standalone_v0_4_1_APK/);
  assert.match(yml,/app-debug\.apk/);
 });
