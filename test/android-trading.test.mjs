@@ -234,7 +234,7 @@ test('AUTO resume refuses missing STOP, foreign Algo and unknown in-flight check
  const mutations=h.calls.filter(x=>x.method!=='GET').length;
  h.algos.splice(h.algos.findIndex(x=>x.orderType==='STOP_MARKET'),1);
  await assert.rejects(again.bot.arm({price:78000,healthy:true,
-  confirmation:'CHAP NHAN BTC FUTURES'}),/STOP|SL/TP/);
+  confirmation:'CHAP NHAN BTC FUTURES'}),/STOP|SL\/TP/);
  assert.equal(again.bot.auto,false);
  assert.equal(h.calls.filter(x=>x.method!=='GET').length,mutations);
  const before=harness(JSON.stringify(h.getSaved()),{exchange:h});
