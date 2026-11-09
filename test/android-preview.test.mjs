@@ -36,8 +36,14 @@ test('Android native Keystore signs only allowlisted checkpoint-leased mutations
  assert.match(java,/private static final Set<String> SIGNED_GET/);
  assert.match(java,/API = "https:\/\/fapi\.binance\.com"/);
 });
-test('OCC M15/H4 indicator is byte-identical to original engine aside from module exports',()=>{
- const source=src('engine.mjs');
+test('Android indicator retains its frozen original engine; PC-only OCC trigger metadata is excluded',()=>{
+ const pcSource=src('engine.mjs');
+ // Android is discontinued. Keep its historical bundle unchanged while PC
+ // adds a read-only BTC trigger threshold field for live LIMIT orders.
+ const source=pcSource
+  .replace('  // BTC price at which provisional H4 SMMA8 open/close lines would be equal.\n'+
+   '  const triggerPrice=this.currentH4.open+7*(this.baseOpen-this.baseClose);\n','')
+  .replace(',triggerPrice,openSeries,closeSeries,eligible:',',openSeries,closeSeries,eligible:');
  const expected=source.replace(/^export const M15/m,'const M15')
   .replace(/^export function smma/m,'function smma')
   .replace(/^export class OCCEngine/m,'class OCCEngine')+'\nwindow.OCCEngine = OCCEngine;\n';
