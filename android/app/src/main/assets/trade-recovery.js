@@ -70,7 +70,7 @@ p.cleanFlat=async function(){
  }
  const last=await this.getSnapshot();
  if(last.side||last.openOrders.length||last.algos.length)throw Error('Chưa dọn sạch BTCUSDT');
- this.cp.phase='IDLE';this.cp.entry=null;this.cp.stop=null;this.cp.tps=[];
+ this.cp.phase='IDLE';this.observeExistingOnly=false;this.cp.entry=null;this.cp.stop=null;this.cp.tps=[];
  this.cp.intent=null;this.cp.halted=false;this.cp.error=null;this.persist();
  this.event('Binance xác nhận FLAT; đã dọn SL/TP cũ');
 };
