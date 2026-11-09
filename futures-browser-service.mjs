@@ -15,6 +15,7 @@ import {validateManagedExit,manualExitControls} from './futures-manual-exit.mjs'
 import {LiveStatsLedger} from './binance-live-stats.mjs';
 import {syncOCCLiveHistory} from './futures-live-history.mjs';
 import {installLimitEntry} from './futures-limit-entry.mjs';
+import {installProtectionRepair} from './futures-protection-repair.mjs';
 
 const DEFAULT={side:'BOTH',marginUSDT:20,leverage:5,slPercent:1,tpMode:'Percent',
  tp1Val:1,tp2Val:2,tp3Val:3,tp1Qty:33,tp2Qty:33,reverseOnSignal:false};
@@ -840,3 +841,4 @@ this.log('HALTED','Auto vẫn ON nhưng khóa giao dịch; cần kiểm tra Bina
 }
 
 installLimitEntry(BrowserFutures);
+installProtectionRepair(BrowserFutures);
