@@ -289,7 +289,7 @@ export class BrowserFutures{
    const expected=new Map();
    for(const x of [saved.stop,...saved.tps]){
     if(!x?.id||!x.clientId||!['SL','TP1','TP2','TP3'].includes(x.role)||
-       x.clientId!==entry.clientPrefix+'-'+x.role||
+       x.clientId!==(entry.algoPrefix||entry.clientPrefix)+'-'+x.role||
        expected.has(String(x.id)))
      throw Error('ID Algo không khớp checkpoint OCC; không hủy');
     expected.set(String(x.id),x);
@@ -477,7 +477,10 @@ export class BrowserFutures{
 
   const orders=await this.api.get('/fapi/v1/openAlgoOrders',{symbol:'BTCUSDT'});
   if(!Array.isArray(orders))throw Error('Cannot verify exchange stop');
-  if(orders.some(o=>o.clientAlgoId===intent.clientId+'-SL'&&
+  if(orders.some(o=>(
+   o.clientAlgoId===(this.activeProtection?.stop?.clientId||
+     this.previousProtection?.stop?.clientId||intent.clientId+'-SL')||
+   o.clientAlgoId===intent.clientId+'-SL')&&
     ['NEW','ACCEPTED','PENDING_NEW'].includes(o.algoStatus))){
    this.log('STOP_STILL_ACTIVE','Đã xác minh SL đang có trên sàn; không đóng cưỡng bức');return;
   }
