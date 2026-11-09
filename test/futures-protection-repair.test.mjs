@@ -161,3 +161,34 @@ test('Ambiguous multiple OCC entries or mismatched checkpoint disallow repair',a
  await assert.rejects(x.service.inspectProtectionRepair(),/Nhiều Entry OCC/);
  assert.equal(x.calls.some(v=>v.method==='POST'),false);
 });
+
+test('Live HALTED managed OCC position with 0/4 active and all old Algos CANCELED can rebuild safely',async t=>{
+ const roles=['SL','TP1','TP2','TP3'];
+ const prior=roles.map((role,i)=>({
+  role,id:9500+i,clientId:ROOT+'-'+role,
+  type:role==='SL'?'STOP_MARKET':'TAKE_PROFIT_MARKET'
+ }));
+ const x=fixture(t,{algoHistory:prior.map(o=>({symbol:'BTCUSDT',
+  clientAlgoId:o.clientId,algoId:o.id,algoStatus:'CANCELED'}))});
+ const cp=new ProtectionCheckpoint(join(x.dir,'futures-live-protection.json'));
+ cp.save({phase:'PROTECTED',entry:{orderId:String(ENTRY.orderId),
+  clientPrefix:ROOT,side:'LONG',qty:.004,entryPrice:75390.4},
+  stop:prior[0],tps:prior.slice(1),inFlight:null,halted:false});
+ x.service.activeProtection=cp.load();
+ x.service.halted=true;
+ const preview=await x.service.inspectProtectionRepair();
+ assert.equal(preview.useFreshAlgoPrefix,true);
+ const done=await x.service.repairMissingProtection({
+  confirmation:'KHOI PHUC SL TP BTCUSDT',
+  expectedOrderId:preview.orderId,expectedQty:preview.qty,
+  expectedEntryPrice:preview.entryPrice,expectedSide:preview.side
+ });
+ assert.equal(done.protected,true);
+ assert.equal(x.service.snapshot().halted,false);
+ assert.equal(x.service.snapshot().armed,false);
+ const current=x.service.snapshot().protectedPosition;
+ assert.equal(current.entry.clientPrefix,ROOT);
+ assert.notEqual(current.entry.algoPrefix,ROOT);
+ assert.equal(current.stop.clientId,current.entry.algoPrefix+'-SL');
+ assert.equal(x.calls.filter(v=>v.method==='POST').length,4);
+});
