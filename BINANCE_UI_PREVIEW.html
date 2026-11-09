@@ -522,7 +522,10 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
    <div class="small" id="autoHint">Bật Auto mới cho phép mở lệnh.</div>
   </div>
   <div class="compactOutcomes" id="positionAnalysis" aria-label="Lệnh SL TP đang mở thực tế trên Binance" hidden>
-   <div class="compactHeading"><div class="compactTitle">SL / TP đang mở trên Binance</div><button type="button" class="minor compactRefresh" id="slTpRefresh" title="Chỉ đọc lại lệnh và vị thế từ Binance, không đặt hoặc hủy lệnh">Đồng bộ Binance</button></div>
+   <div class="compactHeading"><div class="compactTitle">SL / TP đang mở trên Binance</div><div class="row" style="gap:6px;flex-wrap:wrap">
+ <button id="repairProtection" type="button" class="minor" hidden>Khôi phục SL/TP</button>
+ <button type="button" class="minor compactRefresh" id="slTpRefresh" title="Chỉ đọc lại lệnh và vị thế từ Binance, không đặt hoặc hủy lệnh">Đồng bộ Binance</button></div></div>
+ <div class="small" id="repairProtectionStatus" role="status"></div>
    <div class="compactSub" id="compactSubtitle">Đang xác minh các lệnh bảo vệ trên Binance…</div>
    <div class="compactRows">
     <div class="compactRow"><span class="compactName">SL<small id="compactSLshare">100% vị thế</small><small class="compactOrderMeta" id="compactSLmeta">—</small></span><span id="compactSLprice">—</span><strong id="compactSLpnl">—</strong></div>
@@ -586,6 +589,7 @@ function renderBinanceIncomeKpi(){
 }
 let marketSnapshot=null,marketRefreshing=false;
 let positionAnalysisRefreshing=false,manualBusy=false,manualSnapshot=null,manualPosition=null;
+let repairBusy=false,repairConnected=false;
 let sizingStatus='unavailable',sizingSequence=0,sizingTimer=null,reverseBusy=false;
 const val=id=>$(id).value.trim()===''?NaN:Number($(id).value);
 function config(){return {side:$('side').value,marginUSDT:val('marginUSDT'),leverage:val('leverage'),
@@ -821,6 +825,8 @@ $('autoHint').textContent=s.halted?'Auto vẫn ON nhưng đang khóa lệnh đ�
    leverageMismatch?'Đòn bẩy sàn '+a.leverage+'x khác cấu hình '+desiredLeverage+'x. Cần áp dụng trước khi bật Auto.':
    'Auto OFF, không mở lệnh mới.';
   // Allow a manual API reconnect with the Windows DPAPI key even if startup failed.
+  repairConnected=!!s.connected;
+  if(!$('repairProtection').hidden)$('repairProtection').disabled=repairBusy||s.busy||!s.connected;
   $('apiReconcile').disabled=s.armed||s.busy||(!s.connected&&!s.credentialSaved);
   if(!s.halted&&s.recoveryStatus==='recovered'&&!s.armed){
    $('apiReconcile').textContent='Đã đối soát · Kiểm tra lại';
@@ -993,6 +999,7 @@ function clearCompact(message){
 function resetPositionAnalysis(message){
  manualSnapshot=null;manualPosition=null;setManualButtons();
  $('positionAnalysis').hidden=true;
+  $('repairProtection').hidden=true;
  $('riskHeadline').textContent=message;
  $('riskUpdated').textContent='Chưa có dữ liệu Binance mới';
  $('riskSummary').hidden=true;$('riskSummary').replaceChildren();
@@ -1005,6 +1012,10 @@ function showPositionAnalysis(data){
  }
  const p=data.position,positionOpen=data.status==='open';
  $('positionAnalysis').hidden=!positionOpen;
+  const noProtection=positionOpen&&data.algoCount===0&&data.normalOrderCount===0;
+  $('repairProtection').hidden=!noProtection;
+  $('repairProtection').disabled=repairBusy||!repairConnected;
+  if(!noProtection&&!repairBusy)$('repairProtectionStatus').textContent='';
  $('riskHeadline').textContent=positionOpen?
   p.side+' · '+fmt(p.quantityBTC,6)+' BTC còn lại':'Không có vị thế BTCUSDT';
  $('riskUpdated').textContent='Đọc từ Binance lúc '+vn(data.fetchedAt);
@@ -1084,6 +1095,42 @@ async function refreshPositionAnalysis(){
  }catch(e){resetPositionAnalysis('Không đọc được vị thế Binance: '+e.message);}
  finally{positionAnalysisRefreshing=false;}
 }
+$('repairProtection').onclick=async()=>{
+ if(repairBusy)return;
+ repairBusy=true;
+ const status=$('repairProtectionStatus');
+ $('repairProtection').disabled=true;
+ status.textContent='Đang xác minh Order ID OCC và giá Entry thực trên Binance…';
+ try{
+  const response=await fetch('/api/binance/protection-repair-preview',{cache:'no-store'});
+  const preview=await response.json();
+  if(!response.ok)throw Error(preview.message||'Không xác minh được nguồn gốc OCC');
+  const targets=preview.tps.map(x=>x.role+' '+fmt(x.price,2)+
+   ' ('+fmt(x.qty,6)+' BTC)').join(' · ');
+  const message='BTCUSDT '+preview.side+' '+fmt(preview.qty,6)+' BTC'+
+   '\nGiá Entry thực: '+fmt(preview.entryPrice,2)+
+   '\nOrder ID OCC: '+preview.orderId+
+   '\nSL close-all: '+fmt(preview.stopPrice,2)+'\n'+targets+
+   '\n\nĐặt SL trước, TP1/TP2/TP3 sau. AUTO sẽ OFF. Tiếp tục?';
+  if(!confirm(message)){status.textContent='Đã hủy khôi phục; chưa đặt lệnh.';return;}
+  const confirmation=prompt('Nhập KHOI PHUC SL TP BTCUSDT:');
+  if(confirmation!=='KHOI PHUC SL TP BTCUSDT'){
+   status.textContent='Chưa xác nhận Futures tiền thật; không đặt SL/TP.';return;
+  }
+  status.textContent='Đang tạo và xác minh STOP/TP trên Binance…';
+  const result=await request('protection-repair',{
+   confirmation,expectedOrderId:preview.orderId,expectedQty:preview.qty,
+   expectedEntryPrice:preview.entryPrice,expectedSide:preview.side
+  });
+  if(!result.ok||!result.protected)throw Error('Binance chưa xác nhận bảo vệ');
+  status.textContent='ĐÃ KHÔI PHỤC · Binance xác minh SL, TP1, TP2, TP3. AUTO OFF.';
+  $('apiError').textContent=status.textContent;
+  await refreshLive();await refreshPositionAnalysis();
+ }catch(e){
+  status.textContent='CHƯA KHÔI PHỤC: '+e.message;
+  $('apiError').textContent=status.textContent;
+ }finally{repairBusy=false;$('repairProtection').disabled=!repairConnected;}
+};
 $('slTpRefresh').onclick=async()=>{
  if(positionAnalysisRefreshing)return;
  const button=$('slTpRefresh');button.disabled=true;
