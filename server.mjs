@@ -162,6 +162,11 @@ const server=createServer(async(req,res)=>{
  if(req.url==='/binance'){res.setHeader('Content-Type','text/html;charset=utf-8');res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'");return res.end(binancePreviewHtml);}
  if(req.url==='/api/binance/market'){res.setHeader('Content-Type','application/json;charset=utf-8');return res.end(JSON.stringify(btcMarketQuote.snapshot({healthy:feed.healthy(),state:feed.state})));}
 if(req.url==='/api/binance/live-status'){res.setHeader('Content-Type','application/json;charset=utf-8');return res.end(JSON.stringify({...browserFutures.snapshot(),marketHealthy:feed.healthy(),marketState:feed.state}));}
+ if(req.url==='/api/binance/protection-repair-preview'){
+  res.setHeader('Content-Type','application/json;charset=utf-8');
+  try{return res.end(JSON.stringify(await browserFutures.inspectProtectionRepair()));}
+  catch(e){res.writeHead(409);return res.end(JSON.stringify({status:'blocked',message:e.message}));}
+ }
  if(req.url==='/api/binance/position-analysis'){
   res.setHeader('Content-Type','application/json;charset=utf-8');
   try{
