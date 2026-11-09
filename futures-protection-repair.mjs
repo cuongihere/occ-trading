@@ -2,6 +2,7 @@
 // BTCUSDT Futures position. Never infer ownership from matching margin alone.
 // All measurements and order acknowledgements are signed Binance readbacks.
 import {existsSync,readFileSync} from 'node:fs';
+import {randomBytes} from 'node:crypto';
 import {ProtectionCheckpoint} from './futures-protection-checkpoint.mjs';
 import {ProtectionCoordinator} from './futures-protection-orchestrator.mjs';
 import {protectionRequests} from './futures-protection-plan.mjs';
@@ -33,11 +34,10 @@ export function installProtectionRepair(BrowserFutures){
   const checkpoint=existsSync(this.protectionPath)?
    new ProtectionCheckpoint(this.protectionPath).load():null;
   const intent=existsSync(this.intentPath)?JSON.parse(readFileSync(this.intentPath,'utf8')):null;
-  // Never resubmit a stop that previously had an ambiguous network result.
-  if(checkpoint?.inFlight||checkpoint?.stop||checkpoint?.tps?.length)
-   throw Error('Checkpoint đã từng gửi SL/TP hoặc kết quả chưa rõ; kiểm tra Algo trên Binance, không gửi trùng');
-  if(['SL_SENDING','STOP_ACTIVE','TP_SENDING','TP_ACTIVE','PROTECTED'].includes(checkpoint?.phase))
-   throw Error('Checkpoint SL/TP cũ cần đối soát; không tạo bộ lệnh thứ hai');
+  // An in-flight mutation can have reached the exchange. Never resend
+  // that ambiguous Algo regardless of what openAlgoOrders currently shows.
+  if(checkpoint?.inFlight||['SL_SENDING','TP_SENDING'].includes(checkpoint?.phase))
+   throw Error('Checkpoint có SL/TP đã gửi nhưng ACK chưa rõ; không thử gửi trùng');
 
   const orders=await this.api.get('/fapi/v1/allOrders',{symbol:'BTCUSDT',limit:500});
   if(!Array.isArray(orders)||orders.length>=500)
@@ -72,9 +72,21 @@ export function installProtectionRepair(BrowserFutures){
   const history=await this.api.get('/fapi/v1/allAlgoOrders',{symbol:'BTCUSDT',limit:500});
   if(!Array.isArray(history)||history.length>=500)
    throw Error('Không kiểm tra được lịch sử Algo Binance đầy đủ');
-  if(history.some(x=>String(x.clientAlgoId||'').startsWith(clientId+'-')))
-   throw Error('Binance từng nhận SL/TP cho Entry này; không được tự gửi bộ SL/TP trùng');
-
+  const priorAlgos=history.filter(x=>String(x.clientAlgoId||'').startsWith(clientId+'-'));
+  // A canceled/expired old protection group may be replaced, but with a
+  // fresh unique Algo prefix. FINISHED/active/unrecognized history blocks.
+  const inert=new Set(['CANCELED','CANCELLED','REJECTED','EXPIRED']);
+  if(priorAlgos.some(x=>!inert.has(String(x.algoStatus||'').toUpperCase())||
+    !/^OCCBTC-[0-9a-f]{14}-(SL|TP[123])$/.test(String(x.clientAlgoId||''))))
+   throw Error('SL/TP cũ có thể đã kích hoạt hoặc trạng thái chưa rõ; không đặt trùng');
+  const recorded=[checkpoint?.stop,...(checkpoint?.tps||[])].filter(Boolean);
+  for(const old of recorded){
+   if(!old.id||!old.clientId||old.clientId!==clientId+'-'+old.role||
+     !priorAlgos.some(x=>String(x.algoId)===String(old.id)&&
+      x.clientAlgoId===old.clientId&&inert.has(String(x.algoStatus||'').toUpperCase())))
+    throw Error('SL/TP cũ trong checkpoint chưa được Binance xác nhận đã hủy; không đặt bộ mới');
+  }
+  const useFreshAlgoPrefix=priorAlgos.length>0;
   const requests=protectionRequests({
    side,entryPrice:a.entryPrice,filledQty:qty,
    stepSize:this.filters.stepSize,tickSize:this.filters.tickSize,clientPrefix:clientId
@@ -86,6 +98,7 @@ export function installProtectionRepair(BrowserFutures){
 
   return {symbol:'BTCUSDT',side,orderId:String(order.orderId),
    clientId,qty,entryPrice:a.entryPrice,leverage:a.leverage,
+   useFreshAlgoPrefix,
    stopPrice:Number(requests.stop.triggerPrice),tps:requests.tps.map((x,i)=>({
     role:'TP'+(i+1),price:Number(x.triggerPrice),qty:Number(x.quantity)
    })),status:'VERIFIED_OCC_UNPROTECTED',checkedAt:Date.now()};
@@ -110,8 +123,10 @@ export function installProtectionRepair(BrowserFutures){
     throw Error('Vị thế Binance đã khác lúc xác nhận; không đặt SL/TP');
 
    // Durable intent precedes the first potential exchange mutation.
+   const algoPrefix=preview.useFreshAlgoPrefix?
+    'OCCBTC-'+randomBytes(7).toString('hex'):preview.clientId;
    this.saveIntent({phase:'PROTECTION_REPAIR_START',clientId:preview.clientId,
-    orderId:preview.orderId,side:preview.side,qty:preview.qty,
+    algoPrefix,orderId:preview.orderId,side:preview.side,qty:preview.qty,
     entryPrice:preview.entryPrice,at:Date.now()});
    mayHaveMutated=true;
    const disk=new ProtectionCheckpoint(this.protectionPath);
@@ -123,7 +138,7 @@ export function installProtectionRepair(BrowserFutures){
    const result=await coordinator.protectConfirmedEntry({
     entryOrderId:preview.orderId,side:preview.side,
     stepSize:this.filters.stepSize,tickSize:this.filters.tickSize,
-    clientPrefix:preview.clientId});
+    clientPrefix:preview.clientId,algoPrefix});
    this.registerRealOrder({orderId:preview.orderId,groupId:preview.clientId,
     clientId:preview.clientId,role:'ENTRY',side:sideToBinance(preview.side)});
    this.saveIntent({phase:'PROTECTED',clientId:preview.clientId,
