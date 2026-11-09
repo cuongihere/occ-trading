@@ -118,10 +118,26 @@ test('Manual, unowned BTC position never receives OCC SL/TP just because quantit
  await assert.rejects(x.service.inspectProtectionRepair(),/Không xác minh được Entry OCC duy nhất/);
  assert.equal(x.calls.some(v=>v.method==='POST'),false);
 });
-test('Existing historical OCC Stop blocks duplicate SL/TP even when no Algo is currently open',async t=>{
+test('Previously canceled STOP is replaced using a NEW Algo prefix, without overwriting Entry ownership',async t=>{
  const x=fixture(t,{algoHistory:[{symbol:'BTCUSDT',clientAlgoId:ROOT+'-SL',
   algoId:9123,algoStatus:'CANCELED'}]});
- await assert.rejects(x.service.inspectProtectionRepair(),/từng nhận SL\/TP/);
+ const preview=await x.service.inspectProtectionRepair();
+ assert.equal(preview.useFreshAlgoPrefix,true);
+ assert.equal(x.calls.some(v=>v.method==='POST'),false);
+ const done=await x.service.repairMissingProtection({confirmation:'KHOI PHUC SL TP BTCUSDT',
+  expectedOrderId:preview.orderId,expectedQty:preview.qty,
+  expectedEntryPrice:preview.entryPrice,expectedSide:preview.side});
+ assert.equal(done.protected,true);
+ const checkpoint=x.service.snapshot().protectedPosition;
+ assert.equal(checkpoint.entry.clientPrefix,ROOT);
+ assert.notEqual(checkpoint.entry.algoPrefix,ROOT);
+ assert.equal(checkpoint.stop.clientId,checkpoint.entry.algoPrefix+'-SL');
+ assert.equal(x.calls.filter(v=>v.method==='POST').length,4);
+});
+test('Previously FINISHED STOP never triggers automatic duplicate protection',async t=>{
+ const x=fixture(t,{algoHistory:[{symbol:'BTCUSDT',clientAlgoId:ROOT+'-SL',
+  algoId:9123,algoStatus:'FINISHED'}]});
+ await assert.rejects(x.service.inspectProtectionRepair(),/đã kích hoạt|chưa rõ/);
  assert.equal(x.calls.some(v=>v.method==='POST'),false);
 });
 test('Failed STOP forces HALT, no TPs, no automatic retry and durable inFlight checkpoint',async t=>{
