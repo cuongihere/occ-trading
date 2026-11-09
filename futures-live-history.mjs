@@ -61,13 +61,15 @@ export async function discoverOCCOrderIds(api,ledger,{checkpoint=null,intent=nul
   if(!match||!actual||a.symbol!=='BTCUSDT'||a.positionSide!=='BOTH'||
     !['BUY','SELL'].includes(a.side))continue;
   const [client,group,role]=match;
+   const canonicalGroup=checkpoint?.entry?.algoPrefix===group?
+    checkpoint.entry.clientPrefix:group;
   // Verify an actual executed child order exists before attributing P&L.
   try{
    const child=await api.get('/fapi/v1/order',{symbol:'BTCUSDT',orderId:actual});
    if(child?.symbol!=='BTCUSDT'||String(child.orderId)!==actual||
       child.side!==a.side||!['FILLED','PARTIALLY_FILLED'].includes(child.status)||
       !(Number(child.executedQty)>0))continue;
-   add({orderId:actual,groupId:group,clientId:client,role,side:a.side});
+   add({orderId:actual,groupId:canonicalGroup,clientId:client,role,side:a.side});
   }catch(e){warnings.push('Không xác minh được lệnh thực thi SL/TP #'+a.algoId+': '+e.message);}
  }
  // Recovery of a reverse reduceOnly close if the final ACK was never persisted.
