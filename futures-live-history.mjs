@@ -5,15 +5,51 @@ const ROOT=/^OCCBTC-[0-9a-f]{14}$/;
 const ALGO=/^(OCCBTC-[0-9a-f]{14})-(SL|TP[123])$/;
 const numericOrder=v=>/^[1-9][0-9]{0,23}$/.test(String(v??''))?String(v):null;
 const sideFor=side=>side==='LONG'?'BUY':side==='SHORT'?'SELL':null;
+// Binance allOrders/allAlgoOrders default to RECENT 7 DAYS even with limit 1000.
+// Backfill 30 days using strictly <7-day requests; split saturated pages so
+// old STOP fills cannot silently disappear from historical OCC statistics.
+export const HISTORY_DAYS=30;
+export async function fetchWindowedOrderHistory(api,endpoint,{now=Date.now(),days=HISTORY_DAYS,maxCalls=64}={}){
+ if(!['/fapi/v1/allOrders','/fapi/v1/allAlgoOrders'].includes(endpoint))
+  throw Error('Unsupported history endpoint');
+ const earliest=now-days*86400000,unique=new Map();
+ let calls=0;
+ async function scan(start,end){
+  if(++calls>maxCalls)throw Error(endpoint+' exceeded bounded history request budget');
+  const rows=await api.get(endpoint,{symbol:'BTCUSDT',
+   startTime:start,endTime:end,limit:1000});
+  if(!Array.isArray(rows))throw Error('Invalid Binance order history');
+  if(rows.length>=1000){
+   if(start>=end)throw Error('History page saturated at one millisecond; cannot claim complete scan');
+   const mid=Math.floor((start+end)/2);
+   await scan(start,mid);await scan(mid+1,end);return;
+  }
+  const field=endpoint.endsWith('/allOrders')?'orderId':'algoId';
+  for(const row of rows){
+   const id=numericOrder(row?.[field]);
+   if(!id)continue; // Invalid IDs cannot become OCC evidence.
+   const current=unique.get(id);
+   if(current&&JSON.stringify(current)!==JSON.stringify(row))
+    throw Error('Conflicting Binance order IDs across windows');
+   unique.set(id,row);
+  }
+ }
+ let end=now;
+ while(end>=earliest){
+  const start=Math.max(earliest,end-(6*86400000-1));
+  await scan(start,end);
+  end=start-1;
+ }
+ return {rows:[...unique.values()],calls,startAt:earliest,checkedAt:now};
+}
 export async function discoverOCCOrderIds(api,ledger,{checkpoint=null,intent=null}={}){
  const warnings=[];let discovered=0;
  const add=record=>{if(ledger.register(record))discovered++;};
  let ordinary=[];
  try{
-  ordinary=await api.get('/fapi/v1/allOrders',{symbol:'BTCUSDT',limit:1000});
-  if(!Array.isArray(ordinary))throw Error('Invalid allOrders response');
-  if(ordinary.length>=1000)warnings.push('Binance chỉ trả 1000 lệnh gần nhất; lịch sử xa hơn có thể cần đồng bộ bổ sung.');
- }catch(e){warnings.push('Không đọc được lịch sử Entry Binance: '+e.message);}
+  ordinary=(await fetchWindowedOrderHistory(api,'/fapi/v1/allOrders')).rows;
+ }catch(e){warnings.push('Không đồng bộ đủ Entry '+HISTORY_DAYS+' ngày: '+e.message);}
+
  for(const order of ordinary){
   const id=numericOrder(order?.orderId),client=String(order?.clientOrderId||'');
   const amount=Number(order?.executedQty);
@@ -41,11 +77,9 @@ export async function discoverOCCOrderIds(api,ledger,{checkpoint=null,intent=nul
  }
  const allAlgos=[];
  try{
-  const orders=await api.get('/fapi/v1/allAlgoOrders',{symbol:'BTCUSDT',limit:1000});
-  if(!Array.isArray(orders))throw Error('Invalid allAlgoOrders response');
-  allAlgos.push(...orders);
-  if(orders.length>=1000)warnings.push('Lịch sử SL/TP Binance vượt giới hạn một trang (1000).');
- }catch(e){warnings.push('Không đọc được lịch sử SL/TP Binance: '+e.message);}
+  const found=await fetchWindowedOrderHistory(api,'/fapi/v1/allAlgoOrders');
+  allAlgos.push(...found.rows);
+ }catch(e){warnings.push('Không đồng bộ đủ Algo SL/TP '+HISTORY_DAYS+' ngày: '+e.message);}
  // Checkpoint supplies exact Algo IDs even if allAlgoOrders did not include them.
  const tracked=[checkpoint?.stop,...checkpoint?.tps||[]].filter(x=>x?.id!=null);
  for(const saved of tracked){
@@ -67,7 +101,8 @@ export async function discoverOCCOrderIds(api,ledger,{checkpoint=null,intent=nul
   try{
    const child=await api.get('/fapi/v1/order',{symbol:'BTCUSDT',orderId:actual});
    if(child?.symbol!=='BTCUSDT'||String(child.orderId)!==actual||
-      child.side!==a.side||!['FILLED','PARTIALLY_FILLED'].includes(child.status)||
+      child.side!==a.side||(child.positionSide&&child.positionSide!=='BOTH')||
+      !['FILLED','PARTIALLY_FILLED'].includes(child.status)||
       !(Number(child.executedQty)>0))continue;
    add({orderId:actual,groupId:canonicalGroup,clientId:client,role,side:a.side});
   }catch(e){warnings.push('Không xác minh được lệnh thực thi SL/TP #'+a.algoId+': '+e.message);}
