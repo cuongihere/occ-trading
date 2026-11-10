@@ -125,8 +125,10 @@ export async function discoverOCCOrderIds(api,ledger,{checkpoint=null,intent=nul
 // Query all recent BTCUSDT fills, including orders OCC can no longer identify.
 // Binance caps each response at 1000 and prohibits fromId with time bounds.
 // Recursively partition the 7-day interval instead of silently losing fills.
-export async function fetchExchangeTrades7Days(api,{now=Date.now(),maxCalls=32}={}){
- const first=Math.max(0,now-7*86400000),full=[];
+export async function fetchExchangeTrades7Days(api,{now=Date.now(),startTime=null,maxCalls=32}={}){
+ const first=Math.max(0,startTime==null?now-7*86400000:Number(startTime)),full=[];
+ if(!Number.isSafeInteger(first)||!Number.isSafeInteger(now)||now<first||
+    now-first>7*86400000)throw Error('Binance userTrades date window must be <=7 days');
  let calls=0;
  async function scan(start,end){
   if(++calls>maxCalls)throw Error('Binance userTrades exceeds bounded audit capacity; partial scan discarded');
@@ -156,6 +158,24 @@ export async function fetchExchangeTrades7Days(api,{now=Date.now(),maxCalls=32}=
  }
  return {rows:full,checkedAt:now,requests:calls};
 }
+// Multi-window 30-day scan preserves actual historic BTC fills beyond the
+// single 7-day Binance API default. All pages must succeed before committing.
+export async function fetchExchangeTrades30Days(api,{now=Date.now(),maxCalls=96}={}){
+ const earliest=now-HISTORY_DAYS*86400000,all=[],seen=new Set();
+ let requests=0;
+ let end=now;
+ while(end>=earliest){
+  const start=Math.max(earliest,end-(6*86400000-1));
+  const result=await fetchExchangeTrades7Days(api,{now:end,startTime:start,maxCalls:maxCalls-requests});
+  requests+=result.requests;
+  for(const row of result.rows){
+   if(seen.has(String(row.id)))throw Error('Binance duplicated trade IDs across history windows');
+   seen.add(String(row.id));all.push(row);
+  }
+  end=start-1;
+ }
+ return {rows:all,checkedAt:now,startAt:earliest,requests};
+}
 export async function syncBinanceIncome(api,ledger,{now=Date.now()}={}){
  // Binance Income is account-level, unlike trade-specific userTrades.
  // Use one bounded seven-day window; do not claim exhaustive data if truncated.
@@ -171,13 +191,13 @@ export async function syncOCCLiveHistory(api,ledger,inputs={}){
  let exchangeTradesUpdated=false,newExchangeFills=0,accountRequests=0,newFillsFull=0;
  if(inputs.syncExchangeTrades===true){
   try{
-   const audit=await fetchExchangeTrades7Days(api);
+   const audit=await fetchExchangeTrades30Days(api);
    // Ingestion is atomic; don't record a "full scan" if pagination fails.
-   newExchangeFills=ledger.ingestExchange(audit.rows,audit.checkedAt);
+   newExchangeFills=ledger.ingestExchange(audit.rows,audit.checkedAt,audit.startAt);
    // Once discovered, all known OCC orderId fills can be matched directly.
    newFillsFull=ledger.ingest(audit.rows);
    accountRequests=audit.requests;exchangeTradesUpdated=true;
-  }catch(e){found.warnings.push('Chưa quét đủ Binance userTrades 7 ngày: '+e.message);}
+  }catch(e){found.warnings.push('Chưa quét đủ Binance userTrades 30 ngày: '+e.message);}
  }
  let incomeUpdated=false;
  if(inputs.syncIncome===true){
