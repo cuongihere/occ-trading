@@ -372,3 +372,10 @@ test('Windows history shows independent audited 30-day Binance PnL alongside unm
  assert.match(report,/incomeMonthComplete/);
  assert.match(report,/accountNetExFunding30dUSDT/);
 });
+
+test('Windows Binance dashboard inline JS remains parseable after 30-day PnL changes',()=>{
+ const html=read('BINANCE_UI_PREVIEW.html');
+ const inline=html.match(/<script>([\s\S]*?)<\/script>/);
+ assert.ok(inline&&inline[1]);
+ assert.doesNotThrow(()=>new Function(inline[1]));
+});
