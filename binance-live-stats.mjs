@@ -194,7 +194,9 @@ export function computeLiveReport(orders,fills,incomes=[],now=Date.now(),exchang
   const incomePnL=matches.filter(x=>x.income_type==='REALIZED_PNL').reduce((v,x)=>v+x.amount,0);
   const incomeFees=matches.filter(x=>x.income_type==='COMMISSION').reduce((v,x)=>v+x.amount,0);
   const netBinanceUSDT=auditStatus==='MATCHED'&&complete?Number((incomePnL+incomeFees).toFixed(8)):null;
-  const item={id,side:entryOrder.side==='BUY'?'LONG':'SHORT',qty,closedQty,remaining:Math.max(0,qty-closedQty),
+  const item={id,entryOrderId:entryOrder.order_id,
+   exitOrderIds:orders.filter(o=>o.group_id===id&&o.role!=='ENTRY').map(o=>o.order_id),
+   side:entryOrder.side==='BUY'?'LONG':'SHORT',qty,closedQty,remaining:Math.max(0,qty-closedQty),
    entryPrice:avg(entry),exitPrice:avg(exits),entryAt:Math.min(...entry.map(x=>x.filled_at)),
    exitAt:complete?Math.max(...exits.map(x=>x.filled_at)):null,
    grossRealizedUSDT:real,usdtFees:fees,netExFundingUSDT:net,nonUSDTFeeFills:other,
