@@ -76,7 +76,7 @@ export class LiveStatsLedger{
  }
  incomeEvents(){return this.#db.prepare('SELECT * FROM income_events ORDER BY occurred_at,tran_id').all();}
  // Exchange trades are separate from OCC. Never infer affiliation by time or price.
- ingestExchange(rows,checkedAt=Date.now()){
+ ingestExchange(rows,checkedAt=Date.now(),startAt=checkedAt-7*86400000){
   if(!Array.isArray(rows))throw Error('Expected Binance userTrades');
   const add=this.#db.prepare('INSERT INTO exchange_fills VALUES (?,?,?,?,?,?,?,?,?)');
   const find=this.#db.prepare('SELECT * FROM exchange_fills WHERE fill_id=?');
@@ -100,12 +100,15 @@ export class LiveStatsLedger{
     }
     add.run(...row);added++;
    }
-   this.#db.prepare("INSERT INTO history_meta(key,value) VALUES('exchange_checked_at',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(String(checkedAt));
+   const mark=this.#db.prepare("INSERT INTO history_meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value");
+   mark.run('exchange_checked_at',String(checkedAt));
+   mark.run('exchange_start_at',String(startAt));
    this.#db.exec('COMMIT');return added;
   }catch(e){this.#db.exec('ROLLBACK');throw e;}
  }
  exchangeFills(){return this.#db.prepare('SELECT * FROM exchange_fills ORDER BY filled_at,CAST(fill_id AS INTEGER)').all();}
  exchangeCheckedAt(){return Number(this.#db.prepare("SELECT value FROM history_meta WHERE key='exchange_checked_at'").get()?.value)||null;}
+ exchangeStartAt(){return Number(this.#db.prepare("SELECT value FROM history_meta WHERE key='exchange_start_at'").get()?.value)||null;}
  ingest(rows){
   if(!Array.isArray(rows))throw Error('Expected Binance userTrades array');
   const valid=new Map(this.orders().map(o=>[o.order_id,o]));
@@ -131,10 +134,10 @@ export class LiveStatsLedger{
  }
  report(){return computeLiveReport(this.orders(),
   this.#db.prepare('SELECT * FROM fills ORDER BY filled_at,CAST(fill_id AS INTEGER)').all(),
-  this.incomeEvents(),Date.now(),this.exchangeFills(),this.exchangeCheckedAt());}
+  this.incomeEvents(),Date.now(),this.exchangeFills(),this.exchangeCheckedAt(),this.exchangeStartAt());}
  close(){this.#db.close();}
 }
-export function computeLiveReport(orders,fills,incomes=[],now=Date.now(),exchangeFills=[],exchangeCheckedAt=null){
+export function computeLiveReport(orders,fills,incomes=[],now=Date.now(),exchangeFills=[],exchangeCheckedAt=null,exchangeStartAt=null){
  const r=emptyLiveReport(),known=new Map(),groups=new Map();
  for(const order of orders){
   known.set(order.order_id,order);
@@ -208,10 +211,18 @@ export function computeLiveReport(orders,fills,incomes=[],now=Date.now(),exchang
  const window=incomes.filter(x=>x.occurred_at>=windowStart&&x.occurred_at<=now&&x.asset==='USDT');
  const total=type=>Number(window.filter(x=>x.income_type===type)
   .reduce((v,x)=>v+x.amount,0).toFixed(8));
+ const historyStart=now-30*86400000;
+ const recentExchange=exchangeFills.filter(f=>f.filled_at>=historyStart&&f.filled_at<=now);
+ const exchGross=recentExchange.reduce((v,f)=>v+f.realized,0);
+ const exchFees=recentExchange.filter(f=>f.asset==='USDT').reduce((v,f)=>v+f.fee,0);
+ const missingFeeAsset=recentExchange.filter(f=>f.asset!=='USDT').length;
+ const complete30d=Number.isSafeInteger(exchangeStartAt)&&exchangeStartAt<=historyStart+60000&&
+  Number.isSafeInteger(exchangeCheckedAt)&&now>=exchangeCheckedAt&&
+  now-exchangeCheckedAt<=15*60000;
  const occIds=new Set(orders.map(x=>String(x.order_id)));
  const unlinked=new Map();
  for(const f of exchangeFills){
-  if(f.filled_at<windowStart||f.filled_at>now||occIds.has(String(f.order_id)))continue;
+  if(f.filled_at<historyStart||f.filled_at>now||occIds.has(String(f.order_id)))continue;
   const id=String(f.order_id);
   if(!unlinked.has(id))unlinked.set(id,{orderId:id,side:f.side,qtyBTC:0,
    firstAt:f.filled_at,lastAt:f.filled_at,realizedUSDT:0,feeUSDT:0,
@@ -229,7 +240,13 @@ export function computeLiveReport(orders,fills,incomes=[],now=Date.now(),exchang
    netExFundingUSDT:x.nonUSDTFeeFills?null:Number((x.realizedUSDT-x.feeUSDT).toFixed(8)),
    source:'BINANCE_USER_TRADES_UNATTRIBUTED'
   }));
- r.exchangeHistory={checkedAt:exchangeCheckedAt,accountFillCount:exchangeFills.length,
+ r.exchangeHistory={checkedAt:exchangeCheckedAt,startAt:exchangeStartAt,
+  complete30d,accountFillCount:exchangeFills.length,
+  accountRealized30dUSDT:complete30d?Number(exchGross.toFixed(8)):null,
+  accountFees30dUSDT:complete30d?Number(exchFees.toFixed(8)):null,
+  accountNetExFunding30dUSDT:complete30d&&!missingFeeAsset?
+   Number((exchGross-exchFees).toFixed(8)):null,
+  missingFeeAssets30d:missingFeeAsset,
   unmatchedRealizedOrders:missingOrders,unmatchedRealizedOrderCount:missingOrders.length,
   warning:'Chưa ghép vào OCC: chỉ có Binance userTrades, không xác minh được OCC Order ID.'};
  if(missingOrders.length)r.warnings.push(missingOrders.length+' lệnh Binance có realized P&L chưa gắn OCC, xem bảng bên dưới.');
@@ -269,7 +286,9 @@ export function readLiveReport(path){
    !!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='exchange_fills'").get()?
     db.prepare('SELECT * FROM exchange_fills').all():[],
    !!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='history_meta'").get()?
-    Number(db.prepare("SELECT value FROM history_meta WHERE key='exchange_checked_at'").get()?.value)||null:null);
+    Number(db.prepare("SELECT value FROM history_meta WHERE key='exchange_checked_at'").get()?.value)||null:null,
+   !!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='history_meta'").get()?
+    Number(db.prepare("SELECT value FROM history_meta WHERE key='exchange_start_at'").get()?.value)||null:null);
  }
  finally{db.close();}
 }
