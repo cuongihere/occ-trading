@@ -72,6 +72,14 @@ Tỷ lệ thắng = số vị thế thắng chia tổng số vị thế đóng, 
 - **Rủi ro bắt buộc hiểu:** Nếu PC/app bị tắt, mất mạng hoặc Binance API không đáp ứng khi LIMIT chờ, Binance vẫn có thể khớp LIMIT trước GTD nhưng STOP/TP chưa có trên sàn. Đừng dùng chế độ LIMIT như bot 24/7 không giám sát; vào Binance kiểm tra ngay nếu OCC hiện **LIMIT CHỜ / HALTED** hoặc có vị thế chưa thấy STOP.
 - Cấu hình LIMIT, STOP và TP là chức năng đặt lệnh tiền thật. Bộ thử nghiệm GitHub Actions dùng Binance giả lập, **chưa được kiểm chứng end-to-end trên Binance Production**. Không chạy đồng thời Auto PC và Android.
 
+### Sửa đồng bộ lịch sử cũ Windows — 10/11/2026
+
+- Binance `allOrders` và `allAlgoOrders` mặc định chỉ trả **lịch sử 7 ngày gần nhất**; bản cũ dùng một lần gọi nên các STOP/TP cũ ngoài 7 ngày có thể mất liên kết, khiến nhóm OCC có Entry nhưng thiếu fill đóng. Windows nay quét **30 ngày bằng các cửa sổ dưới 7 ngày**, tự chia nhỏ các trang đầy 1.000 record và xác minh `actualOrderId` của Algo với `GET /fapi/v1/order` trước khi gán Order ID đóng cho đúng Entry OCC.
+- `userTrades` toàn tài khoản và `Income` cùng được quét 30 ngày theo cửa sổ Binance hỗ trợ. Báo cáo thêm **P&L Binance BTC 30 ngày** = Realized P&L + phí + funding (độc lập Net OCC) với dấu thời gian và chỉ công bố tổng nếu phạm vi 30 ngày được xác minh đầy đủ; 7 ngày vẫn được hiển thị riêng. Đừng nhầm `P&L 7 ngày` với P&L toàn bộ lịch sử.
+- Trên trang Windows, bảng **“OCC chưa ghép đủ lệnh đóng”** liệt kê Entry Order ID, số BTC vào/đã ghép/còn thiếu và Exit Order ID đã nhận. Các nhóm này *chưa* được tính vào Net OCC; nếu khôi phục chính xác Order ID đóng từ lịch sử Algo Binance thì Net OCC/Win rate tự tính lại.
+- **Giới hạn:** Nếu SL/TP trên Binance không có `actualOrderId`, Algo đã vượt thời hạn truy vấn hoặc giao dịch đóng không có bằng chứng thuộc OCC, ứng dụng chỉ hiển thị các fill trong bảng **Binance chưa ghép**; không tự nhận lệnh thủ công là lệnh OCC.
+- Không chỉnh dữ liệu SQLite cũ. Giữ nguyên thư mục `data/` khi cập nhật. Để tải lại, bấm **Làm mới** và kiểm tra thời điểm đồng bộ 30 ngày, trạng thái đối soát 2 nhóm đang thiếu.
+
 ### Đối soát P&L Binance Futures Windows — bổ sung ngày 10/11/2026
 
 - Lịch sử OCC tiếp tục tính theo **Entry/Exit Order ID và fill đã được chứng minh thuộc OCC**, không gộp các giao dịch ngoài OCC vào tỷ lệ thắng hoặc Net OCC.
