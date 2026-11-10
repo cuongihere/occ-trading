@@ -149,3 +149,28 @@ test('Income from another symbol is never part of BTCUSDT account comparison',t=
  assert.equal(ledger.report().incomeAudit.available,false);
  ledger.close();
 });
+
+test('Exchange realized loss is visible without falsely counting an unidentified OCC exit',t=>{
+ const ledger=new LiveStatsLedger(pathFor(t)),now=Date.now();
+ const root='OCCBTC-aaaaaaaaaaaaaa';
+ ledger.register({orderId:7001,groupId:root,clientId:root,role:'ENTRY',side:'BUY'});
+ const trades=[
+  {symbol:'BTCUSDT',id:101,orderId:7001,side:'BUY',qty:'.004',price:'75000',realizedPnl:'0',
+   commission:'.15',commissionAsset:'USDT',time:now-10000},
+  {symbol:'BTCUSDT',id:102,orderId:7002,side:'SELL',qty:'.004',price:'74200',
+   realizedPnl:'-3.2',commission:'.14',commissionAsset:'USDT',time:now-9000}
+ ];
+ assert.equal(ledger.ingestExchange(trades,now),2);
+ assert.equal(ledger.ingest(trades),1);
+ let r=ledger.report();
+ assert.equal(r.summary.closed,0);
+ assert.equal(r.summary.open,1);
+ assert.equal(r.exchangeHistory.unmatchedRealizedOrderCount,1);
+ assert.equal(r.exchangeHistory.unmatchedRealizedOrders[0].orderId,'7002');
+ assert.equal(r.exchangeHistory.unmatchedRealizedOrders[0].realizedUSDT,-3.2);
+ assert.ok(Math.abs(r.exchangeHistory.unmatchedRealizedOrders[0].netExFundingUSDT+3.34)<1e-8);
+ assert.equal(r.summary.netExFundingUSDT,0);
+ assert.equal(ledger.ingestExchange(trades,now),0);
+ ledger.close();
+ // Persisted read-only ledger can be opened again without losing the unlinked loss.
+});
