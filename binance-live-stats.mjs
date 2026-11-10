@@ -8,7 +8,9 @@ const schema=[
 "PRAGMA journal_mode=WAL","PRAGMA foreign_keys=ON",
 "CREATE TABLE IF NOT EXISTS orders (order_id TEXT PRIMARY KEY,group_id TEXT NOT NULL,client_id TEXT NOT NULL,role TEXT NOT NULL,side TEXT NOT NULL,synced_at INTEGER NOT NULL DEFAULT 0)",
 "CREATE TABLE IF NOT EXISTS fills (fill_id TEXT PRIMARY KEY,order_id TEXT NOT NULL REFERENCES orders(order_id),side TEXT NOT NULL,qty REAL NOT NULL,price REAL NOT NULL,realized REAL NOT NULL,fee REAL NOT NULL,asset TEXT NOT NULL,filled_at INTEGER NOT NULL)",
-"CREATE TABLE IF NOT EXISTS income_events (income_type TEXT NOT NULL,tran_id TEXT NOT NULL,trade_id TEXT,asset TEXT NOT NULL,amount REAL NOT NULL,occurred_at INTEGER NOT NULL,PRIMARY KEY(income_type,tran_id))"
+"CREATE TABLE IF NOT EXISTS income_events (income_type TEXT NOT NULL,tran_id TEXT NOT NULL,trade_id TEXT,asset TEXT NOT NULL,amount REAL NOT NULL,occurred_at INTEGER NOT NULL,PRIMARY KEY(income_type,tran_id))",
+"CREATE TABLE IF NOT EXISTS exchange_fills (fill_id TEXT PRIMARY KEY,order_id TEXT NOT NULL,side TEXT NOT NULL,qty REAL NOT NULL,price REAL NOT NULL,realized REAL NOT NULL,fee REAL NOT NULL,asset TEXT NOT NULL,filled_at INTEGER NOT NULL)",
+"CREATE TABLE IF NOT EXISTS history_meta (key TEXT PRIMARY KEY,value TEXT NOT NULL)"
 ].join(';')+';';
 export const emptyLiveReport=()=>({source:'BINANCE_VERIFIED_OCC_ONLY',asOf:null,registeredOrders:0,
  summary:{closed:0,open:0,wins:0,losses:0,breakeven:0,winRate:null,grossRealizedUSDT:0,
@@ -73,6 +75,37 @@ export class LiveStatsLedger{
   }catch(e){this.#db.exec('ROLLBACK');throw e;}
  }
  incomeEvents(){return this.#db.prepare('SELECT * FROM income_events ORDER BY occurred_at,tran_id').all();}
+ // Exchange trades are separate from OCC. Never infer affiliation by time or price.
+ ingestExchange(rows,checkedAt=Date.now()){
+  if(!Array.isArray(rows))throw Error('Expected Binance userTrades');
+  const add=this.#db.prepare('INSERT INTO exchange_fills VALUES (?,?,?,?,?,?,?,?,?)');
+  const find=this.#db.prepare('SELECT * FROM exchange_fills WHERE fill_id=?');
+  let added=0;
+  this.#db.exec('BEGIN IMMEDIATE');
+  try{
+   for(const t of rows){
+    if(t.symbol!=='BTCUSDT')continue;
+    if(!/^[0-9]{1,24}$/.test(String(t.id))||!/^[0-9]{1,24}$/.test(String(t.orderId))||
+       !['BUY','SELL'].includes(t.side))throw Error('Invalid Binance fill identity');
+    const qty=number(t.qty,'qty'),price=number(t.price,'price'),
+     pnl=number(t.realizedPnl,'realizedPnl'),fee=number(t.commission,'commission'),
+     at=number(t.time,'time'),asset=String(t.commissionAsset||'');
+    if(qty<=0||price<=0||fee<0||!Number.isSafeInteger(at)||at<0||
+       !/^[A-Z0-9]{2,12}$/.test(asset))throw Error('Malformed Binance account fill');
+    const row=[String(t.id),String(t.orderId),t.side,qty,price,pnl,fee,asset,at];
+    const old=find.get(row[0]);
+    if(old){
+     if(Object.values(old).some((v,i)=>v!==row[i]))throw Error('Conflicting Binance account fill');
+     continue;
+    }
+    add.run(...row);added++;
+   }
+   this.#db.prepare("INSERT INTO history_meta(key,value) VALUES('exchange_checked_at',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(String(checkedAt));
+   this.#db.exec('COMMIT');return added;
+  }catch(e){this.#db.exec('ROLLBACK');throw e;}
+ }
+ exchangeFills(){return this.#db.prepare('SELECT * FROM exchange_fills ORDER BY filled_at,CAST(fill_id AS INTEGER)').all();}
+ exchangeCheckedAt(){return Number(this.#db.prepare("SELECT value FROM history_meta WHERE key='exchange_checked_at'").get()?.value)||null;}
  ingest(rows){
   if(!Array.isArray(rows))throw Error('Expected Binance userTrades array');
   const valid=new Map(this.orders().map(o=>[o.order_id,o]));
@@ -98,10 +131,10 @@ export class LiveStatsLedger{
  }
  report(){return computeLiveReport(this.orders(),
   this.#db.prepare('SELECT * FROM fills ORDER BY filled_at,CAST(fill_id AS INTEGER)').all(),
-  this.incomeEvents());}
+  this.incomeEvents(),Date.now(),this.exchangeFills(),this.exchangeCheckedAt());}
  close(){this.#db.close();}
 }
-export function computeLiveReport(orders,fills,incomes=[],now=Date.now()){
+export function computeLiveReport(orders,fills,incomes=[],now=Date.now(),exchangeFills=[],exchangeCheckedAt=null){
  const r=emptyLiveReport(),known=new Map(),groups=new Map();
  for(const order of orders){
   known.set(order.order_id,order);
@@ -175,6 +208,31 @@ export function computeLiveReport(orders,fills,incomes=[],now=Date.now()){
  const window=incomes.filter(x=>x.occurred_at>=windowStart&&x.occurred_at<=now&&x.asset==='USDT');
  const total=type=>Number(window.filter(x=>x.income_type===type)
   .reduce((v,x)=>v+x.amount,0).toFixed(8));
+ const occIds=new Set(orders.map(x=>String(x.order_id)));
+ const unlinked=new Map();
+ for(const f of exchangeFills){
+  if(f.filled_at<windowStart||f.filled_at>now||occIds.has(String(f.order_id)))continue;
+  const id=String(f.order_id);
+  if(!unlinked.has(id))unlinked.set(id,{orderId:id,side:f.side,qtyBTC:0,
+   firstAt:f.filled_at,lastAt:f.filled_at,realizedUSDT:0,feeUSDT:0,
+   fillCount:0,nonUSDTFeeFills:0});
+  const o=unlinked.get(id);o.qtyBTC+=f.qty;o.realizedUSDT+=f.realized;
+  if(f.asset==='USDT')o.feeUSDT+=f.fee;else o.nonUSDTFeeFills++;
+  o.firstAt=Math.min(o.firstAt,f.filled_at);o.lastAt=Math.max(o.lastAt,f.filled_at);
+  o.fillCount++;
+ }
+ const missingOrders=[...unlinked.values()].filter(x=>Math.abs(x.realizedUSDT)>EPS)
+  .sort((a,b)=>b.lastAt-a.lastAt).map(x=>({
+   ...x,qtyBTC:Number(x.qtyBTC.toFixed(8)),
+   realizedUSDT:Number(x.realizedUSDT.toFixed(8)),
+   feeUSDT:Number(x.feeUSDT.toFixed(8)),
+   netExFundingUSDT:x.nonUSDTFeeFills?null:Number((x.realizedUSDT-x.feeUSDT).toFixed(8)),
+   source:'BINANCE_USER_TRADES_UNATTRIBUTED'
+  }));
+ r.exchangeHistory={checkedAt:exchangeCheckedAt,accountFillCount:exchangeFills.length,
+  unmatchedRealizedOrders:missingOrders,unmatchedRealizedOrderCount:missingOrders.length,
+  warning:'Chưa ghép vào OCC: chỉ có Binance userTrades, không xác minh được OCC Order ID.'};
+ if(missingOrders.length)r.warnings.push(missingOrders.length+' lệnh Binance có realized P&L chưa gắn OCC, xem bảng bên dưới.');
  const knownFillIds=new Set(fills.map(x=>String(x.fill_id)));
  const unmatched=window.filter(x=>['REALIZED_PNL','COMMISSION'].includes(x.income_type)&&
   (!x.trade_id||!knownFillIds.has(String(x.trade_id))));
@@ -206,7 +264,12 @@ export function readLiveReport(path){
   const hasIncome=!!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='income_events'").get();
   const incomes=hasIncome?db.prepare('SELECT * FROM income_events').all():[];
   return computeLiveReport(db.prepare('SELECT * FROM orders').all(),
-   db.prepare('SELECT * FROM fills ORDER BY filled_at,CAST(fill_id AS INTEGER)').all(),incomes);
+   db.prepare('SELECT * FROM fills ORDER BY filled_at,CAST(fill_id AS INTEGER)').all(),incomes,
+   Date.now(),
+   !!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='exchange_fills'").get()?
+    db.prepare('SELECT * FROM exchange_fills').all():[],
+   !!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='history_meta'").get()?
+    Number(db.prepare("SELECT value FROM history_meta WHERE key='exchange_checked_at'").get()?.value)||null:null);
  }
  finally{db.close();}
 }

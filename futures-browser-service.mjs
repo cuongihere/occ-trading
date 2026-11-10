@@ -33,7 +33,7 @@ export class BrowserFutures{
   this.armed=false;this.busy=false;this.halted=false;this.error=null;this.events=[];this.activeProtection=null;
   this.recoveryStatus='idle';this.lastRecoveryCheck=null;this.restoreTask=null;
   this.pendingLimit=null;this.observeExistingOnly=false;
-  this.historySyncTask=null;this.lastHistorySync=0;this.lastIncomeSync=0;this.historyError=null;this.historyCount=0;this.lastEntryTiming=null;
+  this.historySyncTask=null;this.lastHistorySync=0;this.lastIncomeSync=0;this.lastExchangeTradeSync=0;this.lastExchangeTradeAttempt=0;this.historyError=null;this.historyCount=0;this.lastEntryTiming=null;
   const unresolved=existsSync(this.intentPath)?JSON.parse(readFileSync(this.intentPath,'utf8')):null;
   if(['LIMIT_PENDING','LIMIT_CANCEL_SENDING'].includes(unresolved?.phase))
    this.pendingLimit={...unresolved};
@@ -68,12 +68,17 @@ export class BrowserFutures{
     // Income endpoint has a high Binance request weight; only sample every
     // five minutes, or at an explicit manual refresh/reconnect.
     const syncIncome=force||Date.now()-this.lastIncomeSync>=300000;
-    const result=await syncOCCLiveHistory(this.api,ledger,{checkpoint,intent,syncIncome});
+    const syncExchangeTrades=force||Date.now()-this.lastExchangeTradeAttempt>=300000;
+    if(syncExchangeTrades)this.lastExchangeTradeAttempt=Date.now();
+    const result=await syncOCCLiveHistory(this.api,ledger,{
+     checkpoint,intent,syncIncome,syncExchangeTrades});
     if(result.incomeUpdated)this.lastIncomeSync=Date.now();
+    if(result.exchangeTradesUpdated)this.lastExchangeTradeSync=Date.now();
     this.historyCount=result.report.summary.closed;
     this.historyError=result.warnings.length?result.warnings.slice(0,2).join(' | '):null;
     this.lastHistorySync=Date.now();
-    this.log('HISTORY_SYNC','Đã lưu '+result.newFills+' fill mới; '+this.historyCount+' vị thế OCC đã đóng.');
+    this.log('HISTORY_SYNC','Đã lưu '+result.newFills+' fill OCC, '+result.newExchangeFills+
+     ' fill Binance toàn tài khoản; '+this.historyCount+' vị thế OCC đã đóng.');
     return result;
    }catch(e){
     this.historyError='Chưa đồng bộ được lịch sử Binance: '+e.message;
@@ -115,6 +120,7 @@ export class BrowserFutures{
    realFuturesOnly:true,halted:this.halted,busy:this.busy,error:this.error,
    recoveryStatus:this.recoveryStatus,lastRecoveryCheck:this.lastRecoveryCheck,
    lastHistorySync:this.lastHistorySync,lastIncomeSync:this.lastIncomeSync,
+   lastExchangeTradeSync:this.lastExchangeTradeSync,
    historyError:this.historyError,historyCount:this.historyCount,
    protectedPosition:this.activeProtection?{entry:this.activeProtection.entry,stop:this.activeProtection.stop,tps:this.activeProtection.tps}:null,
    config:this.config,account:this.account,credentialSaved:this.vault.exists(),lastAccountSync:this.lastAccountSync,

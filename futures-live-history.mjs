@@ -87,6 +87,40 @@ export async function discoverOCCOrderIds(api,ledger,{checkpoint=null,intent=nul
  }
  return {discovered,warnings};
 }
+// Query all recent BTCUSDT fills, including orders OCC can no longer identify.
+// Binance caps each response at 1000 and prohibits fromId with time bounds.
+// Recursively partition the 7-day interval instead of silently losing fills.
+export async function fetchExchangeTrades7Days(api,{now=Date.now(),maxCalls=32}={}){
+ const first=Math.max(0,now-7*86400000),full=[];
+ let calls=0;
+ async function scan(start,end){
+  if(++calls>maxCalls)throw Error('Binance userTrades exceeds bounded audit capacity; partial scan discarded');
+  const rows=await api.get('/fapi/v1/userTrades',{
+   symbol:'BTCUSDT',startTime:start,endTime:end,limit:1000});
+  if(!Array.isArray(rows))throw Error('Invalid Binance userTrades response');
+  if(rows.length>=1000){
+   if(start>=end)throw Error('At least 1000 fills at one timestamp; cannot claim a complete scan');
+   const mid=Math.floor((start+end)/2);
+   await scan(start,mid);
+   await scan(mid+1,end);
+   return;
+  }
+  for(const x of rows){
+   if(x?.symbol!=='BTCUSDT'||!Number.isSafeInteger(Number(x.time))||
+      Number(x.time)<start||Number(x.time)>end)
+    throw Error('Inconsistent Binance account trade timestamps/symbol');
+   full.push(x);
+  }
+ }
+ await scan(first,now);
+ const seen=new Set();
+ for(const x of full){
+  const id=String(x.id);
+  if(seen.has(id))throw Error('Binance userTrades returned duplicate trade ID across windows');
+  seen.add(id);
+ }
+ return {rows:full,checkedAt:now,requests:calls};
+}
 export async function syncBinanceIncome(api,ledger,{now=Date.now()}={}){
  // Binance Income is account-level, unlike trade-specific userTrades.
  // Use one bounded seven-day window; do not claim exhaustive data if truncated.
@@ -99,6 +133,17 @@ export async function syncBinanceIncome(api,ledger,{now=Date.now()}={}){
 }
 export async function syncOCCLiveHistory(api,ledger,inputs={}){
  const found=await discoverOCCOrderIds(api,ledger,inputs);
+ let exchangeTradesUpdated=false,newExchangeFills=0,accountRequests=0,newFillsFull=0;
+ if(inputs.syncExchangeTrades===true){
+  try{
+   const audit=await fetchExchangeTrades7Days(api);
+   // Ingestion is atomic; don't record a "full scan" if pagination fails.
+   newExchangeFills=ledger.ingestExchange(audit.rows,audit.checkedAt);
+   // Once discovered, all known OCC orderId fills can be matched directly.
+   newFillsFull=ledger.ingest(audit.rows);
+   accountRequests=audit.requests;exchangeTradesUpdated=true;
+  }catch(e){found.warnings.push('Chưa quét đủ Binance userTrades 7 ngày: '+e.message);}
+ }
  let incomeUpdated=false;
  if(inputs.syncIncome===true){
   try{
@@ -109,5 +154,6 @@ export async function syncOCCLiveHistory(api,ledger,inputs={}){
  let synced={tracked:ledger.orders().length,newFills:0,report:ledger.report()};
  try{synced=await syncKnownOrderFills(api,ledger);}
  catch(e){found.warnings.push('Không đồng bộ đầy đủ được fill Binance: '+e.message);}
- return {...found,...synced,report:ledger.report(),incomeUpdated};
+ return {...found,...synced,newFills:synced.newFills+newFillsFull,
+  exchangeTradesUpdated,newExchangeFills,accountRequests,report:ledger.report(),incomeUpdated};
 }

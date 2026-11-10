@@ -563,6 +563,13 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
    <thead><tr><th>Vào / Ra (VN)</th><th>Chiều</th><th>BTC</th><th>Entry → Exit</th><th>TP/SL</th><th>Gross fill</th><th>Phí fill</th><th>Net fill</th><th>Net Binance Income</th><th>Kết quả / đối soát</th></tr></thead>
    <tbody id="realHistory"><tr><td colspan="10">Chưa có lệnh OCC đã xác minh.</td></tr></tbody>
   </table></div>
+  <h3 style="font-size:14px;margin:16px 0 5px">Binance: lệnh đã có P&L nhưng chưa ghép được OCC</h3>
+  <div class="small" id="exchangeHistoryStatus" role="status">Chưa kiểm tra lịch sử userTrades 7 ngày.</div>
+  <div class="small" style="margin-bottom:6px">Đây là dữ liệu fill thực từ Binance, có thể gồm lệnh thủ công hoặc lệnh OCC mất liên kết. Chưa xác minh thuộc OCC nên KHÔNG cộng vào Net OCC.</div>
+  <div class="tableScroll"><table>
+   <thead><tr><th>Thời gian (VN)</th><th>Order ID Binance</th><th>Chiều khớp</th><th>BTC</th><th>Realized</th><th>Phí USDT</th><th>Net chưa funding</th><th>Đối soát</th></tr></thead>
+   <tbody id="unlinkedBinanceHistory"><tr><td colspan="8">Chưa có dữ liệu đối soát.</td></tr></tbody>
+  </table></div>
  </div>
 </section>
 <footer><span id="lastUpdate">Binance USDⓈ-M</span><span>Auto mặc định OFF khi mở app · P&L bot chưa gồm funding/phí ngoài USDT</span><span>Futures có rủi ro mất vốn</span></footer>
@@ -929,6 +936,25 @@ async function refreshReport(){
       t.auditStatus==='MISMATCH'?'LỆCH INCOME':'CHƯA KHỚP INCOME')];
    const tr=document.createElement('tr');
    for(const c of cells){const td=document.createElement('td');td.textContent=c;tr.append(td);}body.append(tr);
+  }
+  const exchange=data.exchangeHistory||{},unlinked=exchange.unmatchedRealizedOrders||[];
+  $('exchangeHistoryStatus').textContent=exchange.checkedAt?
+   'Đã quét Binance userTrades lúc '+vn(exchange.checkedAt)+
+   ' · '+exchange.accountFillCount+' fill lưu · '+unlinked.length+' order có P&L chưa ghép OCC.':
+   'Chưa quét thành công userTrades 7 ngày. Nhấn Làm mới để thử lại.';
+  const extra=$('unlinkedBinanceHistory');extra.replaceChildren();
+  if(!unlinked.length){const tr=document.createElement('tr'),td=document.createElement('td');
+   td.colSpan=8;td.textContent=exchange.checkedAt?
+    'Không có order có realized P&L chưa ghép trong lịch sử đã quét.':
+    'Chưa có kết quả quét đầy đủ của Binance.';
+   tr.append(td);extra.append(tr);
+  }
+  for(const order of unlinked.slice(0,100)){
+   const values=[vn(order.lastAt),order.orderId,order.side,fmt(order.qtyBTC,6),
+    signedUSDT(order.realizedUSDT),fmt(order.feeUSDT,4),
+    signedUSDT(order.netExFundingUSDT),'CHƯA XÁC MINH THUỘC OCC'];
+   const tr=document.createElement('tr');
+   for(const v of values){const td=document.createElement('td');td.textContent=v;tr.append(td);}extra.append(tr);
   }
  }catch(e){$('statsStatus').textContent='Lỗi báo cáo: '+e.message;}
 }

@@ -340,3 +340,18 @@ test('Missing 0/4 SL-TP on Binance offers consented recovery from actual OCC fil
  assert.match(build,/'futures-protection-repair\.mjs'/);
  assert.doesNotMatch(html,/autoRepair\(\)|sendStopOnRender/);
 });
+
+test('Windows dashboard shows Binance unlinked realized fills separately and never counts them as OCC trades',()=>{
+ const html=read('BINANCE_UI_PREVIEW.html');
+ const service=read('futures-browser-service.mjs');
+ const history=read('futures-live-history.mjs');
+ const ledger=read('binance-live-stats.mjs');
+ assert.match(html,/id="unlinkedBinanceHistory"/);
+ assert.match(html,/id="exchangeHistoryStatus"/);
+ assert.match(html,/unmatchedRealizedOrders/);
+ assert.match(html,/CHƯA XÁC MINH THUỘC OCC/);
+ assert.match(history,/fetchExchangeTrades7Days/);
+ assert.match(service,/syncExchangeTrades/);
+ assert.match(ledger,/BINANCE_USER_TRADES_UNATTRIBUTED/);
+ assert.doesNotMatch(html,/liveReport\.exchangeHistory\.unmatchedRealizedOrders\.reduce/);
+});
