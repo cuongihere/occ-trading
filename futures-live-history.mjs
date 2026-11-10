@@ -176,15 +176,43 @@ export async function fetchExchangeTrades30Days(api,{now=Date.now(),maxCalls=96}
  }
  return {rows:all,checkedAt:now,startAt:earliest,requests};
 }
+// Income is account-wide; only source of funding-inclusive Binance P&L.
+// The original one-page, seven-day call missed old transactions. Binance
+// allows seven days MAX per request, so scan 30 days in closed partitions.
+export async function fetchIncome30Days(api,{now=Date.now(),maxCalls=64}={}){
+ const earliest=now-HISTORY_DAYS*86400000,all=[],seen=new Map();
+ let requests=0;
+ async function scan(start,end){
+  if(++requests>maxCalls)throw Error('Income history exceeds request budget');
+  const rows=await api.get('/fapi/v1/income',{symbol:'BTCUSDT',
+   startTime:start,endTime:end,limit:1000});
+  if(!Array.isArray(rows))throw Error('Invalid Binance Income response');
+  if(rows.length>=1000){
+   if(start>=end)throw Error('Income saturated within one millisecond');
+   const mid=Math.floor((start+end)/2);
+   await scan(start,mid);await scan(mid+1,end);return;
+  }
+  for(const o of rows){
+   if(o.symbol!=='BTCUSDT')continue;
+   const id=String(o.incomeType)+':'+String(o.tranId);
+   const prior=seen.get(id);
+   if(prior&&JSON.stringify(prior)!==JSON.stringify(o))
+    throw Error('Conflicting Binance Income transaction ID');
+   if(!prior){seen.set(id,o);all.push(o);}
+  }
+ }
+ let end=now;
+ while(end>=earliest){
+  const start=Math.max(earliest,end-(6*86400000-1));
+  await scan(start,end);end=start-1;
+ }
+ return {rows:all,startAt:earliest,checkedAt:now,requests};
+}
 export async function syncBinanceIncome(api,ledger,{now=Date.now()}={}){
- // Binance Income is account-level, unlike trade-specific userTrades.
- // Use one bounded seven-day window; do not claim exhaustive data if truncated.
- const rows=await api.get('/fapi/v1/income',{
-  symbol:'BTCUSDT',startTime:now-7*86400000,endTime:now,limit:1000
- });
- if(!Array.isArray(rows)||rows.length>=1000)
-  throw Error('Binance Income có thể chưa đầy đủ; từ chối kết quả phân trang thiếu.');
- return {newIncome:ledger.ingestIncome(rows),incomeCheckedAt:now};
+ const scan=await fetchIncome30Days(api,{now});
+ const newIncome=ledger.ingestIncome(scan.rows);
+ ledger.markIncomeScan(scan.checkedAt,scan.startAt);
+ return {newIncome,incomeCheckedAt:scan.checkedAt,incomeStartAt:scan.startAt};
 }
 export async function syncOCCLiveHistory(api,ledger,inputs={}){
  const found=await discoverOCCOrderIds(api,ledger,inputs);
