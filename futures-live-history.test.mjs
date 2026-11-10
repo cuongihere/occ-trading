@@ -4,7 +4,7 @@ import {mkdtempSync,rmSync,readFileSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {LiveStatsLedger,readLiveReport} from './binance-live-stats.mjs';
-import {syncOCCLiveHistory} from './futures-live-history.mjs';
+import {syncOCCLiveHistory,fetchExchangeTrades7Days} from './futures-live-history.mjs';
 
 const prefix='OCCBTC-0123456789abcd',pathFor=t=>{
  const dir=mkdtempSync(join(tmpdir(),'occ-history-'));
@@ -155,5 +155,53 @@ test('Terminal partially-filled canceled OCC LIMIT is discovered by actual execu
  assert.ok(order);
  assert.equal(order.role,'ENTRY');
  assert.equal(order.group_id,limitId);
+ ledger.close();
+});
+
+test('Full seven-day userTrades scan partitions saturated Binance pages and never loses yesterday losses',async t=>{
+ const now=Date.now(),start=now-7*86400000+1000;
+ const trades=Array.from({length:1450},(_,i)=>({
+  symbol:'BTCUSDT',id:100000+i,orderId:900000+i,side:'SELL',
+  qty:'.001',price:'75000',realizedPnl:i===1449?'-2.4':'0',
+  commission:'.04',commissionAsset:'USDT',
+  time:start+Math.floor((6*86400000*i)/1450)
+ }));
+ const calls=[],api={async get(endpoint,p={}){
+  calls.push({endpoint,p});
+  if(endpoint==='/fapi/v1/userTrades'){
+   if(p.orderId)return trades.filter(x=>String(x.orderId)===String(p.orderId));
+   return trades.filter(x=>x.time>=p.startTime&&x.time<=p.endTime).slice(0,1000);
+  }
+  if(endpoint==='/fapi/v1/allOrders'||endpoint==='/fapi/v1/allAlgoOrders')return [];
+  throw Error('Unexpected '+endpoint);
+ }};
+ const ledger=new LiveStatsLedger(pathFor(t));
+ const result=await syncOCCLiveHistory(api,ledger,{syncExchangeTrades:true});
+ assert.equal(result.exchangeTradesUpdated,true);
+ assert.equal(result.newExchangeFills,1450);
+ assert.ok(result.accountRequests>=3);
+ assert.equal(ledger.exchangeFills().length,1450);
+ assert.equal(ledger.report().exchangeHistory.unmatchedRealizedOrderCount,1);
+ assert.equal(ledger.report().exchangeHistory.unmatchedRealizedOrders[0].realizedUSDT,-2.4);
+ assert.equal(ledger.report().summary.closed,0);
+ assert.equal(calls.filter(x=>x.endpoint==='/fapi/v1/userTrades'&&x.p.startTime!=null)
+  .every(x=>x.p.endTime-x.p.startTime<=7*86400000),true);
+ ledger.close();
+});
+
+test('A truncated or inconsistent account scan does not publish partial Binance audit',async t=>{
+ const ledger=new LiveStatsLedger(pathFor(t));
+ const api={async get(path,p={}){
+  if(path==='/fapi/v1/allOrders'||path==='/fapi/v1/allAlgoOrders')return [];
+  if(path==='/fapi/v1/userTrades'&&p.startTime!==undefined)
+   return [{symbol:'BTCUSDT',id:1,orderId:33,side:'SELL',qty:'.001',
+    price:'75000',realizedPnl:'-1',commission:'.1',commissionAsset:'USDT',time:p.endTime+5}];
+  throw Error('unexpected '+path);
+ }};
+ const result=await syncOCCLiveHistory(api,ledger,{syncExchangeTrades:true});
+ assert.equal(result.exchangeTradesUpdated,false);
+ assert.equal(ledger.exchangeCheckedAt(),null);
+ assert.equal(ledger.exchangeFills().length,0);
+ assert.ok(result.warnings.some(x=>x.includes('userTrades 7 ngày')));
  ledger.close();
 });
