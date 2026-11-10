@@ -75,6 +75,18 @@ export class LiveStatsLedger{
   }catch(e){this.#db.exec('ROLLBACK');throw e;}
  }
  incomeEvents(){return this.#db.prepare('SELECT * FROM income_events ORDER BY occurred_at,tran_id').all();}
+ markIncomeScan(checkedAt,startAt){
+  const record=this.#db.prepare("INSERT INTO history_meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value");
+  this.#db.exec('BEGIN IMMEDIATE');
+  try{
+   record.run('income_checked_at',String(checkedAt));
+   record.run('income_start_at',String(startAt));
+   this.#db.exec('COMMIT');
+  }catch(e){this.#db.exec('ROLLBACK');throw e;}
+ }
+ historyMeta(key){
+  return Number(this.#db.prepare("SELECT value FROM history_meta WHERE key=?").get(key)?.value)||null;
+ }
  // Exchange trades are separate from OCC. Never infer affiliation by time or price.
  ingestExchange(rows,checkedAt=Date.now(),startAt=checkedAt-7*86400000){
   if(!Array.isArray(rows))throw Error('Expected Binance userTrades');
@@ -134,10 +146,11 @@ export class LiveStatsLedger{
  }
  report(){return computeLiveReport(this.orders(),
   this.#db.prepare('SELECT * FROM fills ORDER BY filled_at,CAST(fill_id AS INTEGER)').all(),
-  this.incomeEvents(),Date.now(),this.exchangeFills(),this.exchangeCheckedAt(),this.exchangeStartAt());}
+  this.incomeEvents(),Date.now(),this.exchangeFills(),this.exchangeCheckedAt(),this.exchangeStartAt(),
+  this.historyMeta('income_checked_at'),this.historyMeta('income_start_at'));}
  close(){this.#db.close();}
 }
-export function computeLiveReport(orders,fills,incomes=[],now=Date.now(),exchangeFills=[],exchangeCheckedAt=null,exchangeStartAt=null){
+export function computeLiveReport(orders,fills,incomes=[],now=Date.now(),exchangeFills=[],exchangeCheckedAt=null,exchangeStartAt=null,incomeCheckedAt=null,incomeStartAt=null){
  const r=emptyLiveReport(),known=new Map(),groups=new Map();
  for(const order of orders){
   known.set(order.order_id,order);
@@ -207,6 +220,21 @@ export function computeLiveReport(orders,fills,incomes=[],now=Date.now(),exchang
   .reduce((v,x)=>v+x.netBinanceUSDT,0).toFixed(8));
  // Account-level Binance BTCUSDT Income includes manual and other trades;
  // NEVER assign unattributed amounts/funding to a specific OCC position.
+ const monthStart=now-30*86400000;
+ const monthIncome=incomes.filter(x=>x.occurred_at>=monthStart&&x.occurred_at<=now&&x.asset==='USDT');
+ const monthSum=type=>Number(monthIncome.filter(x=>x.income_type===type)
+  .reduce((v,x)=>v+x.amount,0).toFixed(8));
+ const incomeMonthComplete=Number.isSafeInteger(incomeStartAt)&&incomeStartAt<=monthStart+60000&&
+  Number.isSafeInteger(incomeCheckedAt)&&now>=incomeCheckedAt&&
+  now-incomeCheckedAt<=15*60000;
+ r.incomeAudit30={source:'BINANCE_INCOME_BTCUSDT_30D',checkedAt:incomeCheckedAt,startAt:incomeStartAt,
+  complete30d:incomeMonthComplete,entries:monthIncome.length,
+  realizedUSDT:incomeMonthComplete?monthSum('REALIZED_PNL'):null,
+  commissionUSDT:incomeMonthComplete?monthSum('COMMISSION'):null,
+  fundingUSDT:incomeMonthComplete?monthSum('FUNDING_FEE'):null,
+  totalUSDT:incomeMonthComplete?Number((monthSum('REALIZED_PNL')+
+   monthSum('COMMISSION')+monthSum('FUNDING_FEE')).toFixed(8)):null,
+  warning:'Đây là Income BTCUSDT toàn tài khoản, không phải P&L OCC.'};
  const windowStart=now-7*86400000;
  const window=incomes.filter(x=>x.occurred_at>=windowStart&&x.occurred_at<=now&&x.asset==='USDT');
  const total=type=>Number(window.filter(x=>x.income_type===type)
@@ -288,7 +316,11 @@ export function readLiveReport(path){
    !!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='history_meta'").get()?
     Number(db.prepare("SELECT value FROM history_meta WHERE key='exchange_checked_at'").get()?.value)||null:null,
    !!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='history_meta'").get()?
-    Number(db.prepare("SELECT value FROM history_meta WHERE key='exchange_start_at'").get()?.value)||null:null);
+    Number(db.prepare("SELECT value FROM history_meta WHERE key='exchange_start_at'").get()?.value)||null:null,
+   !!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='history_meta'").get()?
+    Number(db.prepare("SELECT value FROM history_meta WHERE key='income_checked_at'").get()?.value)||null:null,
+   !!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='history_meta'").get()?
+    Number(db.prepare("SELECT value FROM history_meta WHERE key='income_start_at'").get()?.value)||null:null);
  }
  finally{db.close();}
 }
