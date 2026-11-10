@@ -355,3 +355,20 @@ test('Windows dashboard shows Binance unlinked realized fills separately and nev
  assert.match(ledger,/BINANCE_USER_TRADES_UNATTRIBUTED/);
  assert.doesNotMatch(html,/liveReport\.exchangeHistory\.unmatchedRealizedOrders\.reduce/);
 });
+
+test('Windows history shows independent audited 30-day Binance PnL alongside unmatched OCC fills',()=>{
+ const html=read('BINANCE_UI_PREVIEW.html'),history=read('futures-live-history.mjs'),
+  report=read('binance-live-stats.mjs');
+ assert.match(html,/id="binanceIncomeTitle"/);
+ assert.match(html,/P&L Binance BTC · 30 ngày/);
+ assert.match(html,/id="incompleteOccHistory"/);
+ assert.match(html,/entryOrderId/);
+ assert.match(html,/incomeAudit30/);
+ assert.match(html,/month\?\.complete30d/);
+ assert.match(html,/id="unlinkedBinanceHistory"/);
+ assert.match(history,/fetchWindowedOrderHistory/);
+ assert.match(history,/fetchExchangeTrades30Days/);
+ assert.match(history,/fetchIncome30Days/);
+ assert.match(report,/incomeMonthComplete/);
+ assert.match(report,/accountNetExFunding30dUSDT/);
+});
