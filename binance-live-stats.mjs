@@ -221,7 +221,7 @@ export function computeLiveReport(orders,fills,incomes=[],now=Date.now(),exchang
   o.firstAt=Math.min(o.firstAt,f.filled_at);o.lastAt=Math.max(o.lastAt,f.filled_at);
   o.fillCount++;
  }
- const unmatched=[...unlinked.values()].filter(x=>Math.abs(x.realizedUSDT)>EPS)
+ const missingOrders=[...unlinked.values()].filter(x=>Math.abs(x.realizedUSDT)>EPS)
   .sort((a,b)=>b.lastAt-a.lastAt).map(x=>({
    ...x,qtyBTC:Number(x.qtyBTC.toFixed(8)),
    realizedUSDT:Number(x.realizedUSDT.toFixed(8)),
@@ -230,9 +230,9 @@ export function computeLiveReport(orders,fills,incomes=[],now=Date.now(),exchang
    source:'BINANCE_USER_TRADES_UNATTRIBUTED'
   }));
  r.exchangeHistory={checkedAt:exchangeCheckedAt,accountFillCount:exchangeFills.length,
-  unmatchedRealizedOrders:unmatched,unmatchedRealizedOrderCount:unmatched.length,
+  unmatchedRealizedOrders:missingOrders,unmatchedRealizedOrderCount:missingOrders.length,
   warning:'Chưa ghép vào OCC: chỉ có Binance userTrades, không xác minh được OCC Order ID.'};
- if(unmatched.length)r.warnings.push(unmatched.length+' lệnh Binance có realized P&L chưa gắn OCC, xem bảng bên dưới.');
+ if(missingOrders.length)r.warnings.push(missingOrders.length+' lệnh Binance có realized P&L chưa gắn OCC, xem bảng bên dưới.');
  const knownFillIds=new Set(fills.map(x=>String(x.fill_id)));
  const unmatched=window.filter(x=>['REALIZED_PNL','COMMISSION'].includes(x.income_type)&&
   (!x.trade_id||!knownFillIds.has(String(x.trade_id))));
