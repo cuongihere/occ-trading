@@ -202,7 +202,7 @@ test('A truncated or inconsistent account scan does not publish partial Binance 
  assert.equal(result.exchangeTradesUpdated,false);
  assert.equal(ledger.exchangeCheckedAt(),null);
  assert.equal(ledger.exchangeFills().length,0);
- assert.ok(result.warnings.some(x=>x.includes('userTrades 7 ngày')));
+ assert.ok(result.warnings.some(x=>x.includes('userTrades 30 ngày')));
  ledger.close();
 });
 
