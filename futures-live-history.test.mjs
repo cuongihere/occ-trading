@@ -4,7 +4,7 @@ import {mkdtempSync,rmSync,readFileSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {LiveStatsLedger,readLiveReport} from './binance-live-stats.mjs';
-import {syncOCCLiveHistory,fetchExchangeTrades7Days} from './futures-live-history.mjs';
+import {syncOCCLiveHistory,fetchExchangeTrades7Days,fetchWindowedOrderHistory,fetchExchangeTrades30Days} from './futures-live-history.mjs';
 
 const prefix='OCCBTC-0123456789abcd',pathFor=t=>{
  const dir=mkdtempSync(join(tmpdir(),'occ-history-'));
@@ -204,4 +204,83 @@ test('A truncated or inconsistent account scan does not publish partial Binance 
  assert.equal(ledger.exchangeFills().length,0);
  assert.ok(result.warnings.some(x=>x.includes('userTrades 7 ngày')));
  ledger.close();
+});
+
+test('Ten-day old BTC losing STOP is automatically recovered via explicit 30-day Algo/Entry history',async t=>{
+ const now=Date.now(),old=now-10*86400000,group='OCCBTC-fedcba98765432';
+ const income=(tranId,tradeId,incomeType,value)=>({
+  symbol:'BTCUSDT',tranId,tradeId,incomeType,income:String(value),asset:'USDT',time:old+90000
+ });
+ const calls=[];
+ const api={async get(path,p={}){
+  calls.push({path,p});
+  if(path==='/fapi/v1/allOrders'){
+   return p.startTime<=old&&old<=p.endTime?[{
+    symbol:'BTCUSDT',orderId:81001,clientOrderId:group,type:'MARKET',
+    positionSide:'BOTH',status:'FILLED',executedQty:'.004',side:'BUY',reduceOnly:false
+   }]:[];
+  }
+  if(path==='/fapi/v1/allAlgoOrders'){
+   return p.startTime<=old&&old<=p.endTime?[{
+    symbol:'BTCUSDT',algoId:91001,clientAlgoId:group+'-SL',
+    positionSide:'BOTH',side:'SELL',algoStatus:'FINISHED',
+    actualOrderId:'81002',orderType:'STOP_MARKET',createTime:old
+   }]:[];
+  }
+  if(path==='/fapi/v1/order'&&String(p.orderId)==='81002')return {
+   symbol:'BTCUSDT',orderId:81002,side:'SELL',positionSide:'BOTH',
+   status:'FILLED',executedQty:'.004'
+  };
+  if(path==='/fapi/v1/userTrades'&&p.orderId)return String(p.orderId)==='81001'?
+   [{symbol:'BTCUSDT',id:101001,orderId:81001,side:'BUY',qty:'.004',
+     price:'75000',realizedPnl:'0',commission:'.12',commissionAsset:'USDT',time:old+2000}]:
+   [{symbol:'BTCUSDT',id:101002,orderId:81002,side:'SELL',qty:'.004',
+     price:'74200',realizedPnl:'-3.2',commission:'.14',commissionAsset:'USDT',time:old+60000}];
+  if(path==='/fapi/v1/userTrades'&&p.startTime!=null){
+   return p.startTime<=old+2000&&old+2000<=p.endTime?[
+    {symbol:'BTCUSDT',id:101001,orderId:81001,side:'BUY',qty:'.004',
+     price:'75000',realizedPnl:'0',commission:'.12',commissionAsset:'USDT',time:old+2000},
+    {symbol:'BTCUSDT',id:101002,orderId:81002,side:'SELL',qty:'.004',
+     price:'74200',realizedPnl:'-3.2',commission:'.14',commissionAsset:'USDT',time:old+60000}
+   ]:[];
+  }
+  if(path==='/fapi/v1/income')return p.startTime<=old&&old<=p.endTime?[
+   income(201001,'101001','COMMISSION',-.12),
+   income(201002,'101002','COMMISSION',-.14),
+   income(201003,'101002','REALIZED_PNL',-3.2)
+  ]:[];
+  throw Error('Unexpected mock Binance endpoint '+path);
+ }};
+ const ledger=new LiveStatsLedger(pathFor(t));
+ const result=await syncOCCLiveHistory(api,ledger,{syncIncome:true,syncExchangeTrades:true});
+ assert.equal(result.discovered,2);
+ assert.equal(result.report.summary.closed,1);
+ assert.equal(result.report.summary.losses,1);
+ assert.equal(result.report.summary.open,0);
+ assert.equal(result.report.positions[0].entryOrderId,'81001');
+ assert.deepEqual(result.report.positions[0].exitOrderIds,['81002']);
+ assert.equal(result.report.positions[0].auditStatus,'MATCHED');
+ assert.equal(result.report.incomeAudit30.complete30d,true);
+ assert.ok(Math.abs(result.report.incomeAudit30.totalUSDT+3.46)<1e-8);
+ assert.equal(result.report.incomeAudit.available,false);
+ assert.ok(calls.some(x=>x.path==='/fapi/v1/allAlgoOrders'&&
+  x.p.startTime<=old&&old<=x.p.endTime));
+ assert.ok(calls.filter(x=>x.path==='/fapi/v1/allAlgoOrders')
+  .every(x=>x.p.endTime-x.p.startTime<7*86400000));
+ ledger.close();
+});
+
+test('Historical order pagination scans older BTC stop and rejects any saturated unsplittable page',async()=>{
+ const now=Date.now(),target=now-12*86400000;
+ const api={async get(path,p){
+  if(path==='/fapi/v1/allAlgoOrders')return p.startTime<=target&&target<=p.endTime?[{
+   symbol:'BTCUSDT',algoId:77,clientAlgoId:'OCCBTC-00112233445566-SL',
+   actualOrderId:'88',positionSide:'BOTH',side:'SELL'
+  }]:[];
+  throw Error('Unexpected');
+ }};
+ const response=await fetchWindowedOrderHistory(api,'/fapi/v1/allAlgoOrders',{now});
+ assert.equal(response.rows.length,1);
+ assert.equal(response.rows[0].actualOrderId,'88');
+ assert.ok(response.calls>=5);
 });
