@@ -155,10 +155,10 @@ test('Unfinished entry intent blocks restart adoption until Binance confirms FLA
  assert.equal(again.snapshot().armed,true);
 });
 
-test('Re-arm a protected OCC position after restart: watch only until FLAT, then NEW crossover',async t=>{
+test('Resume a protected OCC position with reversal OFF: watch only until FLAT, then NEW crossover',async t=>{
  const dir=tmp(t),fx=fake(),one=new BrowserFutures({
   dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
- await one.connect(creds);one.saveConfig({marginUSDT:500,leverage:5,reverseOnSignal:true});
+ await one.connect(creds);one.saveConfig({marginUSDT:500,leverage:5,reverseOnSignal:false});
  await one.arm('CHAP NHAN BTC FUTURES',77000);
  await one.signal({id:'ORIGINAL',side:'LONG',barTime:900000},true);
  assert.equal(fx.position.qty,.032);
@@ -193,7 +193,7 @@ test('Re-arm a protected OCC position after restart: watch only until FLAT, then
 test('Re-enable monitor-only on an OCC position without restart, even when available margin is low',async t=>{
  const dir=tmp(t),fx=fake(),svc=new BrowserFutures({
   dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
- await svc.connect(creds);svc.saveConfig({marginUSDT:500,leverage:5,reverseOnSignal:true});
+ await svc.connect(creds);svc.saveConfig({marginUSDT:500,leverage:5,reverseOnSignal:false});
  await svc.arm('CHAP NHAN BTC FUTURES',77000);
  await svc.signal({side:'LONG',barTime:900000},true);
  svc.disarm();
@@ -203,6 +203,113 @@ test('Re-enable monitor-only on an OCC position without restart, even when avail
  await svc.signal({side:'SHORT',barTime:1800000},true);
  assert.equal(fx.calls.filter(x=>x.method==='POST'&&x.path==='/fapi/v1/order').length,1);
 });
+test('Resumed protected OCC with reverse ON switches LONG to SHORT immediately by MARKET even if normal Entry is LIMIT',async t=>{
+ const dir=tmp(t),fx=fake(),first=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await first.connect(creds);
+ first.saveConfig({marginUSDT:500,leverage:5,reverseOnSignal:true,entryMode:'MARKET'});
+ await first.arm('CHAP NHAN BTC FUTURES',77000);
+ await first.signal({side:'LONG',barTime:900000,time:1800000},true);
+ assert.equal(fx.position.qty,.032);
+ first.disarm();
+ const resumed=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await resumed.connect(creds);
+ assert.equal(resumed.snapshot().canResumeManaged,true);
+ // Enabling reverse while already holding an OCC position works regardless of
+ // whether new flat-account entries will use a future LIMIT entry.
+ resumed.setReverseOnSignal(true);
+ assert.equal(resumed.config.reverseOnSignal,true);
+ const before=fx.calls.filter(x=>x.method==='POST').length;
+ await resumed.arm('CHAP NHAN BTC FUTURES',77000);
+ assert.equal(resumed.snapshot().armed,true);
+ assert.equal(resumed.snapshot().observeExistingOnly,true);
+ await resumed.signal({side:'SHORT',barTime:1800000,time:2700000},true);
+ assert.equal(resumed.snapshot().halted,false,resumed.snapshot().error);
+ assert.equal(resumed.snapshot().observeExistingOnly,false);
+ assert.equal(resumed.snapshot().protectedPosition?.entry.side,'SHORT');
+ assert.equal(fx.position.qty,-.032);
+ const posts=fx.calls.filter(x=>x.method==='POST').slice(before);
+ assert.deepEqual(posts.map(x=>x.path),[
+  '/fapi/v1/order','/fapi/v1/order',...Array(4).fill('/fapi/v1/algoOrder')]);
+ assert.equal(posts[0].p.type,'MARKET');
+ assert.equal(posts[0].p.reduceOnly,'true');
+ assert.equal(posts[0].p.side,'SELL');
+ assert.equal(posts[1].p.type,'MARKET');
+ assert.equal(posts[1].p.side,'SELL');
+ assert.equal(posts[1].p.reduceOnly,undefined);
+ assert.equal(posts[2].p.type,'STOP_MARKET');
+ assert.ok(resumed.snapshot().events.some(x=>x.type==='REVERSE_FLAT'));
+});
+
+test('OCC reversal with LIMIT entry closes old protected position and re-enters MARKET; fresh FLAT entries still LIMIT',async t=>{
+ const dir=tmp(t),fx=fake(),svc=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await svc.connect(creds);
+ svc.saveConfig({marginUSDT:500,leverage:5,reverseOnSignal:true,entryMode:'LIMIT_PULLBACK',
+  limitBasis:'OCC_TRIGGER',limitWaitSeconds:90});
+ await svc.arm('CHAP NHAN BTC FUTURES',77000);
+ await svc.signal({side:'LONG',barTime:900000,time:1800000,triggerPrice:76000},true);
+ assert.equal(fx.limit.order?.type,'LIMIT');
+ const limit=fx.limit.order;
+ fx.limit.order={...limit,status:'FILLED',executedQty:limit.origQty,avgPrice:limit.price};
+ fx.position.qty=Number(limit.origQty);
+ // mock's Entry readback must return the verified LIMIT fill.
+ await svc.pollLimit();
+ assert.equal(svc.snapshot().protectedPosition?.entry.side,'LONG');
+ const start=fx.calls.filter(x=>x.method==='POST').length;
+ await svc.signal({side:'SHORT',barTime:1800000,time:2700000,triggerPrice:76500},true);
+ assert.equal(svc.snapshot().halted,false,svc.snapshot().error);
+ assert.equal(svc.snapshot().protectedPosition?.entry.side,'SHORT');
+ const newCalls=fx.calls.filter(x=>x.method==='POST').slice(start);
+ assert.deepEqual(newCalls.slice(0,2).map(x=>x.p.type),['MARKET','MARKET']);
+ assert.equal(newCalls[0].p.reduceOnly,'true');
+ assert.equal(newCalls[1].p.reduceOnly,undefined);
+ assert.equal(newCalls.filter(x=>x.p.type==='LIMIT').length,0);
+ assert.ok(svc.snapshot().events.some(x=>x.type==='REVERSE_ENTRY_MARKET'));
+});
+
+test('Stale BTC quote blocks OCC reversal BEFORE any reduceOnly close and retains original exchange STOP',async t=>{
+ const dir=tmp(t),fx=fake(),svc=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await svc.connect(creds);svc.saveConfig({marginUSDT:500,leverage:5,reverseOnSignal:true});
+ await svc.arm('CHAP NHAN BTC FUTURES',77000);
+ await svc.signal({side:'LONG',barTime:900000},true);
+ const count=fx.calls.filter(x=>x.method==='POST').length;
+ await svc.signal({side:'SHORT',barTime:1800000},true,
+  ()=>({symbol:'BTCUSDT',live:true,lastPrice:77000,lastReceivedAt:Date.now()-12000}));
+ assert.equal(svc.snapshot().halted,false);
+ assert.equal(fx.calls.filter(x=>x.method==='POST').length,count);
+ assert.equal(svc.snapshot().protectedPosition.entry.side,'LONG');
+ assert.ok(fx.algo.some(x=>x.orderType==='STOP_MARKET'));
+});
+
+test('Undersized opposite TP legs skip reversal without closing an owned protected position',async t=>{
+ const dir=tmp(t),fx=fake(),svc=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await svc.connect(creds);svc.saveConfig({marginUSDT:500,leverage:5,reverseOnSignal:true});
+ await svc.arm('CHAP NHAN BTC FUTURES',77000);
+ await svc.signal({side:'LONG',barTime:900000},true);
+ svc.disarm();
+ // Do not permit config edits while the position is still held.
+ assert.throws(()=>svc.saveConfig({marginUSDT:20,leverage:5}),/Tắt Auto và xử lý hết/);
+ const before=fx.calls.filter(x=>x.method==='POST').length;
+ // A later exchange filter change makes the intended reverse size invalid.
+ const original=fx.api.get;
+ fx.api.get=async(path,p={})=>{
+  const out=await original(path,p);
+  if(path==='/fapi/v1/exchangeInfo')
+   return {...out,symbols:out.symbols.map(sym=>({...sym,
+    filters:sym.filters.map(filter=>filter.filterType==='MARKET_LOT_SIZE'?
+     {...filter,minQty:'0.02'}:filter)}))};
+  return out;
+ };
+ // The static preflight uses verified filters from connect, so mutate actual
+ // filter state deliberately to assert the safety gate before any close.
+ svc.filters={...svc.filters,minQty:.02};
+ await svc.arm('CHAP NHAN BTC FUTURES',77000);
+ await svc.signal({side:'SHORT',barTime:1800000},true);
+ assert.equal(fx.calls.filter(x=>x.method==='POST').length,before);
+ assert.equal(fx.position.qty,.032);
+ assert.equal(svc.snapshot().protectedPosition.entry.side,'LONG');
+ assert.equal(svc.snapshot().halted,false);
+});
+
 test('Missing STOP or unrecognized Binance Algo prevents unsafe adoption and does not mutate orders',async t=>{
  const dir=tmp(t),fx=fake(),one=new BrowserFutures({
   dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
