@@ -1,3 +1,11 @@
+## FIX Windows — OCC đảo chiều cả vị thế đã Resume (12/11/2026)
+
+- **Đảo chiều OCC ON thực sự hoạt động với vị thế OCC cũ sau khi mở lại app.** Vị thế cũ phải có Entry Order ID, STOP close-all và các TP reduceOnly hợp lệ, được xác minh trên Binance khi người dùng bật AUTO. Cờ theo dõi vị thế cũ không còn chặn tín hiệu OCC ngược nếu bật đảo chiều; nếu OFF vẫn giữ nguyên đến SL/TP.
+- Khi nến M15 đóng xác nhận tín hiệu ngược chiều vị thế đang mở, OCC kiểm tra nguồn giá trực tiếp và khối lượng tối thiểu của ba TP **trước khi đóng lệnh**, xác minh vị thế/SL/TP của OCC, đóng bằng MARKET reduceOnly và kiểm tra FLAT. Sau đó **mở MARKET chiều ngược**, xác minh fill và đặt STOP close-all trước TP1/2/3. Tuyệt đối không mở lệnh mới nếu bước đóng trước chưa được xác nhận. Không tự phát lại tín hiệu đã lỡ lúc ứng dụng OFF.
+- **Chế độ đảo chiều luôn MARKET**, kể cả khi Entry thông thường chọn `LIMIT_PULLBACK` hoặc `OCC_TRIGGER`. Đây là hành vi khác với một Entry khi tài khoản FLAT: lần vào lệnh mới khi đang FLAT vẫn theo Market/LIMIT đã chọn. Giao diện Windows yêu cầu xác nhận rõ trước khi bật AUTO với đảo chiều ON.
+- Nếu mất giá trực tiếp hoặc khối lượng TP không đạt yêu cầu trước khi đóng, OCC **giữ vị thế và STOP cũ**, bỏ qua tín hiệu. Nếu kết quả đóng/đảo hay việc đặt lệnh bảo vệ không rõ, OCC HALT và yêu cầu kiểm tra Binance, không gửi lại lệnh mù. Đã thêm regression test cho vị thế resume, LIMIT + đảo MARKET, stale quote và kiểm tra lô BTC tối thiểu.
+- Chỉ áp dụng Windows PC; không thay đổi APK Android.
+
 ## Khôi phục SL/TP từ vị thế Binance thực (PC Windows · 09/11/2026)
 
 Khi BTCUSDT còn vị thế trên Binance nhưng **không có lệnh SL/TP đang mở**, giao diện PC có thêm nút **Khôi phục SL/TP** trong mục *Vị thế BTCUSDT*. Nút này thực hiện hai bước tách biệt:
