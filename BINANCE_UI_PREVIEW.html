@@ -639,7 +639,7 @@ function updateAutoConfigSnapshot(){
   display(val('marginUSDT'))+' USDT · '+display(val('leverage'),0)+'x · '+direction+
   ' · SL '+display(val('sl'))+'% · TP '+
   [val('tp1'),val('tp2'),val('tp3')].map(v=>display(v)).join('/')+unit+
-  ' · Đảo chiều '+($('reverseToggle').checked?'ON':'OFF')+
+  ' · Đảo chiều '+($('reverseToggle').checked?'MARKET ON':'OFF')+
  ' · '+($('entryMode').value==='LIMIT_PULLBACK'?
  ($('limitBasis').value==='OCC_TRIGGER'?'LIMIT giá kích hoạt OCC/'+fmt(val('limitWaitSeconds'),0)+'s':
  'LIMIT '+fmt(val('limitOffsetPct'),2)+'%/'+fmt(val('limitWaitSeconds'),0)+'s'):'MARKET');
@@ -707,7 +707,7 @@ $('cancelLimit').onclick=async()=>{
 };
 $('reverseToggle').onchange=async()=>{
  const value=$('reverseToggle').checked;
- if(value&&!confirm('BẬT ĐẢO CHIỀU FUTURES TIỀN THẬT? Khi có tín hiệu OCC ngược, bot có thể đóng vị thế hiện tại và mở vị thế ngược sau khi xác minh an toàn.')){
+ if(value&&!confirm('BẬT ĐẢO CHIỀU OCC FUTURES THẬT? Khi nến M15 xác nhận OCC ngược, bot đóng vị thế đã bảo vệ bằng MARKET reduceOnly, đối soát FLAT và mở chiều mới bằng MARKET, sau đó đặt STOP và TP1–TP3. ĐẢO CHIỀU LUÔN DÙNG MARKET, kể cả khi Entry thông thường là LIMIT. Tiếp tục?')){
   $('reverseToggle').checked=false;return;
  }
  reverseBusy=true;$('reverseToggle').disabled=true;
@@ -778,13 +778,19 @@ $('enabled').onchange=async()=>{
    if(!statusResponse.ok)throw Error('Không đọc được trạng thái Binance hiện tại');
    const current=await statusResponse.json(),monitoringExisting=!!current.canResumeManaged;
    if(monitoringExisting){
-    if(!confirm('Binance đang có vị thế OCC được ghi nhận. AUTO sẽ chỉ GIÁM SÁT vị thế cũ, KHÔNG đảo chiều dù bật đảo chiều OCC. Sau khi FLAT và dọn SL/TP mới chờ giao cắt M15 tiếp theo. Vẫn phải xác minh Binance thực tế. Tiếp tục?'))
-     throw Error('Đã hủy bật Auto giám sát');
+    const mayReverse=current.config?.reverseOnSignal===true;
+    const message=mayReverse?
+     'ĐÃ CÓ VỊ THẾ OCC. BẬT AUTO sẽ quản lý SL/TP cũ; nếu OCC phát tín hiệu ngược trên nến M15, bot sẽ ĐẢO CHIỀU THẬT: đóng bằng MARKET reduceOnly, xác minh FLAT, MỞ CHIỀU NGƯỢC BẰNG MARKET và thiết lập SL/TP (ngay cả khi Entry thường chọn LIMIT). Tiếp tục?':
+     'ĐÃ CÓ VỊ THẾ OCC. Đảo chiều đang OFF: AUTO chỉ theo dõi vị thế cũ đến SL/TP, không mở hoặc đảo lệnh khi còn vị thế. Sau FLAT chờ tín hiệu M15 mới. Tiếp tục?';
+    if(!confirm(message))throw Error('Đã hủy bật Auto trên vị thế OCC');
    }else{
     const check=await validateSizing();
     if(check.status!=='valid')throw Error('Không thể bật AUTO: '+check.message);
     if(!await saveConfig(true))throw Error('Cấu hình chưa hợp lệ hoặc chưa lưu được');
    }
+   if(current.config?.reverseOnSignal===true&&!monitoringExisting&&
+      !confirm('ĐẢO CHIỀU ĐANG ON: khi có vị thế được OCC quản lý và tín hiệu ngược M15, bot sẽ chốt MARKET reduceOnly rồi vào MARKET chiều ngược, không chờ LIMIT. Xác nhận?'))
+    throw Error('Chưa xác nhận đảo chiều MARKET');
    if(!monitoringExisting&&$('entryMode').value==='LIMIT_PULLBACK'&&!confirm(
     'LIMIT có thể khớp lúc OCC mất mạng/tắt; STOP/TP chưa có đến khi app xác minh khớp. '+
     'GTD dự phòng Binance khoảng 11 phút. Bạn chấp nhận rủi ro này?'))throw Error('Đã hủy LIMIT');
@@ -828,7 +834,8 @@ async function refreshLive(){
 $('enabled').disabled=autoBusy||(!s.armed&&(!s.connected||leverageMismatch||(!s.canResumeManaged&&(s.halted||sizingStatus!=='valid'))));
 $('autoLabel').textContent=!s.armed&&s.canResumeManaged?'AUTO OFF · VỊ THẾ OCC':
  s.halted?(s.armed?'AUTO ON · KHÓA AN TOÀN':'HALTED'):
- s.armed&&s.observeExistingOnly?'AUTO ON · THEO DÕI VỊ THẾ OCC':
+ s.armed&&s.observeExistingOnly?
+  (s.config?.reverseOnSignal?'AUTO ON · ĐẢO OCC MARKET':'AUTO ON · GIÁM SÁT OCC'):
  s.armed?(s.marketHealthy?'AUTO ON · THẬT':'AUTO ON · CHỜ GIÁ'):'AUTO OFF';
   $('autoWrap').className='auto'+(s.armed?' on':'')+(s.halted?' halted':'');
   const labels={wallet:'walletUSDT',available:'availableUSDT',equity:'equityUSDT',unrealized:'unrealizedUSDT',btcPosition:'positionBTC'};
@@ -856,10 +863,14 @@ $('autoLabel').textContent=!s.armed&&s.canResumeManaged?'AUTO OFF · VỊ THẾ 
   $('openAlgoCount').textContent=a?String(a.openAlgos):'—';
 $('botState').textContent=!s.armed&&s.canResumeManaged?'VỊ THẾ OCC · CHỜ BẬT GIÁM SÁT':
  s.halted?'KHÓA AN TOÀN · KHÔNG ĐẶT LỆNH':
- s.armed&&s.observeExistingOnly?'GIÁM SÁT VỊ THẾ OCC · CHỜ FLAT':s.armed?(s.marketHealthy?'Đang chạy':'Chờ Binance đồng bộ'):'Tạm dừng';
+ s.armed&&s.observeExistingOnly?
+  (s.config?.reverseOnSignal?'THEO DÕI OCC · ĐẢO MARKET KHI CÓ TÍN HIỆU NGƯỢC':'GIÁM SÁT VỊ THẾ OCC · CHỜ FLAT'):s.armed?(s.marketHealthy?'Đang chạy':'Chờ Binance đồng bộ'):'Tạm dừng';
 $('autoHint').textContent=!s.armed&&s.canResumeManaged?'AUTO OFF · có thể bật giám sát vị thế OCC hiện tại sau khi app kiểm tra Entry, STOP và các TP trực tiếp từ Binance.':
  s.halted?'Auto đang khóa lệnh do trạng thái Binance chưa chắc chắn; kiểm tra và đối soát trước khi bật.':
- s.armed&&s.observeExistingOnly?'Đang theo dõi vị thế OCC đã xác minh, không đảo lệnh hoặc mở thêm. Sau khi Binance FLAT và sạch SL/TP, chờ tín hiệu OCC M15 mới.':
+ s.armed&&s.observeExistingOnly?
+  (s.config?.reverseOnSignal?
+   'Vị thế OCC cũ đã xác minh: khi nến M15 có tín hiệu NGƯỢC sẽ đóng reduceOnly MARKET, xác nhận FLAT rồi mở MARKET chiều mới và đặt SL/TP.':
+   'Đang theo dõi vị thế OCC đã xác minh, đảo chiều OFF; sau khi Binance FLAT và sạch SL/TP mới xét tín hiệu M15.'):
  s.armed?(s.marketHealthy?'Bot có thể mở lệnh BTCUSDT theo tín hiệu OCC.':'Auto vẫn ON, tạm ngừng lệnh mới đến khi dữ liệu giá Binance khỏe và nến được đồng bộ lại.'):
    leverageMismatch?'Đòn bẩy sàn '+a.leverage+'x khác cấu hình '+desiredLeverage+'x. Cần áp dụng trước khi bật Auto.':
    s.canResumeManaged?'Auto OFF · có thể bật để theo dõi vị thế OCC cũ nếu Binance xác minh đủ Entry và SL/TP.':
