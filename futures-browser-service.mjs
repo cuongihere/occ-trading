@@ -818,7 +818,16 @@ try{
   if(!(price>0))throw Error('Giá Binance không hợp lệ; giữ nguyên vị thế OCC');
   return price;
  };
- if(existing)await liveQuote();
+ if(existing){
+  const indicativeQuote=await liveQuote();
+  // Validate minimum BTC lot and all three TP legs BEFORE reduceOnly closes
+  // the old trade. This is only a sizing preflight, not a margin guarantee:
+  // the actual free balance is still rechecked after Binance confirms FLAT.
+  const indicative=previewLiveSizing(this.config,this.filters,indicativeQuote,
+   this.config.marginUSDT);
+  if(indicative.status!=='valid')
+   throw Error('Đảo chiều chưa thực hiện: khối lượng chiều mới không đủ an toàn: '+indicative.message);
+ }
  if(existing){
   reverseAttempted=true;
   const closed=await this.reverseManagedPosition(signal);
