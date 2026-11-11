@@ -528,8 +528,11 @@ export class BrowserFutures{
     this.activeProtection=saved;this.previousProtection=null;
     this.observeExistingOnly=true;this.armed=true;this.halted=false;this.error=null;
     this.recoveryStatus='monitoring';
-    this.log('AUTO_OBSERVE_EXISTING','OCC Entry '+saved.entry.orderId+
-     ': chỉ theo dõi vị thế và SL/TP, không đảo chiều; chờ tín hiệu M15 mới sau FLAT.');
+    this.log(this.config.reverseOnSignal?'AUTO_REVERSE_RESUMED':'AUTO_OBSERVE_EXISTING',
+     'OCC Entry '+saved.entry.orderId+
+     (this.config.reverseOnSignal?
+      ': giám sát SL/TP và ĐẢO MARKET khi OCC xác nhận tín hiệu ngược; không mở lệnh trùng.':
+      ': giữ vị thế hiện tại đến SL/TP; chờ tín hiệu mới sau FLAT.'));
     return this.snapshot();
    }
    if(this.halted||this.activeProtection||this.previousProtection)
@@ -777,15 +780,18 @@ export class BrowserFutures{
    phase:'IDLE',entry:null,stop:null,tps:[],inFlight:null,halted:false
   });
   this.saveIntent({phase:'CLEARED',at:Date.now()});
-  this.activeProtection=null;this.previousProtection=null;
+  this.activeProtection=null;this.previousProtection=null;this.observeExistingOnly=false;
   this.log('REVERSE_FLAT','Đã đóng vị thế cũ và dọn SL/TP; Binance xác nhận FLAT');
   return true;
  }
  async signal(signal,feedHealthy,quoteProvider=null){
   if(!this.armed||this.busy||this.halted||this.pendingLimit||this.environment!=='production'||!feedHealthy||!signal?.side)return;
   const existing=this.activeProtection;
-  if(existing&&this.observeExistingOnly){
-   this.log('SIGNAL_IGNORED_EXISTING','Vị thế OCC cũ còn mở: bỏ qua tín hiệu mới cho đến khi Binance xác nhận FLAT.');
+  // Resuming a protected trade must not silently disable the explicit
+  // reverseOnSignal toggle. Watch-only applies only when reverse is OFF.
+  if(existing&&this.observeExistingOnly&&!this.config.reverseOnSignal){
+   this.log('SIGNAL_IGNORED_EXISTING',
+    'Giữ vị thế OCC cũ do đảo chiều OFF; không mở lệnh trùng trước khi FLAT.');
    return;
   }
   if(existing&&(!this.config.reverseOnSignal||existing.entry.side===signal.side||
@@ -796,6 +802,23 @@ export class BrowserFutures{
 this.busy=true;
 let reverseAttempted=false,reverseCompleted=false,entrySubmissionPossible=false;
 try{
+ // Check a fresh executable BTC price BEFORE closing the managed position.
+ // If the feed is stale, keep its exchange-side STOP/TP untouched.
+ const liveQuote=async()=>{
+  if(typeof quoteProvider==='function'){
+   const q=quoteProvider(),age=Date.now()-Number(q?.lastReceivedAt);
+   if(q?.symbol!=='BTCUSDT'||q?.live!==true||
+      !Number.isFinite(q?.lastPrice)||q.lastPrice<=0||
+      !Number.isFinite(age)||age< -3000||age>5000)
+    throw Error('Giá Binance aggTrade đã quá hạn; chưa được đảo vị thế OCC');
+   return q.lastPrice;
+  }
+  const q=await this.api.get('/fapi/v1/ticker/price',{symbol:'BTCUSDT'});
+  const price=Number(q?.price);
+  if(!(price>0))throw Error('Giá Binance không hợp lệ; giữ nguyên vị thế OCC');
+  return price;
+ };
+ if(existing)await liveQuote();
  if(existing){
   reverseAttempted=true;
   const closed=await this.reverseManagedPosition(signal);
@@ -807,26 +830,18 @@ try{
   }
  }
  const a=await this.inspect();
- // Fresh verified aggTrade removes one redundant Binance REST round trip.
- // Fail closed on stale feed rather than using any price from a previous bar.
- let quotePrice;
- if(typeof quoteProvider==='function'){
-  const q=quoteProvider();
-  const age=Date.now()-Number(q?.lastReceivedAt);
-  if(q?.symbol!=='BTCUSDT'||q?.live!==true||
-     !Number.isFinite(q?.lastPrice)||q.lastPrice<=0||
-     !Number.isFinite(age)||age< -3000||age>5000)
-   throw Error('Giá Binance aggTrade đã quá hạn; bỏ qua tín hiệu, không đặt lệnh');
-  quotePrice=q.lastPrice;
- }else{
-  // Retain compatibility with test/external callers that do not supply live stream.
-  const quote=await this.api.get('/fapi/v1/ticker/price',{symbol:'BTCUSDT'});
-  quotePrice=Number(quote.price);
- }
- if(this.config.entryMode==='LIMIT_PULLBACK'){
+ // Verify price again after any exchange-side reduceOnly closure.
+ // A true OCC reversal uses MARKET for both close and opposite Entry.
+ // LIMIT at the historical trigger could stay unfilled or marketable and
+ // silently leave the user FLAT rather than actually reversed.
+ const quotePrice=await liveQuote();
+ if(this.config.entryMode==='LIMIT_PULLBACK'&&!reverseCompleted){
   await this.submitLimit(signal,a,quotePrice);
   return;
  }
+ if(reverseCompleted)this.log('REVERSE_ENTRY_MARKET',
+  'Vị thế cũ đã FLAT; mở chiều '+signal.side+
+  ' bằng MARKET dù Entry thông thường cấu hình LIMIT, rồi xác minh SL/TP.');
  const plan=draftProtectedOrder({side:signal.side,account:a,filters:this.filters,
   quotePrice},this.config);
 const clientId='OCCBTC-'+randomBytes(7).toString('hex');
