@@ -379,3 +379,16 @@ test('Windows Binance dashboard inline JS remains parseable after 30-day PnL cha
  assert.ok(inline&&inline[1]);
  assert.doesNotThrow(()=>new Function(inline[1]));
 });
+
+test('Windows resumed protected OCC accepts explicit MARKET reversal even with LIMIT entry setting',()=>{
+ const html=read('BINANCE_UI_PREVIEW.html'),svc=read('futures-browser-service.mjs');
+ assert.match(html,/ĐẢO CHIỀU LUÔN DÙNG MARKET/);
+ assert.match(html,/AUTO ON · ĐẢO OCC MARKET/);
+ assert.match(html,/KHÔNG đảo\/vào thêm|giám sát SL\/TP cũ|ĐẢO CHIỀU THẬT/i);
+ assert.match(html,/s\.config\?\.reverseOnSignal/);
+ assert.match(svc,/if\(existing&&this\.observeExistingOnly&&!this\.config\.reverseOnSignal\)/);
+ assert.match(svc,/if\(this\.config\.entryMode==='LIMIT_PULLBACK'&&!reverseCompleted\)/);
+ assert.match(svc,/const quotePrice=await liveQuote\(\)/);
+ assert.match(svc,/if\(existing\)\{\s+const indicativeQuote=await liveQuote\(\)/);
+ assert.doesNotThrow(()=>new Function(html.match(/<script>([\s\S]*?)<\/script>/)[1]));
+});
