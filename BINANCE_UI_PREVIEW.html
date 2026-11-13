@@ -488,6 +488,66 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
 .historyDrawer>.below{padding:8px;gap:8px}
 .historyDrawer .tableScroll{height:auto;max-height:300px;overflow:auto}
 .historyDrawer #realCurve{height:175px}
+
+/* 2026-11-13 refined mockup-style one-chart layout */
+:root{--cardH:112px;--radius:14px;--softBorder:#274564;--softBg:#12243a;--softBg2:#102034;--glow:0 10px 30px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.03)}
+body{background:radial-gradient(circle at top center,#0b2240 0,#071220 42%,#06101b 100%)}
+.app{max-width:1920px;gap:12px;padding:14px}
+.topbar{padding:6px 2px 2px;border-bottom:0;min-height:auto;background:transparent}
+.brand{font-size:22px;font-weight:800;letter-spacing:.2px}
+.topbar .small{font-size:13px;color:#a7bfd7;margin-top:3px}
+.controls{gap:10px}
+.controls .link,.chartExpand{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:0 14px;border-radius:12px;background:linear-gradient(180deg,#152a42,#0f2034);border:1px solid #36567a;color:#eff6ff;text-decoration:none;font-weight:700;box-shadow:var(--glow)}
+.controls .status,.auto{min-height:40px;border-radius:12px;padding:0 14px;display:inline-flex;align-items:center;font-weight:700;box-shadow:var(--glow)}
+.kpis{gap:12px;grid-template-columns:repeat(6,minmax(0,1fr))}
+.kpi,.topgrid>.panel,.chartWorkbench,.positionSection>.accountPanel,.historyDrawer,.below>.panel{background:linear-gradient(180deg,rgba(19,36,58,.98),rgba(12,24,39,.98));border:1px solid var(--softBorder);border-radius:var(--radius);box-shadow:var(--glow)}
+.kpi{min-height:var(--cardH);padding:16px 18px;display:flex;flex-direction:column;justify-content:space-between}
+.kpi .label{font-size:13px;font-weight:700;color:#c1d7ee}
+.kpi .value{font-size:22px;line-height:1.1;font-weight:800;margin:0}
+.kpi .detail{font-size:12px;color:#8ea7c2}
+.topgrid{grid-template-columns:minmax(350px,1.05fr) minmax(280px,.62fr) minmax(460px,1.05fr);gap:12px;align-items:stretch}
+.topgrid>.panel{min-height:100px;padding:18px}
+.topgrid>.panel h2{font-size:14px;margin:0 0 10px;font-weight:800}
+.apiPanel .row{margin-bottom:10px}.apiActions{gap:8px}.apiActions button,.credentials button,.manualTp,.manualClose,.compactRefresh,.minor,.primary{border-radius:10px;min-height:38px;padding:0 12px;font-weight:700}
+.credentials{margin-top:8px;border:1px solid #305173;border-radius:12px;background:#0f2134}
+.credentials summary{padding:12px 14px;font-weight:700}.credentials[open]{box-shadow:inset 0 1px 0 rgba(255,255,255,.03)}
+.fields2{gap:10px}.fields2 label,.configPrimary label,.configSecond label{gap:7px;font-size:12px;color:#aecdde}
+input,select{border-radius:10px;min-height:38px;padding:0 12px;background:#091a2b;border:1px solid #35577a;color:#edf6ff}
+.pricePanel .marketTicker{min-height:100%;display:flex;align-items:center;justify-content:center;border-radius:14px;background:radial-gradient(circle at center,#11332f 0,#0f2233 70%);border:1px solid #84703b;box-shadow:0 0 0 1px rgba(248,190,75,.08), var(--glow)}
+.pricePanel .quoteHeading{font-size:14px;font-weight:800;color:#d6e6fb}.pricePanel .quoteValue{font-size:58px;font-weight:900;letter-spacing:.5px}.pricePanel .quoteMeta{font-size:14px}
+.configPanel{position:relative;display:flex;align-items:stretch}.autoConfigDetails{width:100%}.autoConfigSummary{min-height:100%;padding:18px;border-radius:14px;background:transparent;border:0;display:grid;grid-template-columns:1fr auto;gap:8px 12px;align-content:center}
+.autoConfigHeading{font-size:14px;font-weight:800}.configVersion{font-size:14px}.autoConfigSnapshot{grid-column:1/span 1;font-size:13px;line-height:1.45;color:#b6cce0}
+.autoConfigControl{align-self:start;display:inline-flex;align-items:center;justify-content:center;padding:10px 16px;border:1px solid #41617f;border-radius:10px;background:#162b44;font-size:13px;font-weight:700;color:#eff6ff}
+.autoConfigDetails>.autoConfigBody{display:none}
+.autoConfigDetails[open]>.autoConfigBody{display:grid;position:fixed;inset:50% auto auto 50%;transform:translate(-50%,-50%);width:min(980px,92vw);max-height:85vh;overflow:auto;z-index:3000;padding:18px 18px 16px;border-radius:18px;background:linear-gradient(180deg,#12253a,#0c1828);border:1px solid #3f6285;box-shadow:0 18px 60px rgba(0,0,0,.56)}
+.autoConfigDetails[open]::before{content:'';position:fixed;inset:0;background:rgba(4,10,18,.72);backdrop-filter:blur(4px);z-index:2500}
+.autoConfigDetails[open] .autoConfigSummary{position:relative;z-index:3100}
+.autoConfigDetails[open] .autoConfigBody>*{position:relative;z-index:3101}
+.configModalClose{position:absolute;top:10px;right:12px;width:34px;height:34px;border-radius:999px;border:1px solid #496884;background:#14283f;color:#f6fbff;font-size:22px;line-height:1;cursor:pointer}
+.autoConfigBody .configPrimary,.autoConfigBody .configSecond{padding-top:24px}
+.chartWorkbench{padding:0!important;overflow:hidden}
+.chartWorkbenchTop{padding:14px 18px;border-bottom:1px solid #274564;background:linear-gradient(180deg,rgba(23,42,67,.95),rgba(12,24,40,.92));min-height:62px}
+.chartWorkbenchTitle strong{font-size:18px;letter-spacing:.1px}.chartWorkbenchTitle span{font-size:13px;color:#9ec1d8}
+.chartReadonly{font-size:11px;font-weight:800;letter-spacing:.3px}.chartExpand{font-size:13px}
+#tradeCompareFrame{display:block;width:100%;height:520px;min-height:520px;border:0;background:#071320;border-radius:0}
+.positionSection>.accountPanel{padding:16px 18px;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);column-gap:16px;row-gap:10px}
+.positionSection>.accountPanel>h2{font-size:16px;font-weight:800;margin-bottom:4px}
+.positionSection .riskHeadline,.positionSection .riskUpdated{font-size:12px;color:#9fb7cf}
+.positionSection .positionGrid{padding:14px 0 8px;gap:12px;border-top:1px solid #274564}
+.positionSection .positionGrid .label{font-size:12px;color:#9cb7d0}.positionSection .positionGrid strong{font-size:17px;font-weight:800}
+.positionSection .botState{grid-column:1/-1;grid-row:auto;display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;border:0;border-top:1px solid #274564;padding:12px 0 0;margin:0;font-size:13px}
+.positionSection .compactOutcomes{grid-column:2;grid-row:2 / span 4;padding:0;margin:0;border:1px solid #274564;border-radius:14px;background:linear-gradient(180deg,#112033,#0e1d30)}
+.positionSection .compactHeading{padding:14px 14px 8px}.positionSection .compactTitle{font-size:16px;font-weight:800}.positionSection .compactSub{padding:0 14px 8px;font-size:12px;color:#a7bed3}
+.positionSection .compactRows{display:block;margin:0;border:0;background:transparent}
+.positionSection .compactRow{display:grid;grid-template-columns:1.4fr .9fr .7fr auto;align-items:center;min-height:58px;padding:0 14px;border-right:0;border-top:1px solid #243f5f;background:transparent}
+.positionSection .compactRow:first-child{border-top:0}.positionSection .compactName{font-size:13px}.positionSection .compactName small,.compactOrderMeta{display:block;font-size:11px;color:#87a4c3}
+.positionSection .compactRow>span:nth-child(2){grid-column:auto;grid-row:auto;font-size:15px;font-weight:800}.positionSection .compactRow>strong{grid-column:auto;grid-row:auto;font-size:14px;text-align:right}.positionSection .manualTp{grid-column:auto;grid-row:auto;justify-self:end;min-height:34px}
+.manualExitBar{padding:10px 14px 14px;border-top:1px solid #243f5f}.compactNote{padding:0 14px 10px}
+.historyDrawerSummary{padding:12px 16px}.historyDrawer>.below{padding:10px}
+#realCurve{height:170px}
+@media(max-width:1500px){.kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.topgrid{grid-template-columns:1fr 320px 1fr}#tradeCompareFrame{height:540px}}
+@media(max-width:1180px){.topgrid{grid-template-columns:1fr}.topgrid>.panel{min-height:auto}.pricePanel .quoteValue{font-size:46px}.positionSection>.accountPanel{grid-template-columns:1fr}.positionSection .compactOutcomes{grid-column:1;grid-row:auto}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}#tradeCompareFrame{height:640px}}
+@media(max-width:720px){.app{padding:10px}.kpis{grid-template-columns:1fr}.topbar{gap:10px}.controls{width:100%;flex-wrap:wrap}.chartWorkbenchTop{align-items:flex-start}.chartWorkbenchActions{width:100%;justify-content:space-between}#tradeCompareFrame{height:700px}.positionSection .compactRow{grid-template-columns:1fr;gap:6px;padding:12px 14px}.positionSection .manualTp{justify-self:start}}
 </style>
 </head>
 <body>
@@ -497,7 +557,7 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
  <div class="controls">
  <span id="connection" class="status">CHƯA KẾT NỐI</span>
  <label class="auto" id="autoWrap" style="flex-direction:row;color:#eff6ff;font-size:12px"><input id="enabled" type="checkbox" disabled><span id="autoLabel">AUTO OFF</span></label>
- <a href="#chartWorkbench" class="link">Đến chart OCC</a><a href="/" class="link">Paper Trading</a></div>
+ <button class="link" type="button" id="openConfigBtn">Cài đặt Auto</button><a href="#chartWorkbench" class="link">Biểu đồ</a><a href="/" class="link">Paper Trading</a></div>
 </header>
 <section class="kpis">
  <div class="kpi"><div class="label">Ví Futures</div><div id="wallet" class="value">—</div><div class="detail">USDT · Wallet</div></div>
@@ -519,7 +579,7 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
    <button class="primary" id="apiConnect">Kết nối & lưu API</button>
   </details>
   <div class="apiActions"><button id="apiDisconnect">Ngắt kết nối</button><button id="apiForget" class="minor">Xóa API đã lưu</button>
-  <button id="apiReconcile" class="minor">Kiểm tra & dọn SL/TP cũ</button></div>
+  <button id="apiReconcile" class="minor">Kiểm tra OCC</button></div>
   <div id="apiError" class="message" role="status"></div>
   <div class="small" id="lastSync">Dữ liệu tài khoản sẽ tự cập nhật.</div>
  
@@ -537,9 +597,9 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
    <summary class="autoConfigSummary">
     <span class="autoConfigHeading">Cấu hình Auto <span class="configVersion">Multi TP v5</span></span>
     <span id="autoConfigSnapshot" class="autoConfigSnapshot">Đang đọc cấu hình...</span>
-    <span class="autoConfigControl">Chỉnh sửa ▾</span>
+    <span class="autoConfigControl">Chỉnh sửa</span>
    </summary>
-   <div class="autoConfigBody">
+   <div class="autoConfigBody"><button type="button" class="configModalClose" id="closeConfigBtn" aria-label="Đóng cài đặt">×</button>
   <div class="configPrimary">
    <label>Ký quỹ USDT<input id="marginUSDT" type="number" step="any" min=".01"></label>
    <label>Đòn bẩy<input id="leverage" type="number" step="1" min="1" max="20"></label>
@@ -572,17 +632,17 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
   </details>
  </div>
 </section>
-<section class="chartWorkbench panel" id="chartWorkbench" aria-label="Biểu đồ OCC và giao dịch thực tế trong màn hình Futures">
+<section class="chartWorkbench panel" id="chartWorkbench" aria-label="Biểu đồ BTCUSDT và lệnh OCC thực tế trên Binance">
  <div class="chartWorkbenchTop">
-  <div class="chartWorkbenchTitle"><strong>OCC TRADING · CHART ĐỐI CHIẾU TRỰC TIẾP</strong>
-   <span>Hai chart cùng nến Binance M15 · Tín hiệu OCC vs Fill / SL / TP thực tế</span></div>
+  <div class="chartWorkbenchTitle"><strong>Biểu đồ BTCUSDT · Lệnh OCC thực tế trên Binance</strong>
+   <span>Chỉ giữ 1 biểu đồ nến thực tế và các lệnh OCC đã vào trên Binance</span></div>
   <div class="chartWorkbenchActions">
    <span class="chartReadonly">CHỈ ĐỌC · KHÔNG ĐẶT LỆNH</span>
-   <a href="/occ-compare" class="chartExpand" target="_blank" rel="noopener noreferrer">Mở chart rộng</a>
+   <a href="/occ-compare?view=real" class="chartExpand" target="_blank" rel="noopener noreferrer">Mở rộng</a>
   </div>
  </div>
- <iframe id="tradeCompareFrame" title="Hai biểu đồ OCC tham chiếu và Binance khớp thực tế"
-  src="/occ-compare?embed=1" loading="eager" referrerpolicy="no-referrer"></iframe>
+ <iframe id="tradeCompareFrame" title="Biểu đồ nến thật BTCUSDT và lệnh OCC thực tế trên Binance"
+  src="/occ-compare?embed=1&view=real" loading="eager" referrerpolicy="no-referrer"></iframe>
 </section>
 <section class="positionSection" aria-label="Vị thế BTCUSDT và quản lý chốt lời">
  <div class="panel accountPanel">
@@ -1354,5 +1414,10 @@ async function refreshMarketPrice(){
 refreshLive();refreshReport();refreshMarketPrice();refreshPositionAnalysis();
 setInterval(refreshLive,5000);setInterval(refreshReport,15000);setInterval(refreshMarketPrice,1000);setInterval(refreshPositionAnalysis,12000);
 setInterval(()=>{if(setupLoaded&&!autoBusy)validateSizing();},15000);
+
+$('openConfigBtn')?.addEventListener('click',()=>{$('autoConfigDetails').open=true;});
+$('closeConfigBtn')?.addEventListener('click',()=>{$('autoConfigDetails').open=false;});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){$('autoConfigDetails').open=false;}});
+$('autoConfigDetails')?.addEventListener('click',e=>{const body=e.target.closest('.autoConfigBody');const summary=e.target.closest('.autoConfigSummary');if(e.target===e.currentTarget&&!body&&!summary)e.currentTarget.open=false;});
 </script>
 </body></html>

@@ -90,7 +90,7 @@ test('Windows routes use no API keys and render two comparison charts with isola
   main:readFileSync(new URL('./BINANCE_UI_PREVIEW.html',import.meta.url),'utf8')
  };
  assert.match(files.server,/req\.url==='\/api\/binance\/occ-chart-compare'/);
- assert.match(files.server,/req\.url==='\/occ-compare'/);
+ assert.match(files.server,/req\.url\.startsWith\('\/occ-compare'\)/);
  assert.match(files.server,/req\.url==='\/occ-tradingview-widget'/);
  assert.match(files.server,/readVerifiedChartFills/);
  assert.match(files.page,/id="reference"/);
@@ -99,7 +99,7 @@ test('Windows routes use no API keys and render two comparison charts with isola
  assert.match(files.page,/id="tvFrame"[^>]+sandbox="allow-scripts allow-popups allow-forms"/);
  assert.match(files.page,/NO_MATCHING_SIGNAL/);
  assert.match(files.widget,/embed-widget-advanced-chart\.js/);
- assert.match(files.main,/href="\/occ-compare"/);
+ assert.match(files.main,/href="\/occ-compare\?view=real"/);
  assert.match(files.portable,/'futures-chart-compare\.mjs'/);
  assert.match(files.portable,/'OCC_COMPARE\.html'/);
  assert.match(files.portable,/'OCC_TV_WIDGET\.html'/);

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>OCC | So sánh TradingView và Binance</title>
-<script>if(new URLSearchParams(location.search).get('embed')==='1')document.documentElement.classList.add('embed');</script>
+<script>const __occParams=new URLSearchParams(location.search);if(__occParams.get('embed')==='1')document.documentElement.classList.add('embed');if(__occParams.get('view')==='real')document.documentElement.classList.add('realonly');</script>
 <style>
 :root{color-scheme:dark;font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif}
 *{box-sizing:border-box}body{margin:0;background:#081321;color:#e6f1ff}
@@ -59,6 +59,28 @@ html.embed main>section.panel td,html.embed main>section.panel th{padding:5px 6p
  html.embed main>section.panel .tablewrap{max-height:85px}
 }
 @media(max-width:560px){html.embed .controls{flex-wrap:wrap}html.embed canvas{height:285px}}
+
+/* Real-only embedded chart for compact OCC trading dashboard */
+html.realonly .grid{grid-template-columns:1fr}
+html.realonly .refPanel,html.realonly .comparePanel,html.realonly #tv,html.realonly .note{display:none!important}
+html.realonly .execPanel h2{margin-bottom:6px}
+html.realonly .execPanel .subtitle{min-height:0}
+html.realonly .execPanel canvas{height:430px}
+html.realonly .execPanel .legend{justify-content:space-between;gap:10px}
+html.realonly .execPanel .foot{margin-top:8px}
+html.embed.realonly body{background:#0b1726}
+html.embed.realonly main{padding:0;max-width:none}
+html.embed.realonly .controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px 6px;margin:0;background:#102135;border-bottom:1px solid #274564}
+html.embed.realonly .controls label{font-size:12px;color:#b9d2e7}
+html.embed.realonly .controls select,html.embed.realonly .controls button{min-height:34px;padding:0 12px;border-radius:10px;background:#14273e;border:1px solid #3a5778;font-size:12px;font-weight:700}
+html.embed.realonly #lastSync{margin-left:auto;font-size:12px}
+html.embed.realonly .status{display:none!important}
+html.embed.realonly .panel.execPanel{padding:10px 14px 8px;border:0;border-radius:0;background:#0d1a2b}
+html.embed.realonly .execPanel canvas{height:392px;border-radius:12px;border:1px solid #23405f;background:#081321}
+html.embed.realonly .execPanel .legend{font-size:12px;padding-bottom:4px}
+html.embed.realonly .execPanel .foot{font-size:12px;padding-bottom:4px}
+@media(max-width:1100px){html.embed.realonly .execPanel canvas{height:360px}}
+@media(max-width:760px){html.embed.realonly .controls{padding:10px}.embed.realonly #lastSync{margin-left:0}.embed.realonly .execPanel canvas{height:330px}}
 </style>
 </head>
 <body>
@@ -80,20 +102,20 @@ html.embed main>section.panel td,html.embed main>section.panel th{padding:5px 6p
 </div>
 <p id="status" class="status">Đang tải dữ liệu nến và fill đã xác minh…</p>
 <div class="grid">
-<section class="panel"><h2>1. OCC tham chiếu · không phải Strategy Tester Pine</h2>
+<section class="panel refPanel"><h2>1. OCC tham chiếu · không phải Strategy Tester Pine</h2>
 <div class="subtitle">Giá nến xác nhận tín hiệu · mốc MA giao cắt · giá BTC kích hoạt OCC</div>
 <canvas id="reference"></canvas>
 <div class="legend"><span class="good">● Giao cắt LONG</span><span class="bad">● Giao cắt SHORT</span><span style="color:#f8bd4b">━ MA Open SMMA8</span><span style="color:#40d4ea">━ MA Close SMMA8</span></div>
 <div id="refHover" class="foot">Trỏ chuột lên nến để xem giá và thời điểm.</div>
 </section>
-<section class="panel"><h2>2. Binance thực tế · fill của bot OCC</h2>
+<section class="panel execPanel"><h2>2. Binance thực tế · fill của bot OCC</h2>
 <div class="subtitle">ENTRY/EXIT đã FILLED + đường giá SL/TP hiện còn mở, chỉ khi Binance xác minh OCC Algo ID.</div>
 <canvas id="execution"></canvas>
 <div class="legend"><span class="good">▲ BUY fill</span><span class="bad">▼ SELL fill</span><span style="color:#8deca9">━ TP Binance đang mở</span><span style="color:#ff7280">━ SL Binance đang mở</span></div>
 <div id="execHover" class="foot">Chỉ hiển thị lệnh đã ghép Order ID thuộc OCC; lệnh chưa ghép không được nhận làm lệnh bot.</div>
 </section>
 </div>
-<section class="panel" style="margin-top:14px">
+<section class="panel comparePanel" style="margin-top:14px">
 <h2>3. Bảng sai lệch giá & thời gian</h2>
 <div class="subtitle">Giá tham chiếu: ENTRY = close nến OCC; SL/TP = các mức % tính từ close nến OCC. Không dùng giá MA làm giá BTC. Lệnh LIMIT có thể khớp muộn.</div>
 <div class="tablewrap"><table>

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
 
-test('One Windows trading screen has inline OCC/Binance charts, not a required second page',()=>{
+test('One Windows trading screen has one Binance fill chart and Auto settings popup',()=>{
  const page=read('BINANCE_UI_PREVIEW.html');
  const a=page.indexOf('<header class="topbar">');
  const b=page.indexOf('<section class="kpis">');
@@ -12,7 +12,7 @@ test('One Windows trading screen has inline OCC/Binance charts, not a required s
  const e=page.indexOf('<section class="positionSection"');
  const f=page.indexOf('<details class="historyDrawer"');
  assert.ok(a>=0&&b>a&&c>b&&d>c&&e>d&&f>e,'Unified page hierarchy');
- assert.match(page,/id="tradeCompareFrame"[\s\S]*?src="\/occ-compare\?embed=1"/);
+ assert.match(page,/id="tradeCompareFrame"[\s\S]*?src="\/occ-compare\?embed=1&view=real"/);
  assert.match(page,/id="chartWorkbench"/);
  assert.match(page,/href="#chartWorkbench"/);
  assert.match(page,/class="historyDrawerSummary"/);
@@ -32,14 +32,18 @@ test('One Windows trading screen has inline OCC/Binance charts, not a required s
 
 test('Dual chart frame embeds same-origin only with compact UI and read-only API',()=>{
  const server=read('server.mjs'),chart=read('OCC_COMPARE.html');
- assert.match(server,/req\.url==='\/occ-compare\?embed=1'/);
+ assert.match(server,/req\.url\.startsWith\('\/occ-compare'\)/);
  assert.match(server,/frame-ancestors 'self'/);
- assert.match(chart,/URLSearchParams\(location\.search\)\.get\('embed'\)==='1'/);
+ assert.match(chart,/__occParams\.get\('embed'\)==='1'/);
  assert.match(chart,/html\.embed main\{max-width:none;padding:2px 3px\}/);
  assert.match(chart,/html\.embed canvas\{height:286px/);
  assert.match(chart,/html\.embed header,html\.embed main>\.note,html\.embed main>\.foot,html\.embed #tv/);
  assert.match(chart,/id="reference"/);
  assert.match(chart,/id="execution"/);
+ assert.match(chart,/html\.realonly \.grid\{grid-template-columns:1fr\}/);
+ assert.match(chart,/html\.realonly \.refPanel,html\.realonly \.comparePanel/);
+ assert.match(read('BINANCE_UI_PREVIEW.html'),/id="openConfigBtn"/);
+ assert.match(read('BINANCE_UI_PREVIEW.html'),/id="closeConfigBtn"/);
  assert.match(chart,/id="rows"/);
  assert.match(chart,/\/api\/binance\/occ-chart-compare/);
  assert.doesNotMatch(chart,/request\('connect'|\/control\/live\/on|\/control\/live\/manual-exit/);
