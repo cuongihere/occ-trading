@@ -43,12 +43,12 @@ test('Binance filled ENTRY and real SL/TP are plotted from ledger, not simulated
  const baseline=buildOCCChartComparison({h4,m15,now});
  const long=baseline.signals.find(s=>s.side==='LONG');
  assert.ok(long);
- const t=long.confirmAt+3500;
+ const filledAt=long.confirmAt+3500;
  l.ingest([
   {id:101,orderId:701,symbol:'BTCUSDT',side:'BUY',qty:'.004',price:'100.6',
-   realizedPnl:'0',commission:'.02',commissionAsset:'USDT',time:t},
+   realizedPnl:'0',commission:'.02',commissionAsset:'USDT',time:filledAt},
   {id:102,orderId:702,symbol:'BTCUSDT',side:'SELL',qty:'.001',price:'103.5',
-   realizedPnl:'.0029',commission:'.005',commissionAsset:'USDT',time:t+1600000}
+   realizedPnl:'.0029',commission:'.005',commissionAsset:'USDT',time:filledAt+1600000}
  ]);
  l.close();
  const fills=readVerifiedChartFills(path,0);
