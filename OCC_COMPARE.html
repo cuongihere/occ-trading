@@ -68,8 +68,8 @@ iframe{width:100%;height:475px;border:1px solid #24405a;border-radius:8px;backgr
 <h2>3. Bảng sai lệch giá & thời gian</h2>
 <div class="subtitle">Giá tham chiếu: ENTRY = close nến OCC; SL/TP = các mức % tính từ close nến OCC. Không dùng giá MA làm giá BTC. Lệnh LIMIT có thể khớp muộn.</div>
 <div class="tablewrap"><table>
-<thead><tr><th>Binance fill (VN)</th><th>Role</th><th>Chiều vị thế</th><th>BTC</th><th>Giá tham chiếu</th><th>Giá khớp</th><th>Sai lệch USDT</th><th>Sai lệch %</th><th>Chậm sau OCC</th><th>Entry Order group</th><th>Tình trạng ghép</th></tr></thead>
-<tbody id="rows"><tr><td colspan="11">Chưa có dữ liệu</td></tr></tbody>
+<thead><tr><th>Binance fill (VN)</th><th>Role</th><th>Chiều</th><th>BTC</th><th>OCC xác nhận (VN)</th><th>MA tại cross</th><th>BTC kích hoạt OCC</th><th>Close OCC / mức SL-TP</th><th>Binance khớp</th><th>Δ USDT</th><th>Δ %</th><th>Trễ sau tín hiệu</th><th>Order group</th><th>Chứng cứ liên kết</th></tr></thead>
+<tbody id="rows"><tr><td colspan="14">Chưa có dữ liệu</td></tr></tbody>
 </table></div>
 </section>
 <details class="panel" style="margin-top:14px" id="tv">
@@ -107,7 +107,9 @@ function draw(canvas,kind){
  if($('showMA').checked)for(const v of visible)prices.push(v.openMA,v.closeMA);
  const fills=state.fills.filter(f=>f.time>=first&&f.time<last+M15);
  const crosses=state.signals.filter(x=>x.time>=first&&x.time<=last);
- if(kind==='real')for(const f of fills)prices.push(f.price);
+ // Both canvases MUST use the same price scale; otherwise visual
+ // separation would misleadingly exaggerate or conceal execution slippage.
+ for(const f of fills)prices.push(f.price);
  const pad=(Math.max(...prices)-Math.min(...prices))*.075||100;
  const hi=Math.max(...prices)+pad,lo=Math.min(...prices)-pad;
  const y=p=>bottom-(p-lo)/(hi-lo)*(bottom-top);
@@ -184,20 +186,21 @@ function renderRows(){
  const body=$('rows');body.replaceChildren();
  if(!state?.comparisons?.length){
   const tr=document.createElement('tr'),td=document.createElement('td');
-  td.colSpan=11;td.textContent='Chưa tìm thấy fill OCC đã xác minh trong dữ liệu SQLite gần đây.';
+  td.colSpan=14;td.textContent='Chưa tìm thấy fill OCC đã xác minh trong dữ liệu SQLite gần đây.';
   tr.append(td);body.append(tr);return;
  }
  for(const r of state.comparisons){
   const vals=[vn(r.fillTime),r.role,r.side,format(r.qty,6),
-   format(r.referencePrice,1),format(r.binancePrice,1),
+   r.signalTime?vn(r.signalTime):'—',format(r.crossMA,1),
+   format(r.triggerBTC,1),format(r.referencePrice,1),format(r.binancePrice,1),
    format(r.deltaPrice,1),format(r.deltaPct,3),
    r.delaySeconds==null?'—':format(r.delaySeconds,0)+' s',r.groupId,
    r.attribution==='NO_MATCHING_SIGNAL'?'Chưa thấy OCC cùng chiều':
-    'Tín hiệu gần nhất, chưa chứng minh liên kết'];
+    'Gần nhất theo giờ; KHÔNG chứng minh ghép lệnh'];
   const tr=document.createElement('tr');
   for(let i=0;i<vals.length;i++){
    const td=document.createElement('td');td.textContent=vals[i];
-   if(i===6&&r.deltaPrice!=null)td.className=r.deltaPrice>0?'bad':'good';
+   if(i===9&&r.deltaPrice!=null)td.className=r.deltaPrice>0?'bad':'good';
    tr.append(td);
   }
   body.append(tr);
