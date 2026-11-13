@@ -81,6 +81,37 @@ html.embed.realonly .execPanel .legend{font-size:12px;padding-bottom:4px}
 html.embed.realonly .execPanel .foot{font-size:12px;padding-bottom:4px}
 @media(max-width:1100px){html.embed.realonly .execPanel canvas{height:360px}}
 @media(max-width:760px){html.embed.realonly .controls{padding:10px}.embed.realonly #lastSync{margin-left:0}.embed.realonly .execPanel canvas{height:330px}}
+
+/* Real-only chart fits its parent's allocated height; never scrolls the host. */
+html.embed.realonly,html.embed.realonly body{height:100%!important;overflow:hidden!important}
+html.embed.realonly main{height:100%!important;min-height:0!important;padding:0!important;
+ display:flex!important;flex-direction:column!important;overflow:hidden!important}
+html.embed.realonly .controls{flex:0 0 30px!important;min-height:30px!important;height:30px!important;
+ margin:0!important;padding:2px 8px!important;gap:5px!important;
+ border-bottom:1px solid #24435f!important;overflow:hidden!important}
+html.embed.realonly .controls label{font-size:10px!important;white-space:nowrap}
+html.embed.realonly .controls label:has(#showMA),
+html.embed.realonly .controls label:has(#showLevels){display:none!important}
+html.embed.realonly .controls select,html.embed.realonly .controls button{min-height:23px!important;
+ height:23px!important;font-size:10px!important;padding:2px 6px!important}
+html.embed.realonly #lastSync{font-size:10px!important;margin-left:auto;white-space:nowrap;
+ overflow:hidden;text-overflow:ellipsis;max-width:43%}
+html.embed.realonly #status{display:none!important}
+html.embed.realonly #status.error{display:block!important;position:absolute;z-index:7;
+ top:33px;left:10px;right:10px;font-size:11px!important;color:#ffd8b1;
+ background:#422e2b;padding:5px!important;border-radius:5px}
+html.embed.realonly .grid{flex:1 1 auto!important;min-height:0!important;height:auto!important;
+ display:flex!important;flex-direction:column!important;gap:0!important;overflow:hidden!important}
+html.embed.realonly .panel.execPanel{flex:1 1 auto;min-height:0!important;max-height:100%!important;
+ display:flex!important;flex-direction:column!important;overflow:hidden!important;
+ border:0!important;border-radius:0!important;padding:1px 4px 2px!important}
+html.embed.realonly .execPanel h2,html.embed.realonly .execPanel .subtitle,
+html.embed.realonly .execPanel .legend{display:none!important}
+html.embed.realonly .execPanel canvas{display:block!important;flex:1 1 auto!important;
+ height:0!important;min-height:0!important;width:100%!important;border:0!important;border-radius:0!important}
+html.embed.realonly #execHover{flex:0 0 17px!important;min-height:17px!important;height:17px!important;
+ font-size:10px!important;line-height:16px!important;overflow:hidden!important;
+ white-space:nowrap!important;text-overflow:ellipsis!important;margin:0!important;padding:0 7px!important}
 </style>
 </head>
 <body>
@@ -231,8 +262,10 @@ function draw(canvas,kind){
    ctx.fillStyle=buy?colors.up:colors.down;
    ctx.beginPath();ctx.moveTo(xx,yy+(buy?7:-7));ctx.lineTo(xx-5,yy+(buy?-5:5));
    ctx.lineTo(xx+5,yy+(buy?-5:5));ctx.closePath();ctx.fill();
-   ctx.font='bold 10px system-ui';ctx.fillStyle='#e4f3ff';
-   ctx.fillText(f.role,xx+7,yy-11);
+   if(!document.documentElement.classList.contains('realonly')){
+    ctx.font='bold 10px system-ui';ctx.fillStyle='#e4f3ff';
+    ctx.fillText(f.role,xx+7,yy-11);
+   }
   }
  }
  const ticks=6;
@@ -246,8 +279,10 @@ function draw(canvas,kind){
   const rect=canvas.getBoundingClientRect();
   const at=Math.min(bars.length-1,Math.max(0,Math.round((e.clientX-rect.left-left)/usable*(bars.length-1))));
   const b=bars[at],dst=kind==='real'?'execHover':'refHover';
+  const atBar=kind==='real'?fills.filter(f=>Math.floor(f.time/M15)*M15===b.time):[];
   $(dst).textContent=vn(b.time)+' · O '+format(b.open)+' H '+format(b.high)+' L '+format(b.low)+' C '+format(b.close)+
-   (kind==='real'?' · Fill = giá khớp thật, không phải giá LIMIT':' · OCC SMMA8 theo nến H4 đang hình thành');
+   (atBar.length?' · '+atBar.map(f=>f.role+' '+format(f.price,1)+' ('+format(f.qty,5)+' BTC)').join(' | '):
+    kind==='real'?' · Fill Binance':' · SMMA8 H4');
  };
 }
 function renderRows(){
@@ -281,14 +316,14 @@ async function refresh(){
   const res=await fetch('/api/binance/occ-chart-compare',{cache:'no-store'});
   const data=await res.json();
   if(!res.ok)throw Error(data.error||'HTTP '+res.status);
-  state=data;drawAll();renderRows();
+  state=data;$('status').classList.remove('error');drawAll();renderRows();
   $('lastSync').textContent='Đồng bộ '+vn(data.asOf);
   $('status').textContent='Đã nạp '+data.candles.length+' nến M15 · '+
    data.signals.length+' giao cắt · '+data.fills.length+' fill đã xác minh · '+
    data.comparisons.length+' hàng đối chiếu.'+
    (data.livePosition?.verified?' · SL/TP đang mở đã đối soát Binance.':'')+
    (data.liveReadbackError?' · '+data.liveReadbackError:'');
- }catch(e){$('status').textContent='Không đồng bộ được chart: '+e.message+
+ }catch(e){$('status').classList.add('error');$('status').textContent='Không đồng bộ được chart: '+e.message+
    ' · Kiểm tra kết nối Binance hoặc nhấn Đồng bộ chart.';}
  finally{$('reload').disabled=false;}
 }
@@ -297,6 +332,10 @@ $('bars').onchange=drawAll;$('showMA').onchange=drawAll;$('showLevels').onchange
 let resizeTimer=null;window.addEventListener('resize',()=>{
  clearTimeout(resizeTimer);resizeTimer=setTimeout(drawAll,180);
 });
+if(document.documentElement.classList.contains('realonly')){
+ $('showMA').checked=false;
+ $('showLevels').checked=false;
+}
 $('tv').addEventListener('toggle',()=>{
  const frame=$('tvFrame');
  if($('tv').open&&!frame.hasAttribute('src'))frame.src='/occ-tradingview-widget';
