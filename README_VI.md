@@ -1,3 +1,13 @@
+## Chart so sánh OCC và Binance (Windows PC · 13/11/2026)
+
+- Từ trang **OCC / BTCUSDT Futures** nhấn **Chart so sánh** hoặc từ lịch sử chọn **Xem chart lệnh thật**. App mở `/occ-compare` với **hai biểu đồ cùng nến BTCUSDT Perpetual M15**:
+  - **OCC tham chiếu**: nến Binance, hai đường SMMA8 H4 đang hình thành tính bằng engine JavaScript OCC thực tế, mốc giao cắt LONG/SHORT, mức ENTRY tham chiếu theo close nến và SL/TP lý thuyết theo cấu hình. Đây không phải kết quả thực thi Pine Strategy Tester trên TradingView.
+  - **Binance thực tế**: cùng nến, hiển thị ENTRY/SL/TP1/TP2/TP3/CLOSE/REVERSE **đúng giá và thời gian fill của Binance** với các Order ID đã xác minh OCC trong SQLite. Fill không thuộc bot hoặc chưa đủ bằng chứng ghép Order ID sẽ không được vẽ là lệnh OCC.
+- **Bảng sai lệch**: mỗi nhóm ENTRY có thể đối chiếu tín hiệu OCC cùng chiều gần nhất trước fill trong cửa sổ 2 giờ, so giá close của nến tạo tín hiệu với giá fill thực, phần trăm và chênh thời gian. SL/TP so với các mức tính từ close nến tín hiệu; ghép theo thời gian chỉ là **ứng viên**, không phải chứng cứ lệnh thực thuộc giao cắt đó. Lệnh LIMIT có thể chờ tới 90 giây và khớp ở giá khác; Pine backtest có quy tắc mô phỏng khác với Binance.
+- Mục **TradingView chart chính thức** ở dưới là widget tham chiếu, được chạy trong iframe sandbox riêng; **TradingView không hỗ trợ chạy custom Pine Script trong widget nhúng**. Để xem Pine R5.1 gốc, mở liên kết TradingView và tải Pine trong tài khoản TradingView của bro. Không đưa khóa API vào widget.
+- Nguồn chart `GET /api/binance/occ-chart-compare` **chỉ đọc**: nến M15/H4 Binance Futures công khai (cached 45 giây) + fill đã xác minh từ SQLite. Không có chức năng gửi hay hủy lệnh, không thay code đặt lệnh và không chỉnh sửa Android. Nếu Binance mất mạng, trang báo lỗi thay vì dựng giá giả.
+- Chart cho phép đổi khoảng 2/4/6/10 ngày, bật/tắt đường MA và mức SL/TP. Có thể kiểm tra những chênh lệch do thời điểm xác nhận nến, mức tham chiếu trigger/close, và điều kiện LIMIT.
+
 ## FIX Windows — OCC đảo chiều cả vị thế đã Resume (12/11/2026)
 
 - **Đảo chiều OCC ON thực sự hoạt động với vị thế OCC cũ sau khi mở lại app.** Vị thế cũ phải có Entry Order ID, STOP close-all và các TP reduceOnly hợp lệ, được xác minh trên Binance khi người dùng bật AUTO. Cờ theo dõi vị thế cũ không còn chặn tín hiệu OCC ngược nếu bật đảo chiều; nếu OFF vẫn giữ nguyên đến SL/TP.
