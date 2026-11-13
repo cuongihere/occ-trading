@@ -474,6 +474,20 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
  .chartReadonly{display:none}
  #tradeCompareFrame{height:920px}
 }
+
+/* Compact, accessible history drawer keeps all history controls on the trade screen. */
+.historyDrawer{border:1px solid #31465f;border-radius:9px;background:#142337;min-width:0}
+.historyDrawerSummary{display:flex;align-items:center;gap:14px;flex-wrap:wrap;list-style:none;cursor:pointer;padding:9px 12px}
+.historyDrawerSummary::-webkit-details-marker{display:none}
+.historyDrawerSummary::marker{content:""}
+.historyDrawerSummary strong{font-size:12px;letter-spacing:.15px}
+.historyDrawerSummary>span{font-size:11px;color:#a2bcd3}
+.historyDrawerSummary .historyDrawerAction{margin-left:auto;color:#c0e0ff;font-size:10px}
+.historyDrawer[open] .historyDrawerSummary{border-bottom:1px solid #31465f}
+.historyDrawer[open] .historyDrawerAction{color:#87dab3}
+.historyDrawer>.below{padding:8px;gap:8px}
+.historyDrawer .tableScroll{height:auto;max-height:300px;overflow:auto}
+.historyDrawer #realCurve{height:175px}
 </style>
 </head>
 <body>
@@ -611,6 +625,11 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
   <div class="riskAlerts" id="riskAlerts" role="status"></div>
  </div>
 </section>
+<details class="historyDrawer" id="historyDrawer">
+ <summary class="historyDrawerSummary"><strong>HIỆU SUẤT OCC · LỊCH SỬ BINANCE</strong>
+  <span id="historyDrawerBrief">Đang đối soát lệnh và P&L…</span>
+  <span class="historyDrawerAction">Mở bảng chi tiết ▾</span>
+ </summary>
 <section class="below">
  <div class="panel" id="realStats">
   <div class="row" style="justify-content:space-between;margin-bottom:8px"><h2 style="margin:0">Hiệu suất OCC · thực tế</h2><span class="small" id="statsStatus">Chưa có dữ liệu</span></div>
@@ -649,6 +668,7 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
   </table></div>
  </div>
 </section>
+</details>
 <footer><span id="lastUpdate">Binance USDⓈ-M</span><span>Auto mặc định OFF khi mở app · P&L bot chưa gồm funding/phí ngoài USDT</span><span>Futures có rủi ro mất vốn</span></footer>
 </div>
 <script>
@@ -985,6 +1005,8 @@ async function refreshReport(){
   renderBinanceIncomeKpi();
   const s=data.summary||{};
   $('realNet').textContent=fmt(s.netExFundingUSDT,2);
+  $('historyDrawerBrief').textContent=(s.closed||0)+' lệnh đã đóng · '+
+   (s.open||0)+' nhóm chưa ghép · Net OCC '+fmt(s.netExFundingUSDT,2)+' USDT';
   color($('realNet'),s.netExFundingUSDT);
   $('realClosed').textContent=s.closed??0;
   $('realWl').textContent=(s.wins??0)+' / '+(s.losses??0)+' / '+(s.breakeven??0);
@@ -1074,6 +1096,9 @@ async function refreshReport(){
   }
  }catch(e){$('statsStatus').textContent='Lỗi báo cáo: '+e.message;}
 }
+$('historyDrawer').addEventListener('toggle',()=>{
+ if($('historyDrawer').open)refreshReport();
+});
 $('statsRefresh').onclick=async()=>{
  $('statsRefresh').disabled=true;
  $('historySyncStatus').textContent='Đang đồng bộ fill lịch sử OCC từ Binance…';
