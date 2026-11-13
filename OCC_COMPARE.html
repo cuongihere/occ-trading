@@ -81,6 +81,37 @@ html.embed.realonly .execPanel .legend{font-size:12px;padding-bottom:4px}
 html.embed.realonly .execPanel .foot{font-size:12px;padding-bottom:4px}
 @media(max-width:1100px){html.embed.realonly .execPanel canvas{height:360px}}
 @media(max-width:760px){html.embed.realonly .controls{padding:10px}.embed.realonly #lastSync{margin-left:0}.embed.realonly .execPanel canvas{height:330px}}
+
+/* Real-only chart fits its parent's allocated height; never scrolls the host. */
+html.embed.realonly,html.embed.realonly body{height:100%!important;overflow:hidden!important}
+html.embed.realonly main{height:100%!important;min-height:0!important;padding:0!important;
+ display:flex!important;flex-direction:column!important;overflow:hidden!important}
+html.embed.realonly .controls{flex:0 0 30px!important;min-height:30px!important;height:30px!important;
+ margin:0!important;padding:2px 8px!important;gap:5px!important;
+ border-bottom:1px solid #24435f!important;overflow:hidden!important}
+html.embed.realonly .controls label{font-size:10px!important;white-space:nowrap}
+html.embed.realonly .controls label:has(#showMA),
+html.embed.realonly .controls label:has(#showLevels){display:none!important}
+html.embed.realonly .controls select,html.embed.realonly .controls button{min-height:23px!important;
+ height:23px!important;font-size:10px!important;padding:2px 6px!important}
+html.embed.realonly #lastSync{font-size:10px!important;margin-left:auto;white-space:nowrap;
+ overflow:hidden;text-overflow:ellipsis;max-width:43%}
+html.embed.realonly #status{display:none!important}
+html.embed.realonly #status.error{display:block!important;position:absolute;z-index:7;
+ top:33px;left:10px;right:10px;font-size:11px!important;color:#ffd8b1;
+ background:#422e2b;padding:5px!important;border-radius:5px}
+html.embed.realonly .grid{flex:1 1 auto!important;min-height:0!important;height:auto!important;
+ display:flex!important;flex-direction:column!important;gap:0!important;overflow:hidden!important}
+html.embed.realonly .panel.execPanel{flex:1 1 auto;min-height:0!important;max-height:100%!important;
+ display:flex!important;flex-direction:column!important;overflow:hidden!important;
+ border:0!important;border-radius:0!important;padding:1px 4px 2px!important}
+html.embed.realonly .execPanel h2,html.embed.realonly .execPanel .subtitle,
+html.embed.realonly .execPanel .legend{display:none!important}
+html.embed.realonly .execPanel canvas{display:block!important;flex:1 1 auto!important;
+ height:0!important;min-height:0!important;width:100%!important;border:0!important;border-radius:0!important}
+html.embed.realonly #execHover{flex:0 0 17px!important;min-height:17px!important;height:17px!important;
+ font-size:10px!important;line-height:16px!important;overflow:hidden!important;
+ white-space:nowrap!important;text-overflow:ellipsis!important;margin:0!important;padding:0 7px!important}
 </style>
 </head>
 <body>
