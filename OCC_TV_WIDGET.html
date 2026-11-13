@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="vi">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TradingView BTCUSDT · reference only</title>
+<style>html,body{height:100%;margin:0;background:#081321;color:#bcd6eb;font-family:system-ui}
+.tradingview-widget-container{height:100%;width:100%}
+.tradingview-widget-container__widget{height:calc(100% - 28px);width:100%}
+.tradingview-widget-copyright{font-size:11px;text-align:right;padding:5px 8px}</style>
+</head>
+<body>
+<!-- This page runs in an iframe with a unique sandbox origin. The TradingView
+ widget cannot access OCC API keys, app DOM or any privileged parent context.
+ Third-party widgets cannot load the user's custom Pine strategy. -->
+<div class="tradingview-widget-container">
+ <div class="tradingview-widget-container__widget"></div>
+ <div class="tradingview-widget-copyright">
+  <a href="https://www.tradingview.com/symbols/BTCUSDT/" target="_blank" rel="noopener noreferrer">BTCUSDT chart by TradingView</a>
+ </div>
+ <script src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
+ {
+   "autosize": true,
+   "symbol": "BINANCE:BTCUSDT.P",
+   "interval": "15",
+   "timezone": "Asia/Ho_Chi_Minh",
+   "theme": "dark",
+   "style": "1",
+   "locale": "en",
+   "hide_top_toolbar": false,
+   "hide_legend": false,
+   "hide_volume": true,
+   "allow_symbol_change": false,
+   "support_host": "https://www.tradingview.com"
+ }
+ </script>
+</div>
+</body></html>
