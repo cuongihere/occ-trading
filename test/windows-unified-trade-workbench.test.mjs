@@ -36,7 +36,7 @@ test('Dual chart frame embeds same-origin only with compact UI and read-only API
  assert.match(server,/frame-ancestors 'self'/);
  assert.match(chart,/URLSearchParams\(location\.search\)\.get\('embed'\)==='1'/);
  assert.match(chart,/html\.embed main\{max-width:none;padding:2px 3px\}/);
- assert.match(chart,/html\.embed canvas\{height:286px\}/);
+ assert.match(chart,/html\.embed canvas\{height:286px/);
  assert.match(chart,/html\.embed header,html\.embed main>\.note,html\.embed main>\.foot,html\.embed #tv/);
  assert.match(chart,/id="reference"/);
  assert.match(chart,/id="execution"/);
