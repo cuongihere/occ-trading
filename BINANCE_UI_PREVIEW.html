@@ -415,6 +415,65 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
 .autoConfigControl{padding:4px 8px}
 @media(max-width:740px){.configPanel .configPrimary{grid-template-columns:repeat(4,minmax(0,1fr))}.configPanel .configTargets{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media(max-width:630px){.configPanel .configPrimary{grid-template-columns:repeat(2,minmax(0,1fr))}.configPanel .configTargets{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Single-screen Windows Futures workbench: chart becomes the dominant workspace. */
+.app{display:flex;flex-direction:column;max-width:1920px;height:auto;min-height:100dvh;gap:7px;padding:8px 12px 12px}
+.topbar{min-height:38px;gap:10px}.brand{font-size:18px}
+.topbar .controls{gap:7px}.topbar .controls .link{padding:7px 10px;font-size:11px}
+.kpis{gap:7px;min-height:62px}
+.kpi{padding:7px 10px;border-radius:9px}.kpi .label{font-size:10px}.kpi .value{font-size:21px;margin:2px 0}
+.kpi .detail{font-size:10px}
+.topgrid{grid-template-columns:minmax(320px,1.04fr) minmax(235px,.73fr) minmax(410px,1.48fr);gap:7px;align-items:start}
+.topgrid>.panel{padding:8px 10px;border-radius:9px}
+.topgrid>.panel h2{font-size:12px;margin-bottom:4px}
+.topgrid .apiPanel .credentials{margin-top:4px;padding:5px 7px}
+.topgrid .apiActions{margin-top:4px;gap:4px}
+.topgrid .apiActions button{padding:4px 6px;min-height:24px;font-size:10px}
+.topgrid .apiPanel #lastSync{margin-top:0}
+.topgrid .pricePanel{padding:0!important}
+.topgrid .pricePanel .marketTicker{min-height:106px;max-height:121px;margin:0;padding:6px 8px;gap:2px}
+.topgrid .pricePanel .quoteValue{font-size:clamp(30px,3vw,44px)}
+.topgrid .configPanel .autoConfigSummary{padding:8px 10px}
+.topgrid .configPanel .autoConfigHeading{font-size:12px}
+.topgrid .configPanel .autoConfigSnapshot{font-size:10px;line-height:1.25}
+.chartWorkbench{padding:7px 9px!important;border-radius:10px;overflow:hidden!important;min-height:0}
+.chartWorkbenchTop{display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:30px}
+.chartWorkbenchTitle{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.chartWorkbenchTitle strong{font-size:12px;letter-spacing:.2px}
+.chartWorkbenchTitle span{font-size:10px;color:#9dbad5}
+.chartWorkbenchActions{display:flex;align-items:center;gap:10px;white-space:nowrap}
+.chartReadonly{font-size:9px;color:#9ccbb5}
+.chartExpand{padding:5px 8px;background:#1d3550;border:1px solid #46607a;border-radius:6px;font-size:10px;text-decoration:none;color:#d1e7fb}
+#tradeCompareFrame{display:block;width:100%;height:520px;min-height:390px;border:0;background:#071320;border-radius:8px}
+.positionSection>.accountPanel{padding:8px 11px;border-radius:9px;row-gap:3px}
+.positionSection>.accountPanel>h2{font-size:13px;margin:0}
+.positionSection .positionGrid{padding:5px 0;gap:6px 10px}
+.positionSection .positionGrid strong{font-size:13px;margin-top:0}
+.positionSection .riskUpdated{font-size:9px}
+.positionSection .riskHeadline{font-size:11px}
+.positionSection .botState{font-size:10px}
+.positionSection .compactOutcomes{padding-top:5px}
+.positionSection .compactRow{min-height:82px;padding:7px 9px}
+.below{gap:7px}.below>.panel{border-radius:9px;padding:10px}
+@media(max-width:1380px){
+ .topgrid{grid-template-columns:minmax(270px,.95fr) minmax(210px,.75fr) minmax(360px,1.35fr)}
+ #tradeCompareFrame{height:545px}
+}
+@media(max-width:1100px){
+ .topgrid{grid-template-columns:minmax(0,1fr) minmax(0,.85fr)}
+ .topgrid>.configPanel{grid-column:1/-1}
+ .kpis{grid-template-columns:repeat(3,minmax(0,1fr))}
+ #tradeCompareFrame{height:700px}
+}
+@media(max-width:700px){
+ .app{padding:7px;gap:7px}
+ .topbar{flex-wrap:wrap}.topgrid{grid-template-columns:1fr}
+ .topgrid>.configPanel{grid-column:auto}
+ .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .chartWorkbenchTop{flex-wrap:wrap;gap:5px}
+ .chartReadonly{display:none}
+ #tradeCompareFrame{height:920px}
+}
 </style>
 </head>
 <body>
@@ -424,7 +483,7 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
  <div class="controls">
  <span id="connection" class="status">CHƯA KẾT NỐI</span>
  <label class="auto" id="autoWrap" style="flex-direction:row;color:#eff6ff;font-size:12px"><input id="enabled" type="checkbox" disabled><span id="autoLabel">AUTO OFF</span></label>
- <a href="/occ-compare" class="link">Chart so sánh</a><a href="/" class="link">Paper Trading</a></div>
+ <a href="#chartWorkbench" class="link">Đến chart OCC</a><a href="/" class="link">Paper Trading</a></div>
 </header>
 <section class="kpis">
  <div class="kpi"><div class="label">Ví Futures</div><div id="wallet" class="value">—</div><div class="detail">USDT · Wallet</div></div>
@@ -499,6 +558,18 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
   </details>
  </div>
 </section>
+<section class="chartWorkbench panel" id="chartWorkbench" aria-label="Biểu đồ OCC và giao dịch thực tế trong màn hình Futures">
+ <div class="chartWorkbenchTop">
+  <div class="chartWorkbenchTitle"><strong>OCC TRADING · CHART ĐỐI CHIẾU TRỰC TIẾP</strong>
+   <span>Hai chart cùng nến Binance M15 · Tín hiệu OCC vs Fill / SL / TP thực tế</span></div>
+  <div class="chartWorkbenchActions">
+   <span class="chartReadonly">CHỈ ĐỌC · KHÔNG ĐẶT LỆNH</span>
+   <a href="/occ-compare" class="chartExpand" target="_blank" rel="noopener noreferrer">Mở chart rộng</a>
+  </div>
+ </div>
+ <iframe id="tradeCompareFrame" title="Hai biểu đồ OCC tham chiếu và Binance khớp thực tế"
+  src="/occ-compare?embed=1" loading="eager" referrerpolicy="no-referrer"></iframe>
+</section>
 <section class="positionSection" aria-label="Vị thế BTCUSDT và quản lý chốt lời">
  <div class="panel accountPanel">
   <h2>Vị thế BTCUSDT & trạng thái bot</h2>
@@ -555,7 +626,7 @@ footer{display:flex;align-items:center;gap:15px;color:#8199b3;font-size:10px;ove
   <span id="realGross" hidden></span>
  </div>
  <div class="panel">
-  <div class="historyHead"><h2>Lịch sử lệnh OCC trên Binance</h2><div class="row"><a href="/occ-compare" class="minor" style="text-decoration:none">Xem chart lệnh thật</a><button class="minor" id="statsRefresh">Làm mới</button><button class="minor" id="statsCsv">Xuất CSV</button></div></div>
+  <div class="historyHead"><h2>Lịch sử lệnh OCC trên Binance</h2><div class="row"><a href="#chartWorkbench" class="minor" style="text-decoration:none">Xem chart phía trên</a><button class="minor" id="statsRefresh">Làm mới</button><button class="minor" id="statsCsv">Xuất CSV</button></div></div>
   <div class="small" id="realOpen" style="margin-bottom:5px"></div><div class="small" id="historySyncStatus" role="status"></div>
   <div class="small" id="incomeAuditSummary" role="status" style="margin:5px 0;line-height:1.45"></div>
   <div class="small" id="incomeReconcileSummary" role="status" style="margin:5px 0;line-height:1.45"></div>
