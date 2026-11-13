@@ -107,3 +107,21 @@ test('Windows routes use no API keys and render two comparison charts with isola
  assert.ok(inline);
  assert.doesNotThrow(()=>new Function(inline));
 });
+
+test('Live chart lines require Binance-verified OCC ownership and never send trades',()=>{
+ const server=readFileSync(new URL('./server.mjs',import.meta.url),'utf8');
+ const page=readFileSync(new URL('./OCC_COMPARE.html',import.meta.url),'utf8');
+ const section=server.slice(server.indexOf('async function readChartComparison(){'),
+  server.indexOf('const server=createServer',server.indexOf('async function readChartComparison(){')));
+ assert.match(section,/browserFutures\.positionAnalysis\(\)/);
+ assert.match(section,/current\.ownershipVerified===true/);
+ assert.match(section,/confirmed===true/);
+ assert.match(section,/BOT_ĐANG_QUẢN_LÝ/);
+ assert.match(section,/KHỚP_CHECKPOINT/);
+ assert.doesNotMatch(section,/\.post\(|\.del\(|manualMarketExit|emergencyClose/);
+ assert.match(page,/SL BINANCE/);
+ assert.match(page,/ENTRY BINANCE/);
+ assert.match(page,/state\.livePosition\?\.verified/);
+ const inline=page.match(/<script>([\s\S]*?)<\/script>/)?.[1];
+ assert.ok(inline);assert.doesNotThrow(()=>new Function(inline));
+});

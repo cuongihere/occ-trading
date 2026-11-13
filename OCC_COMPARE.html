@@ -58,9 +58,9 @@ iframe{width:100%;height:475px;border:1px solid #24405a;border-radius:8px;backgr
 <div id="refHover" class="foot">Trỏ chuột lên nến để xem giá và thời điểm.</div>
 </section>
 <section class="panel"><h2>2. Binance thực tế · fill của bot OCC</h2>
-<div class="subtitle">ENTRY, SL, TP1–3, CLOSE, REVERSE: giá & thời gian khớp thực từ Binance</div>
+<div class="subtitle">ENTRY/EXIT đã FILLED + đường giá SL/TP hiện còn mở, chỉ khi Binance xác minh OCC Algo ID.</div>
 <canvas id="execution"></canvas>
-<div class="legend"><span class="good">▲ BUY fill</span><span class="bad">▼ SELL fill</span><span>● TP / SL và lệnh đảo chiều theo Order ID</span></div>
+<div class="legend"><span class="good">▲ BUY fill</span><span class="bad">▼ SELL fill</span><span style="color:#8deca9">━ TP Binance đang mở</span><span style="color:#ff7280">━ SL Binance đang mở</span></div>
 <div id="execHover" class="foot">Chỉ hiển thị lệnh đã ghép Order ID thuộc OCC; lệnh chưa ghép không được nhận làm lệnh bot.</div>
 </section>
 </div>
@@ -107,9 +107,14 @@ function draw(canvas,kind){
  if($('showMA').checked)for(const v of visible)prices.push(v.openMA,v.closeMA);
  const fills=state.fills.filter(f=>f.time>=first&&f.time<last+M15);
  const crosses=state.signals.filter(x=>x.time>=first&&x.time<=last);
+ const live=state.livePosition?.verified?state.livePosition:null;
  // Both canvases MUST use the same price scale; otherwise visual
  // separation would misleadingly exaggerate or conceal execution slippage.
  for(const f of fills)prices.push(f.price);
+ if(live){
+  if(live.entryPrice>0)prices.push(live.entryPrice);
+  for(const level of live.levels||[])if(level.price>0)prices.push(level.price);
+ }
  const pad=(Math.max(...prices)-Math.min(...prices))*.075||100;
  const hi=Math.max(...prices)+pad,lo=Math.min(...prices)-pad;
  const y=p=>bottom-(p-lo)/(hi-lo)*(bottom-top);
@@ -157,6 +162,18 @@ function draw(canvas,kind){
    }
   }
  }else{
+  if(live){
+   const liveLevels=[{role:'ENTRY BINANCE',price:live.entryPrice},
+    ...(live.levels||[]).map(x=>({role:x.role==='SL'?'SL BINANCE':x.role+' BINANCE',price:x.price}))];
+   for(const level of liveLevels){
+    if(!(level.price>0))continue;
+    const yy=y(level.price),sl=level.role.startsWith('SL'),entry=level.role.startsWith('ENTRY');
+    const col=sl?'#fc6975':entry?'#5fbbff':'#b0eb77';
+    ctx.globalAlpha=.85;line(ctx,[[left,yy],[right,yy]],col,1.3);ctx.globalAlpha=1;
+    ctx.fillStyle=col;ctx.font='bold 10px system-ui';
+    ctx.fillText(level.role+' '+format(level.price,1),right-145,yy-8);
+   }
+  }
   for(const f of fills){
    const xx=x(Math.floor(f.time/M15)*M15),yy=y(f.price);
    const buy=f.side==='BUY';
@@ -217,7 +234,9 @@ async function refresh(){
   $('lastSync').textContent='Đồng bộ '+vn(data.asOf);
   $('status').textContent='Đã nạp '+data.candles.length+' nến M15 · '+
    data.signals.length+' giao cắt · '+data.fills.length+' fill đã xác minh · '+
-   data.comparisons.length+' hàng đối chiếu.';
+   data.comparisons.length+' hàng đối chiếu.'+
+   (data.livePosition?.verified?' · SL/TP đang mở đã đối soát Binance.':'')+
+   (data.liveReadbackError?' · '+data.liveReadbackError:'');
  }catch(e){$('status').textContent='Không đồng bộ được chart: '+e.message+
    ' · Kiểm tra kết nối Binance hoặc nhấn Đồng bộ chart.';}
  finally{$('reload').disabled=false;}

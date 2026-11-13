@@ -122,9 +122,34 @@ async function getComparisonCandles(){
 }
 async function readChartComparison(){
  const {h4,m15}=await getComparisonCandles();
- return buildOCCChartComparison({h4,m15,
+ const model=buildOCCChartComparison({h4,m15,
   fills:readVerifiedChartFills(resolve(dir,'binance-live-stats.sqlite')),
   settings:browserFutures.config,now:Date.now()});
+ // A second independent, exchange-signed read-only source gives the current
+ // real STOP and TP levels. Never plot guessed SL/TP from the saved config
+ // as though they were Binance live orders.
+ let livePosition=null,liveReadbackError=null;
+ if(browserFutures.api&&!browserFutures.busy){
+  try{
+   const current=await browserFutures.positionAnalysis();
+   if(current.status==='open'){
+    const owned=current.ownershipVerified===true;
+    livePosition={verified:owned,fetchedAt:current.fetchedAt,
+     side:current.position?.side||null,
+     quantityBTC:current.position?.quantityBTC||null,
+     entryPrice:owned?current.position?.entryPrice:null,
+     levels:owned?(current.levels||[]).filter(x=>x.confirmed===true&&
+      ['BOT_ĐANG_QUẢN_LÝ','KHỚP_CHECKPOINT'].includes(x.origin)&&
+      Number.isFinite(Number(x.price))&&Number(x.price)>0).map(x=>({
+       role:/-(SL|TP[123])$/.exec(String(x.clientId||''))?.[1]||x.role,
+       price:x.price,quantityBTC:x.quantityBTC,
+       algoId:x.id,status:x.status,origin:x.origin})):[]
+    };
+    if(!owned)liveReadbackError='Vị thế Binance chưa đối chiếu đủ OCC Algo ID; không vẽ SL/TP chưa xác minh.';
+   }
+  }catch(e){liveReadbackError='Không đọc được SL/TP hiện tại: '+e.message;}
+ }
+ return {...model,livePosition,liveReadbackError};
 }
 const server=createServer(async(req,res)=>{
  const host=req.headers.host||'';if(![`127.0.0.1:${port}`,`localhost:${port}`].includes(host)){res.writeHead(403);return res.end('Local host required');}
