@@ -1,3 +1,12 @@
+## Windows · Màn hình giao dịch hợp nhất (13/11/2026)
+
+- **Chart OCC/Binance nằm trực tiếp trong trang Futures** `http://127.0.0.1:8080/binance`, không cần chuyển sang màn hình so sánh riêng. Hai chart được nhúng cùng nguồn nến M15 và API so sánh chỉ đọc, hiển thị trong một khung chính ở ngay dưới KPI, giá BTC, API và cấu hình Auto.
+- Bố trí mới: thanh KPI gọn → ba nhóm API / BTC LAST / cấu hình Auto → **hai chart OCC và Binance thực tế** → bảng vị thế & lệnh SL/TP → mục **Hiệu suất và lịch sử Binance** mở rộng khi cần. Không xóa nội dung hoặc nút giao dịch, chỉ thay vị trí / mật độ.
+- Bảng sai lệch cơ bản ở dưới chart vẫn có thể cuộn để xem; phần lịch sử lớn đóng mặc định nhằm dành chiều cao cho chart. Mở mục **Hiệu suất OCC · Lịch sử Binance** để xem biểu đồ P&L, lệnh còn thiếu và xuất CSV.
+- Nút **Mở chart rộng** vẫn cho phép hiển thị trang so sánh độc lập nếu cần không gian phân tích. Bản nhúng `/occ-compare?embed=1` ẩn logo/trợ giúp lặp và thu nhỏ các chart cho một trang giao dịch.
+- **An toàn:** không thay đổi code chiến lược, ENTRY, đảo lệnh, STOP/TP, API key, checkpoint hoặc file dữ liệu. Cả hai chart chỉ đọc; widget TradingView tham khảo không tải trong bản nhúng nên không phát sinh kết nối bên thứ ba trong màn hình trade.
+- Khi nâng cấp Windows Portable, phải giữ nguyên thư mục `data/` cũ để bảo toàn lịch sử, cấu hình và các checkpoint Binance Futures.
+
 ## Chart so sánh OCC và Binance (Windows PC · 13/11/2026)
 
 - Từ trang **OCC / BTCUSDT Futures** nhấn **Chart so sánh** hoặc từ lịch sử chọn **Xem chart lệnh thật**. App mở `/occ-compare` với **hai biểu đồ cùng nến BTCUSDT Perpetual M15**:
