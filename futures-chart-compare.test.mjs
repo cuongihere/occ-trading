@@ -97,7 +97,7 @@ test('Windows routes use no API keys and render two comparison charts with isola
  assert.match(files.page,/id="execution"/);
  assert.match(files.page,/id="rows"/);
  assert.match(files.page,/id="tvFrame"[^>]+sandbox="allow-scripts allow-popups allow-forms"/);
- assert.match(files.page,/NEAREST_PRECEDING_SIGNAL_NOT_PROVEN/);
+ assert.match(files.page,/NO_MATCHING_SIGNAL/);
  assert.match(files.widget,/embed-widget-advanced-chart\.js/);
  assert.match(files.main,/href="\/occ-compare"/);
  assert.match(files.portable,/'futures-chart-compare\.mjs'/);
