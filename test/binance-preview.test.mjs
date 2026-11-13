@@ -186,7 +186,7 @@ test('App safely clears only OCC checkpoint orphaned SL TP after FLAT and persis
  const html=read('BINANCE_UI_PREVIEW.html'),server=read('server.mjs'),
   svc=read('futures-browser-service.mjs'),build=read('BUILD_PORTABLE.ps1'),
   transport=read('futures-transport.mjs');
- assert.match(html,/Kiểm tra & dọn SL\/TP cũ/);
+ assert.match(html,/<button id="apiReconcile" class="minor">Kiểm tra OCC<\/button>/);
  assert.match(html,/id="historySyncStatus"/);
  assert.match(html,/request\('history-refresh'\)/);
  assert.match(server,/control\/live\/history-refresh/);
