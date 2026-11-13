@@ -690,6 +690,12 @@ body:has(#credentialEditor[open])::before{content:'';position:fixed;inset:0;z-in
 .historyDrawer[open]{position:fixed;z-index:1201;inset:3vh 2vw;overflow:auto;background:#12283d}
 .historyModalClose{margin-left:auto}
 }
+
+/* Modal close remains top-right above the settings form. */
+#autoConfigDetails[open]>.autoConfigBody>.configModalClose{
+ position:absolute!important;top:10px!important;right:11px!important;left:auto!important;
+ z-index:3200!important;width:30px;height:30px;padding:0!important;display:grid;place-items:center
+}
 </style>
 </head>
 <body>
