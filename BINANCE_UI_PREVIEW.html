@@ -548,28 +548,170 @@ input,select{border-radius:10px;min-height:38px;padding:0 12px;background:#091a2
 @media(max-width:1500px){.kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.topgrid{grid-template-columns:1fr 320px 1fr}#tradeCompareFrame{height:540px}}
 @media(max-width:1180px){.topgrid{grid-template-columns:1fr}.topgrid>.panel{min-height:auto}.pricePanel .quoteValue{font-size:46px}.positionSection>.accountPanel{grid-template-columns:1fr}.positionSection .compactOutcomes{grid-column:1;grid-row:auto}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}#tradeCompareFrame{height:640px}}
 @media(max-width:720px){.app{padding:10px}.kpis{grid-template-columns:1fr}.topbar{gap:10px}.controls{width:100%;flex-wrap:wrap}.chartWorkbenchTop{align-items:flex-start}.chartWorkbenchActions{width:100%;justify-content:space-between}#tradeCompareFrame{height:700px}.positionSection .compactRow{grid-template-columns:1fr;gap:6px;padding:12px 14px}.positionSection .manualTp{justify-self:start}}
+
+/* Compact desktop trading cockpit; preserve order and protection functions. */
+@media(min-width:1040px){
+html,body{height:100%;overflow:hidden!important}
+.app{height:100dvh!important;max-height:100dvh!important;min-height:0!important;overflow:hidden!important;
+ display:grid!important;grid-template-columns:minmax(0,1fr);
+ grid-template-rows:32px 46px 54px minmax(0,1fr) 140px!important;
+ gap:5px!important;padding:7px 9px!important;max-width:none!important}
+.app>.topbar{grid-row:1}.app>.kpis{grid-row:2}.app>.topgrid{grid-row:3}
+.app>.chartWorkbench{grid-row:4}.app>.positionSection{grid-row:5}
+.app>footer{display:none!important}
+.topbar{min-height:0!important;padding:0!important}
+.brand{font-size:15px!important}.topbar .small{display:none}
+.topbar .controls{gap:5px!important}
+.topbar .controls .link,.topbar .auto,.topbar .status{height:26px!important;min-height:26px!important;
+ border-radius:6px!important;padding:3px 8px!important;font-size:10px!important}
+.topbar .auto input{width:13px;height:13px}
+.kpis{grid-template-columns:repeat(6,minmax(0,1fr))!important;gap:5px!important;min-height:0!important}
+.kpi{height:46px!important;min-height:0!important;display:grid!important;grid-template-rows:12px 20px;
+ padding:5px 8px!important;border-radius:7px!important;align-content:space-between}
+.kpi .label{font-size:10px!important;white-space:nowrap!important;overflow:hidden;text-overflow:ellipsis}
+.kpi .value{font-size:18px!important;line-height:20px;margin:0!important}.kpi .detail{display:none!important}
+.topgrid{grid-template-columns:minmax(255px,1.1fr) 175px minmax(245px,.85fr)!important;
+ align-items:stretch!important;gap:5px!important}
+.topgrid>.panel{height:54px!important;min-height:0!important;max-height:54px!important;
+ align-self:stretch!important;border-radius:7px!important;padding:5px 8px!important}
+.apiPanel{display:grid!important;grid-template-columns:95px minmax(0,1fr);grid-template-rows:15px 25px;
+ gap:1px 5px;align-items:center}
+.apiPanel h2{grid-column:1;grid-row:1;font-size:11px!important;margin:0!important}
+.apiPanel>.row{grid-column:1;grid-row:2;margin:0!important;white-space:nowrap;overflow:hidden}
+.apiPanel #apiStatusText{font-size:9px}.apiPanel #savedInfo{display:none}
+.apiPanel .apiActions{grid-column:2;grid-row:1/span 2;display:grid!important;
+ grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:3px!important;margin:0!important}
+.apiPanel .apiActions button{min-width:0;min-height:25px!important;height:25px!important;
+ padding:2px 3px!important;font-size:10px!important;white-space:nowrap!important}
+.apiPanel #lastSync{display:none!important}
+.apiPanel #apiError{grid-column:1/-1;position:absolute;top:58px;left:0;z-index:5;
+ padding:2px 5px;background:#50302f;border-radius:5px;max-width:550px}
+.apiPanel #apiError:empty{display:none}
+.topgrid>.pricePanel{padding:0!important}
+.pricePanel .marketTicker{height:54px!important;min-height:0!important;max-height:54px!important;
+ margin:0!important;padding:2px 5px!important;gap:0!important;border-radius:7px}
+.pricePanel .quoteHeading{font-size:9px!important}.pricePanel .quoteValue{font-size:25px!important;line-height:26px!important}
+.pricePanel .quoteMeta{font-size:9px!important;line-height:11px}#btcPriceTime{display:none!important}
+.topgrid>.configPanel{padding:0!important;overflow:visible!important}
+.configPanel .autoConfigSummary{height:54px!important;min-height:0!important;padding:5px 8px!important;
+ display:grid;grid-template-columns:minmax(0,1fr) auto!important;
+ grid-template-rows:15px 27px!important;gap:1px 5px!important}
+.configPanel .autoConfigHeading{font-size:11px!important}.configPanel .configVersion{font-size:9px!important}
+.configPanel .autoConfigSnapshot{font-size:9px!important;line-height:12px!important;
+ grid-column:1!important;grid-row:2!important;display:-webkit-box;
+ -webkit-box-orient:vertical;-webkit-line-clamp:2;max-height:24px;overflow:hidden!important}
+.configPanel .autoConfigControl{grid-column:2!important;grid-row:1/span 2!important;
+ font-size:10px!important;padding:4px 6px!important;border-radius:6px;align-self:center!important}
+.chartWorkbench{display:flex!important;flex-direction:column;min-height:0!important;overflow:hidden!important;
+ border-radius:7px!important;padding:0!important}
+.chartWorkbenchTop{flex:0 0 28px!important;min-height:28px!important;max-height:28px!important;
+ padding:3px 9px!important}
+.chartWorkbenchTitle strong{font-size:12px!important}.chartWorkbenchTitle span{display:none!important}
+.chartWorkbenchActions .chartReadonly{font-size:9px!important}
+.chartWorkbenchActions .chartExpand{min-height:22px!important;padding:2px 7px!important;font-size:9px!important}
+#tradeCompareFrame{display:block!important;flex:1 1 auto!important;min-height:0!important;
+ width:100%!important;height:100%!important;border:0!important;border-radius:0!important}
+.positionSection{min-height:0!important;overflow:hidden!important}
+.positionSection>.accountPanel{display:grid!important;height:100%!important;overflow:hidden!important;
+ grid-template-columns:minmax(0,1fr) minmax(410px,1fr)!important;
+ grid-template-rows:18px 49px minmax(0,1fr)!important;gap:2px 8px!important;padding:5px 8px!important}
+.positionSection>.accountPanel>h2{grid-column:1!important;grid-row:1!important;font-size:11px!important;margin:0!important}
+.positionSection .riskHeadline{grid-column:1!important;grid-row:1!important;justify-self:end;
+ max-width:60%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:9px!important}
+.positionSection .riskUpdated,#entryTiming{display:none!important}
+.positionSection .positionGrid{grid-column:1!important;grid-row:2!important;
+ display:grid!important;grid-template-columns:repeat(6,minmax(0,1fr))!important;
+ padding:3px 0!important;gap:3px!important;border-top:1px solid #29405a}
+.positionSection .positionGrid .label{font-size:9px!important}
+.positionSection .positionGrid strong{font-size:12px!important;line-height:15px;margin-top:2px!important}
+.positionSection .riskSummary{display:none!important}
+.positionSection .botState{grid-column:1!important;grid-row:3!important;display:flex!important;
+ flex-wrap:wrap;align-items:start;gap:2px 9px!important;margin:0!important;
+ padding:4px 0 0!important;border-top:1px solid #29405a!important;font-size:10px!important}
+.positionSection .botState .small{display:none!important}
+.positionSection .compactOutcomes{grid-column:2!important;grid-row:1/-1!important;
+ display:flex!important;flex-direction:column;min-height:0!important;overflow:hidden!important;
+ padding:0 4px!important;margin:0!important;border-radius:7px!important}
+.positionSection .compactOutcomes[hidden]{display:none!important}
+.positionSection .compactHeading{padding:2px!important;min-height:20px}.positionSection .compactTitle{font-size:11px!important}
+.positionSection .compactRefresh{font-size:9px!important;min-height:20px!important;padding:2px 5px!important}
+.positionSection .compactSub,#repairProtectionStatus{display:none!important}
+.positionSection .compactRows{flex:1;display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;
+ gap:3px!important;margin:0!important;border:0!important;background:transparent!important}
+.positionSection .compactRow{min-height:0!important;display:flex!important;flex-direction:column;
+ align-items:start!important;justify-content:space-between!important;padding:3px 5px!important;
+ gap:1px!important;border:1px solid #2d455f!important;border-radius:5px!important}
+.positionSection .compactName{font-size:10px!important}.positionSection .compactName small{display:none!important}
+.positionSection .compactRow>span:nth-child(2){font-size:11px!important}
+.positionSection .compactRow>strong{font-size:10px!important}
+.positionSection .compactRow .manualTp{font-size:9px!important;min-height:18px!important;height:18px;
+ padding:1px 5px!important;align-self:start!important}
+.positionSection .compactNote{display:none!important}
+.positionSection .manualExitBar{flex:0 0 19px;padding:1px!important;margin:0!important;gap:3px!important;border:0!important}
+.positionSection .manualClose{min-height:19px!important;padding:1px 6px!important;font-size:9px!important}
+.positionSection #manualActionStatus{display:none!important}
+.positionSection #riskAlerts{grid-column:1/-1;max-height:16px;overflow:hidden;font-size:9px!important;color:#ffc787}
+.positionEmpty{display:flex;grid-column:2;grid-row:1/-1;justify-content:center;align-items:center;
+ border:1px dashed #32516e;border-radius:6px;font-size:11px;color:#9db4cb}
+.accountPanel:has(#positionAnalysis:not([hidden])) .positionEmpty{display:none!important}
+.historyDrawer:not([open]){display:none!important}
+.historyDrawer[open]{display:block!important;position:fixed;z-index:1201;inset:3vh 3vw;overflow:auto;
+ height:94vh;width:94vw;padding:0;border-radius:9px;background:#102134;box-shadow:0 25px 70px #000c}
+.historyDrawerSummary{position:sticky;top:0;z-index:2;background:#17314a!important;padding:9px 12px!important}
+.historyDrawer .historyDrawerAction{display:none!important}
+.historyModalClose{margin-left:auto!important;min-height:24px!important;padding:2px 8px!important;font-size:16px}
+.historyDrawer .below{display:grid!important;grid-template-columns:1fr 2fr;padding:8px!important;gap:8px}
+.historyDrawer .tableScroll{height:auto!important;max-height:260px;overflow:auto}
+.configPanel #autoConfigDetails[open]::before{display:none!important}
+.configPanel #autoConfigDetails[open]>.autoConfigBody{display:block!important;position:fixed!important;
+ z-index:1402!important;left:50%!important;top:50%!important;transform:translate(-50%,-50%)!important;
+ width:min(870px,94vw)!important;max-height:87dvh!important;overflow:auto!important;
+ padding:18px!important;background:#102438!important;border:1px solid #426383!important;
+ border-radius:10px!important;box-shadow:0 25px 75px #000c!important}
+#autoConfigDetails[open] .autoConfigSummary{z-index:auto!important}
+#autoConfigDetails[open] .configPrimary{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:8px!important;margin-top:22px}
+#autoConfigDetails[open] .configTargets{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:8px!important}
+#autoConfigDetails[open] .configPrimary>label,#autoConfigDetails[open] .configTargets>label{grid-column:auto!important}
+.apiPanel .credentials:not([open]){display:none!important}
+.apiPanel #credentialEditor[open]{display:block!important;position:fixed!important;z-index:1402!important;
+ left:50%;top:50%;transform:translate(-50%,-50%);width:min(560px,94vw);
+ max-height:80dvh;overflow:auto;margin:0!important;padding:16px!important;
+ border:1px solid #426383;border-radius:10px;background:#102438;box-shadow:0 25px 75px #000c}
+body:has(#historyDrawer[open])::before,body:has(#autoConfigDetails[open])::before,
+body:has(#credentialEditor[open])::before{content:'';position:fixed;inset:0;z-index:1200;
+ background:rgba(0,5,13,.8);backdrop-filter:blur(3px)}
+}
+@media(min-width:1040px) and (max-height:665px){
+.app{grid-template-rows:28px 42px 50px minmax(0,1fr) 123px!important;gap:4px!important}
+.kpi{height:42px!important}.topgrid>.panel,.pricePanel .marketTicker{height:50px!important}
+}
+@media(max-width:1039px){
+.historyDrawer:not([open]){display:none}
+.historyDrawer[open]{position:fixed;z-index:1201;inset:3vh 2vw;overflow:auto;background:#12283d}
+.historyModalClose{margin-left:auto}
+}
 </style>
 </head>
 <body>
 <div class="app">
 <header class="topbar">
- <div><div class="brand">OCC <span style="color:#b0ecbd">/</span> BTCUSDT Futures</div><div class="small">Binance thật · USDⓈ-M Perpetual</div></div>
+ <div><div class="brand">OCC / BTCUSDT</div><div class="small">Futures · Binance</div></div>
  <div class="controls">
  <span id="connection" class="status">CHƯA KẾT NỐI</span>
  <label class="auto" id="autoWrap" style="flex-direction:row;color:#eff6ff;font-size:12px"><input id="enabled" type="checkbox" disabled><span id="autoLabel">AUTO OFF</span></label>
- <button class="link" type="button" id="openConfigBtn">Cài đặt Auto</button><a href="#chartWorkbench" class="link">Biểu đồ</a><a href="/" class="link">Paper Trading</a></div>
+ <button class="link" type="button" id="openConfigBtn">Cài đặt</button><button class="link" type="button" id="openHistoryBtn">Lịch sử</button><a href="/" class="link">Paper</a></div>
 </header>
 <section class="kpis">
- <div class="kpi"><div class="label">Ví Futures</div><div id="wallet" class="value">—</div><div class="detail">USDT · Wallet</div></div>
+ <div class="kpi"><div class="label">Ví</div><div id="wallet" class="value">—</div><div class="detail">USDT · Wallet</div></div>
  <div class="kpi"><div class="label">Khả dụng</div><div id="available" class="value">—</div><div class="detail">USDT · Available</div></div>
- <div class="kpi"><div class="label">Tài sản Equity</div><div id="equity" class="value">—</div><div class="detail">USDT · Margin balance</div></div>
- <div class="kpi"><div class="label">P&L chưa chốt</div><div id="unrealized" class="value">—</div><div class="detail">USDT · Futures</div></div>
- <div class="kpi"><div class="label">Vị thế BTC</div><div id="btcPosition" class="value">—</div><div class="detail">BTCUSDT · +Long / −Short</div></div>
+ <div class="kpi"><div class="label">Equity</div><div id="equity" class="value">—</div><div class="detail">USDT · Margin balance</div></div>
+ <div class="kpi"><div class="label">PnL mở</div><div id="unrealized" class="value">—</div><div class="detail">USDT · Futures</div></div>
+ <div class="kpi"><div class="label">BTC</div><div id="btcPosition" class="value">—</div><div class="detail">BTCUSDT · +Long / −Short</div></div>
  <div class="kpi" title="Binance Income BTCUSDT toàn tài khoản · Realized P&L + phí + funding, không gồm lãi/lỗ chưa chốt. Chỉ hiển thị tổng 30 ngày sau khi quét đủ dữ liệu."><div class="label" id="binanceIncomeTitle">P&L Binance BTC · 30 ngày</div><div id="binanceIncomeTotal" class="value">—</div><div id="incomeKpiDetail" class="detail">Đang đối soát Binance Income 30 ngày</div></div>
 </section>
 <section class="topgrid">
  <div class="panel apiPanel">
-  <h2>API Binance</h2>
+  <h2>Binance</h2>
   <div class="row"><span id="apiStatusText">Chưa kết nối</span><span class="small" id="savedInfo"></span></div>
   <details id="credentialEditor" class="credentials">
    <summary id="credentialSummary">Nhập / thay API Key</summary>
@@ -578,15 +720,14 @@ input,select{border-radius:10px;min-height:38px;padding:0 12px;background:#091a2
    <label class="savebox" style="flex-direction:row"><input id="rememberApi" type="checkbox" checked>Lưu API mã hóa trên Windows</label>
    <button class="primary" id="apiConnect">Kết nối & lưu API</button>
   </details>
-  <div class="apiActions"><button id="apiDisconnect">Ngắt kết nối</button><button id="apiForget" class="minor">Xóa API đã lưu</button>
-  <button id="apiReconcile" class="minor">Kiểm tra OCC</button></div>
+  <div class="apiActions"><button id="openApiBtn" type="button" class="minor">API</button><button id="apiDisconnect">Ngắt</button><button id="apiForget" class="minor" title="Xóa API đã lưu">Xóa</button><button id="apiReconcile" class="minor">Kiểm tra</button></div>
   <div id="apiError" class="message" role="status"></div>
   <div class="small" id="lastSync">Dữ liệu tài khoản sẽ tự cập nhật.</div>
  
  </div>
  <div class="panel pricePanel" aria-label="Giá BTCUSDT Futures trực tiếp">
  <div class="marketTicker stale" id="btcMarketTicker" aria-live="off" title="Giá khớp gần nhất BTCUSDT Perpetual từ Binance Futures, không phải giá Paper">
-  <div class="quoteHeading">BTCUSDT FUTURES · LAST</div>
+  <div class="quoteHeading">BTCUSDT · LAST</div>
   <div id="btcLastPrice" class="quoteValue">—</div>
   <div class="quoteMeta"><span id="btcLastState" class="quoteState">ĐANG KẾT NỐI</span> · Mark <span id="btcMarketMark">—</span></div>
   <div class="quoteMeta" id="btcPriceTime">Chưa nhận được giao dịch trực tiếp</div>
@@ -595,7 +736,7 @@ input,select{border-radius:10px;min-height:38px;padding:0 12px;background:#091a2
  <div class="panel configPanel">
   <details id="autoConfigDetails" class="autoConfigDetails">
    <summary class="autoConfigSummary">
-    <span class="autoConfigHeading">Cấu hình Auto <span class="configVersion">Multi TP v5</span></span>
+    <span class="autoConfigHeading">Auto <span class="configVersion">TP v5</span></span>
     <span id="autoConfigSnapshot" class="autoConfigSnapshot">Đang đọc cấu hình...</span>
     <span class="autoConfigControl">Chỉnh sửa</span>
    </summary>
@@ -634,10 +775,9 @@ input,select{border-radius:10px;min-height:38px;padding:0 12px;background:#091a2
 </section>
 <section class="chartWorkbench panel" id="chartWorkbench" aria-label="Biểu đồ BTCUSDT và lệnh OCC thực tế trên Binance">
  <div class="chartWorkbenchTop">
-  <div class="chartWorkbenchTitle"><strong>Biểu đồ BTCUSDT · Lệnh OCC thực tế trên Binance</strong>
-   <span>Chỉ giữ 1 biểu đồ nến thực tế và các lệnh OCC đã vào trên Binance</span></div>
+  <div class="chartWorkbenchTitle"><strong>BTCUSDT · Lệnh OCC</strong></div>
   <div class="chartWorkbenchActions">
-   <span class="chartReadonly">CHỈ ĐỌC · KHÔNG ĐẶT LỆNH</span>
+   <span class="chartReadonly">LIVE · CHỈ ĐỌC</span>
    <a href="/occ-compare?view=real" class="chartExpand" target="_blank" rel="noopener noreferrer">Mở rộng</a>
   </div>
  </div>
@@ -646,7 +786,7 @@ input,select{border-radius:10px;min-height:38px;padding:0 12px;background:#091a2
 </section>
 <section class="positionSection" aria-label="Vị thế BTCUSDT và quản lý chốt lời">
  <div class="panel accountPanel">
-  <h2>Vị thế BTCUSDT & trạng thái bot</h2>
+  <h2>Vị thế · Bot</h2>
   <div class="riskHeadline" id="riskHeadline">Đang đọc vị thế từ Binance…</div>
   <div class="riskUpdated" id="riskUpdated">Dữ liệu vị thế sẽ cập nhật tự động</div>
   <div class="riskUpdated" id="entryTiming" role="status">Độ trễ Entry: chưa có tín hiệu mới</div>
@@ -667,7 +807,7 @@ input,select{border-radius:10px;min-height:38px;padding:0 12px;background:#091a2
    <div class="small" id="autoHint">Bật Auto mới cho phép mở lệnh.</div>
   </div>
   <div class="compactOutcomes" id="positionAnalysis" aria-label="Lệnh SL TP đang mở thực tế trên Binance" hidden>
-   <div class="compactHeading"><div class="compactTitle">SL / TP đang mở trên Binance</div><div class="row" style="gap:6px;flex-wrap:wrap">
+   <div class="compactHeading"><div class="compactTitle">SL / TP</div><div class="row" style="gap:6px;flex-wrap:wrap">
  <button id="repairProtection" type="button" class="minor" hidden>Khôi phục SL/TP</button>
  <button type="button" class="minor compactRefresh" id="slTpRefresh" title="Chỉ đọc lại lệnh và vị thế từ Binance, không đặt hoặc hủy lệnh">Đồng bộ Binance</button></div></div>
  <div class="small" id="repairProtectionStatus" role="status"></div>
@@ -682,11 +822,11 @@ input,select{border-radius:10px;min-height:38px;padding:0 12px;background:#091a2
    <div class="compactNote" id="compactUnverified" hidden></div>
    <div class="manualExitBar"><button type="button" id="manualCloseAll" class="manualClose" disabled>Đóng toàn bộ MARKET</button><span class="small" id="manualActionStatus" role="status">Chỉ bật khi có vị thế OCC đã xác minh trên Binance.</span></div>
   </div>
-  <div class="riskAlerts" id="riskAlerts" role="status"></div>
+  <div class="positionEmpty" id="emptyOrders">Không có SL/TP đang mở</div><div class="riskAlerts" id="riskAlerts" role="status"></div>
  </div>
 </section>
 <details class="historyDrawer" id="historyDrawer">
- <summary class="historyDrawerSummary"><strong>HIỆU SUẤT OCC · LỊCH SỬ BINANCE</strong>
+ <summary class="historyDrawerSummary"><strong>Hiệu suất · Lịch sử</strong><button type="button" id="closeHistoryBtn" class="historyModalClose" aria-label="Đóng lịch sử">×</button>
   <span id="historyDrawerBrief">Đang đối soát lệnh và P&L…</span>
   <span class="historyDrawerAction">Mở bảng chi tiết ▾</span>
  </summary>
@@ -884,7 +1024,7 @@ $('applyLeverage').onclick=async()=>{
  }catch(e){$('apiError').textContent='Chưa đồng bộ đòn bẩy: '+e.message;}
  finally{await refreshLive();}
 };
-$('credentialEditor').open=true;
+$('credentialEditor').open=false;
 $('apiConnect').onclick=async()=>{
  const key=$('apiKey').value.trim(),secret=$('apiSecret').value.trim(),remember=$('rememberApi').checked;
  $('apiConnect').disabled=true;
@@ -1419,5 +1559,18 @@ $('openConfigBtn')?.addEventListener('click',()=>{$('autoConfigDetails').open=tr
 $('closeConfigBtn')?.addEventListener('click',()=>{$('autoConfigDetails').open=false;});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){$('autoConfigDetails').open=false;}});
 $('autoConfigDetails')?.addEventListener('click',e=>{const body=e.target.closest('.autoConfigBody');const summary=e.target.closest('.autoConfigSummary');if(e.target===e.currentTarget&&!body&&!summary)e.currentTarget.open=false;});
+
+$('openHistoryBtn')?.addEventListener('click',()=>{$('historyDrawer').open=true;});
+$('closeHistoryBtn')?.addEventListener('click',e=>{
+ e.preventDefault();e.stopPropagation();$('historyDrawer').open=false;
+});
+$('openApiBtn')?.addEventListener('click',()=>{$('credentialEditor').open=true;});
+document.addEventListener('keydown',e=>{
+ if(e.key==='Escape'){
+  $('historyDrawer').open=false;
+  $('credentialEditor').open=false;
+  $('autoConfigDetails').open=false;
+ }
+});
 </script>
 </body></html>
