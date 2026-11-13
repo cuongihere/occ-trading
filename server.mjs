@@ -8,6 +8,7 @@ import {summarize} from './stats.mjs';
 import {BinanceFeed} from './server-feed.mjs';
 import {BtcMarketQuote} from './btc-market-quote.mjs';
 import {readLiveReport} from './binance-live-stats.mjs';
+import {buildOCCChartComparison,readVerifiedChartFills} from './futures-chart-compare.mjs';
 import {BrowserFutures} from './futures-browser-service.mjs';
 const args=new Set(process.argv.slice(2));
 if(args.has('--help')){console.log('node server.mjs [--simulate]\nPaper default: collection only; --simulate enables paper. Binance Futures API and Auto have separate controls at localhost:8080/binance. DATA_DIR and PORT optional.');process.exit(0);}
@@ -95,6 +96,36 @@ if(previousEvent){
 commit('process_start',{simulate,pid:process.pid,version:2,initialState:engine.serialize()},null,bootTime);
 const html=readFileSync(new URL('./dashboard.html',import.meta.url),'utf8');
 const binancePreviewHtml=readFileSync(new URL('./BINANCE_UI_PREVIEW.html',import.meta.url),'utf8');
+const comparisonHtml=readFileSync(new URL('./OCC_COMPARE.html',import.meta.url),'utf8');
+const tradingViewReferenceHtml=readFileSync(new URL('./OCC_TV_WIDGET.html',import.meta.url),'utf8');
+let compareCandleCache=null,compareCandleTask=null;
+async function getComparisonCandles(){
+ const now=Date.now();
+ if(compareCandleCache&&compareCandleCache.expiresAt>now)return compareCandleCache;
+ if(compareCandleTask)return compareCandleTask;
+ compareCandleTask=(async()=>{
+  const get=async interval=>{
+   const url='https://fapi.binance.com/fapi/v1/klines?symbol=BTCUSDT&interval='+
+    encodeURIComponent(interval)+'&limit='+(interval==='4h'?500:1000);
+   const response=await fetch(url,{signal:AbortSignal.timeout(12000),cache:'no-store'});
+   if(!response.ok)throw Error('Binance candles HTTP '+response.status+' ('+interval+')');
+   const data=await response.json();
+   if(!Array.isArray(data)||data.length<50)throw Error('Binance '+interval+' candles incomplete');
+   return data;
+  };
+  const [h4,m15]=await Promise.all([get('4h'),get('15m')]);
+  compareCandleCache={h4,m15,expiresAt:Date.now()+45000};
+  return compareCandleCache;
+ })();
+ try{return await compareCandleTask;}
+ finally{compareCandleTask=null;}
+}
+async function readChartComparison(){
+ const {h4,m15}=await getComparisonCandles();
+ return buildOCCChartComparison({h4,m15,
+  fills:readVerifiedChartFills(resolve(dir,'binance-live-stats.sqlite')),
+  settings:browserFutures.config,now:Date.now()});
+}
 const server=createServer(async(req,res)=>{
  const host=req.headers.host||'';if(![`127.0.0.1:${port}`,`localhost:${port}`].includes(host)){res.writeHead(403);return res.end('Local host required');}
  if(req.method==='POST'&&req.url.startsWith('/control/')){
@@ -160,6 +191,25 @@ const server=createServer(async(req,res)=>{
  res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');
  if(req.url==='/'){res.setHeader('Content-Type','text/html;charset=utf-8');return res.end(html);}
  if(req.url==='/binance'){res.setHeader('Content-Type','text/html;charset=utf-8');res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'");return res.end(binancePreviewHtml);}
+ if(req.url==='/occ-compare'){
+  res.setHeader('Content-Type','text/html;charset=utf-8');
+  res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; frame-src 'self'; object-src 'none'");
+  return res.end(comparisonHtml);
+ }
+ if(req.url==='/occ-tradingview-widget'){
+  res.setHeader('Content-Type','text/html;charset=utf-8');
+  // Load the official widget only inside a sandboxed, opaque-origin iframe.
+  // No access to parent DOM or OCC trade APIs/credentials.
+  res.setHeader('Content-Security-Policy',
+   "default-src 'none'; script-src https://s3.tradingview.com; style-src 'unsafe-inline'; "+
+   "img-src https: data:; font-src https: data:; frame-src https:; connect-src https: wss:; object-src 'none'");
+  return res.end(tradingViewReferenceHtml);
+ }
+ if(req.url==='/api/binance/occ-chart-compare'){
+  res.setHeader('Content-Type','application/json;charset=utf-8');
+  try{return res.end(JSON.stringify(await readChartComparison()));}
+  catch(e){res.writeHead(503);return res.end(JSON.stringify({error:'Chart chỉ đọc: '+e.message}));}
+ }
  if(req.url==='/api/binance/market'){res.setHeader('Content-Type','application/json;charset=utf-8');return res.end(JSON.stringify(btcMarketQuote.snapshot({healthy:feed.healthy(),state:feed.state})));}
 if(req.url==='/api/binance/live-status'){res.setHeader('Content-Type','application/json;charset=utf-8');return res.end(JSON.stringify({...browserFutures.snapshot(),marketHealthy:feed.healthy(),marketState:feed.state}));}
  if(req.url==='/api/binance/protection-repair-preview'){

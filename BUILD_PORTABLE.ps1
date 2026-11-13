@@ -12,8 +12,8 @@ $files = @(
     'START_WINDOWS.bat','BOOTSTRAP_RUNTIME.ps1',
     'CHECK_BINANCE_WINDOWS.bat','CHECK_BINANCE.ps1','CHECK_BINANCE.mjs','binance-account.mjs','binance-live-stats.mjs','futures-live-history.mjs','BINANCE_API_SETUP.md',
     'futures-transport.mjs','futures-sizing.mjs','futures-order-plan.mjs','futures-lifecycle.mjs','futures-protection-plan.mjs','futures-protection-orchestrator.mjs','futures-protection-checkpoint.mjs','futures-browser-service.mjs','futures-limit-entry.mjs','futures-protection-repair.mjs','futures-credential-vault.mjs','futures-position-analysis.mjs','futures-compact-pnl.mjs','futures-manual-exit.mjs','FUTURES_EXECUTION_STATUS.md',
-    'server.mjs','server-feed.mjs','btc-market-quote.mjs','engine.mjs','store.mjs','stats.mjs',
-    'dashboard.html','BINANCE_UI_PREVIEW.html','package.json','README.md','README_VI.md',
+    'server.mjs','server-feed.mjs','btc-market-quote.mjs','futures-chart-compare.mjs','engine.mjs','store.mjs','stats.mjs',
+    'dashboard.html','BINANCE_UI_PREVIEW.html','OCC_COMPARE.html','OCC_TV_WIDGET.html','package.json','README.md','README_VI.md',
     'RUNTIME_SOURCE.txt','PORTABLE_BUILD.md'
 )
 foreach ($file in $files) {
