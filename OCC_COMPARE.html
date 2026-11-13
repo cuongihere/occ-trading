@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OCC | So sánh TradingView và Binance</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif}
+*{box-sizing:border-box}body{margin:0;background:#081321;color:#e6f1ff}
+header{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:16px 22px;background:#0c1829;border-bottom:1px solid #28405b}
+h1{font-size:20px;margin:0}h2{font-size:15px;margin:0 0 7px}h3{font-size:14px;margin:0 0 6px}
+small,.muted{color:#9eb6ce;font-size:12px}.tag{font-size:12px;color:#aee6c7}
+a{color:#86cbff}button,select{font:inherit;color:#e4eefb;border:1px solid #345674;border-radius:8px;padding:9px 12px;background:#162b44;cursor:pointer}
+button:hover{background:#234361}button:disabled{opacity:.5;cursor:default}
+main{max-width:1860px;padding:18px 22px;margin:auto}
+.controls{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:13px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+.panel{background:#13243a;border:1px solid #29415c;border-radius:12px;padding:14px;min-width:0}
+.subtitle{min-height:30px;color:#a9bfd4;font-size:12px}
+canvas{display:block;width:100%;height:455px;border:1px solid #1e3650;border-radius:8px;background:#07121f;cursor:crosshair}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;margin-top:9px;color:#bbd0e3}
+.bold{font-weight:700}.badge{padding:3px 8px;border:1px solid #40617c;border-radius:99px;color:#c1e9ff;font-size:12px}
+.good{color:#79e5b7}.bad{color:#f88791}.note{line-height:1.6;font-size:13px;color:#b7cfe4;margin:11px 0}
+.tablewrap{overflow:auto;max-height:500px}table{border-collapse:collapse;width:100%;font-size:12px;white-space:nowrap}
+th,td{border-bottom:1px solid #2b415a;padding:9px;text-align:left}
+th{position:sticky;top:0;background:#162d47;color:#b9d2e9}
+tr:hover{background:#233a54}
+.status{font-size:13px;margin:0 0 10px;min-height:20px;color:#e8ca84}
+.foot{font-size:12px;line-height:1.65;color:#91abc4;margin-top:12px}
+details summary{cursor:pointer;color:#afd9ff;font-weight:600;margin-bottom:10px}
+iframe{width:100%;height:475px;border:1px solid #24405a;border-radius:8px;background:#101c2b}
+@media(max-width:1050px){.grid{grid-template-columns:1fr}canvas{height:400px}}
+</style>
+</head>
+<body>
+<header>
+<div><h1>OCC / BTCUSDT Futures · So sánh tín hiệu & lệnh thật</h1><small>M15 · SMMA8 H4 đang hình thành · nguồn nến Binance Futures</small></div>
+<div style="display:flex;align-items:center;gap:13px;flex-wrap:wrap">
+<a href="/binance">Quay lại OCC Trading</a>
+<a href="https://www.tradingview.com/chart/?symbol=BINANCE%3ABTCUSDT.P&interval=15" target="_blank" rel="noopener noreferrer">Mở Pine gốc trên TradingView</a>
+</div>
+</header>
+<main>
+<p class="note"><strong>Phân biệt nguồn dữ liệu:</strong> chart bên trái dựng lại OCC theo <strong>engine SMMA8 của app</strong>, không giả vờ chạy trực tiếp Pine của TradingView. Chart bên phải chỉ đánh dấu <strong>fill đã xác minh từ Binance và ghi vào OCC SQLite</strong>; không lấy giá đặt lệnh làm giá khớp. Mọi ghép cặp tín hiệu ↔ fill chỉ là <strong>đối chiếu theo thời gian</strong>, chưa chứng minh lệnh xuất phát từ tín hiệu nào.</p>
+<div class="controls">
+<label>Khoảng nến <select id="bars"><option value="192">2 ngày</option><option value="384">4 ngày</option><option value="576" selected>6 ngày</option><option value="960">10 ngày</option></select></label>
+<label><input type="checkbox" id="showMA" checked> Hiện đường OCC</label>
+<label><input type="checkbox" id="showLevels" checked> Mức tham chiếu SL/TP</label>
+<button id="reload">Đồng bộ chart</button>
+<span id="lastSync" class="tag">Chưa đồng bộ</span>
+</div>
+<p id="status" class="status">Đang tải dữ liệu nến và fill đã xác minh…</p>
+<div class="grid">
+<section class="panel"><h2>1. OCC tham chiếu · không phải Strategy Tester Pine</h2>
+<div class="subtitle">Giá nến xác nhận tín hiệu · mốc MA giao cắt · giá BTC kích hoạt OCC</div>
+<canvas id="reference"></canvas>
+<div class="legend"><span class="good">● Giao cắt LONG</span><span class="bad">● Giao cắt SHORT</span><span style="color:#f8bd4b">━ MA Open SMMA8</span><span style="color:#40d4ea">━ MA Close SMMA8</span></div>
+<div id="refHover" class="foot">Trỏ chuột lên nến để xem giá và thời điểm.</div>
+</section>
+<section class="panel"><h2>2. Binance thực tế · fill của bot OCC</h2>
+<div class="subtitle">ENTRY, SL, TP1–3, CLOSE, REVERSE: giá & thời gian khớp thực từ Binance</div>
+<canvas id="execution"></canvas>
+<div class="legend"><span class="good">▲ BUY fill</span><span class="bad">▼ SELL fill</span><span>● TP / SL và lệnh đảo chiều theo Order ID</span></div>
+<div id="execHover" class="foot">Chỉ hiển thị lệnh đã ghép Order ID thuộc OCC; lệnh chưa ghép không được nhận làm lệnh bot.</div>
+</section>
+</div>
+<section class="panel" style="margin-top:14px">
+<h2>3. Bảng sai lệch giá & thời gian</h2>
+<div class="subtitle">Giá tham chiếu: ENTRY = close nến OCC; SL/TP = các mức % tính từ close nến OCC. Không dùng giá MA làm giá BTC. Lệnh LIMIT có thể khớp muộn.</div>
+<div class="tablewrap"><table>
+<thead><tr><th>Binance fill (VN)</th><th>Role</th><th>Chiều vị thế</th><th>BTC</th><th>Giá tham chiếu</th><th>Giá khớp</th><th>Sai lệch USDT</th><th>Sai lệch %</th><th>Chậm sau OCC</th><th>Entry Order group</th><th>Tình trạng ghép</th></tr></thead>
+<tbody id="rows"><tr><td colspan="11">Chưa có dữ liệu</td></tr></tbody>
+</table></div>
+</section>
+<details class="panel" style="margin-top:14px" id="tv">
+<summary>TradingView chart chính thức (tham khảo, không thể nhúng Pine Script tùy chỉnh)</summary>
+<p class="note">Widget TradingView do TradingView tự cung cấp, không chạy Pine R5.1 riêng của bro. Để xem đúng Pine gốc, dùng liên kết <strong>Mở Pine gốc trên TradingView</strong> ở phía trên và tải indicator/strategy trong tài khoản TradingView của bro.</p>
+<iframe id="tvFrame" title="TradingView BTCUSDT 15m" sandbox="allow-scripts allow-popups allow-forms" loading="lazy"></iframe>
+</details>
+<div class="foot">Tất cả API và dữ liệu lệnh trong trang so sánh đều là <strong>read-only</strong>. Không có nút mở, đóng hoặc hủy lệnh. Chỉ báo tham chiếu có thể khác Pine do cấu hình, feed, cơ chế khớp Strategy Tester hoặc quy tắc lookahead. Mọi số sai lệch hiển thị là số đo đối chiếu, không phải nguyên nhân chắc chắn.</div>
+</main>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const M15=900000,format=(x,n=1)=>x==null||!Number.isFinite(Number(x))?'—':Number(x).toLocaleString('en-US',{maximumFractionDigits:n});
+const vn=t=>new Date(t).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',hour12:false});
+let state=null;
+const colors={up:'#0bb785',down:'#f25a65',open:'#f2b749',close:'#30c7e5',grid:'#203449',text:'#9eb7cf'};
+function line(ctx,pts,color,width=1.5){
+ ctx.beginPath();ctx.strokeStyle=color;ctx.lineWidth=width;
+ let started=false;
+ for(const pt of pts){if(pt==null){started=false;continue;}if(!started){ctx.moveTo(pt[0],pt[1]);started=true;}else ctx.lineTo(pt[0],pt[1]);}
+ ctx.stroke();
+}
+function draw(canvas,kind){
+ if(!state)return;
+ const n=Number($('bars').value),bars=state.candles.slice(-n);
+ const W=Math.max(420,canvas.clientWidth||760),H=canvas.clientHeight||455,dpr=window.devicePixelRatio||1;
+ canvas.width=Math.ceil(W*dpr);canvas.height=Math.ceil(H*dpr);
+ const ctx=canvas.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);
+ ctx.clearRect(0,0,W,H);ctx.fillStyle='#07121f';ctx.fillRect(0,0,W,H);
+ if(!bars.length)return;
+ const left=12,right=W-74,top=24,bottom=H-36,usable=right-left;
+ const first=bars[0].time,last=bars[bars.length-1].time;
+ const visible=state.series.filter(x=>x.time>=first&&x.time<=last);
+ const prices=bars.flatMap(x=>[x.high,x.low]);
+ if($('showMA').checked)for(const v of visible)prices.push(v.openMA,v.closeMA);
+ const fills=state.fills.filter(f=>f.time>=first&&f.time<last+M15);
+ const crosses=state.signals.filter(x=>x.time>=first&&x.time<=last);
+ if(kind==='real')for(const f of fills)prices.push(f.price);
+ const pad=(Math.max(...prices)-Math.min(...prices))*.075||100;
+ const hi=Math.max(...prices)+pad,lo=Math.min(...prices)-pad;
+ const y=p=>bottom-(p-lo)/(hi-lo)*(bottom-top);
+ const x=t=>left+(t-first)/(Math.max(M15,last-first))*usable;
+ ctx.font='11px system-ui';ctx.textBaseline='middle';
+ for(let i=0;i<=6;i++){
+  const price=lo+(hi-lo)*i/6,yy=y(price);
+  line(ctx,[[left,yy],[right,yy]],colors.grid,1);
+  ctx.fillStyle=colors.text;ctx.fillText(format(price,0),right+7,yy);
+ }
+ for(let i=0;i<bars.length;i++){
+  const b=bars[i],xx=x(b.time),w=Math.max(1,Math.min(10,usable/bars.length*.72));
+  const up=b.close>=b.open,col=up?colors.up:colors.down;
+  line(ctx,[[xx,y(b.high)],[xx,y(b.low)]],col,1);
+  const a=y(Math.max(b.open,b.close)),z=y(Math.min(b.open,b.close));
+  ctx.fillStyle=col;ctx.fillRect(xx-w/2,a,w,Math.max(1,z-a));
+ }
+ if($('showMA').checked){
+  line(ctx,visible.map(v=>[x(v.time),y(v.openMA)]),colors.open,1.5);
+  line(ctx,visible.map(v=>[x(v.time),y(v.closeMA)]),colors.close,1.5);
+ }
+ if(kind==='ref'){
+  for(const sig of crosses){
+   const xx=x(sig.time),yy=y(sig.signalClose),long=sig.side==='LONG';
+   ctx.fillStyle=long?colors.up:colors.down;ctx.beginPath();
+   ctx.arc(xx,yy,long?5:5,0,Math.PI*2);ctx.fill();
+   ctx.fillStyle='#e9fbff';ctx.font='bold 10px system-ui';
+   ctx.fillText(long?'L':'S',xx+7,yy-8);
+  }
+  if($('showLevels').checked&&crosses.length){
+   // Model levels use the signal candle CLOSE, not the TradingView
+   // strategy's simulated next-bar fill. Show only the most recent signal.
+   const sig=crosses.at(-1),dir=sig.side==='LONG'?1:-1,c=state.settings;
+   const targets=[['ENTRY',sig.signalClose],['SL',c.slPercent],['TP1',c.tp1Val],['TP2',c.tp2Val],['TP3',c.tp3Val]];
+   for(const [role,v] of targets){
+    if(v==null||!(v>0))continue;
+    const px=role==='ENTRY'?v:c.tpMode==='Points'?
+     sig.signalClose+(role==='SL'?-dir:dir)*v:
+     sig.signalClose*(1+(role==='SL'?-dir:dir)*v/100);
+    const yy=y(px);
+    if(yy<top||yy>bottom)continue;
+    const col=role==='SL'?'#ff6571':role==='ENTRY'?'#5bbafe':'#9dde68';
+    ctx.globalAlpha=.67;line(ctx,[[x(sig.time),yy],[right,yy]],col,1.2);ctx.globalAlpha=1;
+    ctx.fillStyle=col;ctx.font='bold 10px system-ui';ctx.fillText(role+' '+format(px,1),right-110,yy-7);
+   }
+  }
+ }else{
+  for(const f of fills){
+   const xx=x(Math.floor(f.time/M15)*M15),yy=y(f.price);
+   const buy=f.side==='BUY';
+   ctx.fillStyle=buy?colors.up:colors.down;
+   ctx.beginPath();ctx.moveTo(xx,yy+(buy?7:-7));ctx.lineTo(xx-5,yy+(buy?-5:5));
+   ctx.lineTo(xx+5,yy+(buy?-5:5));ctx.closePath();ctx.fill();
+   ctx.font='bold 10px system-ui';ctx.fillStyle='#e4f3ff';
+   ctx.fillText(f.role,xx+7,yy-11);
+  }
+ }
+ const ticks=6;
+ for(let i=0;i<=ticks;i++){
+  const b=bars[Math.floor((bars.length-1)*i/ticks)];
+  if(!b)continue;
+  ctx.font='10px system-ui';ctx.fillStyle=colors.text;
+  ctx.fillText(new Date(b.time).toLocaleDateString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',month:'2-digit',day:'2-digit'}),x(b.time)-15,H-17);
+ }
+ canvas.onmousemove=e=>{
+  const rect=canvas.getBoundingClientRect();
+  const at=Math.min(bars.length-1,Math.max(0,Math.round((e.clientX-rect.left-left)/usable*(bars.length-1))));
+  const b=bars[at],dst=kind==='real'?'execHover':'refHover';
+  $(dst).textContent=vn(b.time)+' · O '+format(b.open)+' H '+format(b.high)+' L '+format(b.low)+' C '+format(b.close)+
+   (kind==='real'?' · Fill = giá khớp thật, không phải giá LIMIT':' · OCC SMMA8 theo nến H4 đang hình thành');
+ };
+}
+function renderRows(){
+ const body=$('rows');body.replaceChildren();
+ if(!state?.comparisons?.length){
+  const tr=document.createElement('tr'),td=document.createElement('td');
+  td.colSpan=11;td.textContent='Chưa tìm thấy fill OCC đã xác minh trong dữ liệu SQLite gần đây.';
+  tr.append(td);body.append(tr);return;
+ }
+ for(const r of state.comparisons){
+  const vals=[vn(r.fillTime),r.role,r.side,format(r.qty,6),
+   format(r.referencePrice,1),format(r.binancePrice,1),
+   format(r.deltaPrice,1),format(r.deltaPct,3),
+   r.delaySeconds==null?'—':format(r.delaySeconds,0)+' s',r.groupId,
+   r.attribution==='NO_MATCHING_SIGNAL'?'Chưa thấy OCC cùng chiều':
+    'Tín hiệu gần nhất, chưa chứng minh liên kết'];
+  const tr=document.createElement('tr');
+  for(let i=0;i<vals.length;i++){
+   const td=document.createElement('td');td.textContent=vals[i];
+   if(i===6&&r.deltaPrice!=null)td.className=r.deltaPrice>0?'bad':'good';
+   tr.append(td);
+  }
+  body.append(tr);
+ }
+}
+function drawAll(){draw($('reference'),'ref');draw($('execution'),'real');}
+async function refresh(){
+ $('reload').disabled=true;$('status').textContent='Đang đọc Binance Futures M15/H4 và fill OCC đã xác minh…';
+ try{
+  const res=await fetch('/api/binance/occ-chart-compare',{cache:'no-store'});
+  const data=await res.json();
+  if(!res.ok)throw Error(data.error||'HTTP '+res.status);
+  state=data;drawAll();renderRows();
+  $('lastSync').textContent='Đồng bộ '+vn(data.asOf);
+  $('status').textContent='Đã nạp '+data.candles.length+' nến M15 · '+
+   data.signals.length+' giao cắt · '+data.fills.length+' fill đã xác minh · '+
+   data.comparisons.length+' hàng đối chiếu.';
+ }catch(e){$('status').textContent='Không đồng bộ được chart: '+e.message+
+   ' · Kiểm tra kết nối Binance hoặc nhấn Đồng bộ chart.';}
+ finally{$('reload').disabled=false;}
+}
+$('reload').onclick=refresh;
+$('bars').onchange=drawAll;$('showMA').onchange=drawAll;$('showLevels').onchange=drawAll;
+let resizeTimer=null;window.addEventListener('resize',()=>{
+ clearTimeout(resizeTimer);resizeTimer=setTimeout(drawAll,180);
+});
+$('tv').addEventListener('toggle',()=>{
+ const frame=$('tvFrame');
+ if($('tv').open&&!frame.hasAttribute('src'))frame.src='/occ-tradingview-widget';
+});
+refresh();
+setInterval(()=>{if(!document.hidden)refresh();},60000);
+</script>
+</body>
+</html>
