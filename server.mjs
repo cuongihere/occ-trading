@@ -141,7 +141,8 @@ async function readChartComparison(){
      levels:owned?(current.levels||[]).filter(x=>x.confirmed===true&&
       ['BOT_ĐANG_QUẢN_LÝ','KHỚP_CHECKPOINT'].includes(x.origin)&&
       Number.isFinite(Number(x.price))&&Number(x.price)>0).map(x=>({
-       role:x.role,price:x.price,quantityBTC:x.quantityBTC,
+       role:/-(SL|TP[123])$/.exec(String(x.clientId||''))?.[1]||x.role,
+       price:x.price,quantityBTC:x.quantityBTC,
        algoId:x.id,status:x.status,origin:x.origin})):[]
     };
     if(!owned)liveReadbackError='Vị thế Binance chưa đối chiếu đủ OCC Algo ID; không vẽ SL/TP chưa xác minh.';
