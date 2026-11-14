@@ -696,6 +696,16 @@ body:has(#credentialEditor[open])::before{content:'';position:fixed;inset:0;z-in
  position:absolute!important;top:10px!important;right:11px!important;left:auto!important;
  z-index:3200!important;width:30px;height:30px;padding:0!important;display:grid;place-items:center
 }
+
+.squareSettings{margin-top:12px;padding:11px 12px;background:#0c1d2e;border:1px solid #365473;border-radius:9px}
+.squareTitle{font-size:12px;font-weight:800;color:#d1ebfb;margin-bottom:8px}
+.squareToggle{display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:8px}
+.squareToggle input{accent-color:#8cdfac;width:16px;height:16px}
+.squareKeyControls{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+.squareKeyControls #squareKey{min-width:230px;flex:1 1 290px}
+.squareKeyControls button{min-height:30px;padding:4px 8px}
+.squareKeyControls a{border:1px solid #395b78;padding:7px 9px;border-radius:6px;text-decoration:none;font-size:11px}
+.squareSettings>.small{line-height:1.5}
 </style>
 </head>
 <body>
@@ -705,7 +715,7 @@ body:has(#credentialEditor[open])::before{content:'';position:fixed;inset:0;z-in
  <div class="controls">
  <span id="connection" class="status">CHƯA KẾT NỐI</span>
  <label class="auto" id="autoWrap" style="flex-direction:row;color:#eff6ff;font-size:12px"><input id="enabled" type="checkbox" disabled><span id="autoLabel">AUTO OFF</span></label>
- <button class="link" type="button" id="openConfigBtn">Cài đặt</button><button class="link" type="button" id="openHistoryBtn">Lịch sử</button><a href="/" class="link">Paper</a></div>
+ <button class="link" type="button" id="openConfigBtn">Cài đặt</button><button class="link" type="button" id="openHistoryBtn">Lịch sử</button></div>
 </header>
 <section class="kpis">
  <div class="kpi"><div class="label">Ví</div><div id="wallet" class="value">—</div><div class="detail">USDT · Wallet</div></div>
@@ -775,6 +785,20 @@ body:has(#credentialEditor[open])::before{content:'';position:fixed;inset:0;z-in
   <div class="settingActions"><div class="row"><button id="save" class="primary">Lưu cấu hình</button>
 <button id="applyLeverage" class="minor" disabled>Áp dụng đòn bẩy lên Binance</button><button id="cancelLimit" class="minor" hidden>Hủy LIMIT</button></div>
 <span id="settingStatus" class="small">Tự lưu · Auto OFF khi sửa</span><span id="limitInfo" class="small" aria-live="polite"></span></div>
+<div class="squareSettings" aria-label="Binance Square tự động đăng bài sau khi Entry Futures khớp">
+ <div class="squareTitle">BINANCE SQUARE · BÀI LỆNH THẬT</div>
+ <label class="squareToggle" style="flex-direction:row"><input type="checkbox" id="squareEnabled" disabled>
+  <span>Đăng ảnh chart sau khi Entry khớp và SL/TP xác nhận</span></label>
+ <div class="squareKeyControls">
+  <input id="squareKey" type="password" autocomplete="new-password" spellcheck="false"
+   placeholder="Square OpenAPI key (khác API Futures)">
+  <button type="button" class="minor" id="squareSaveKey">Lưu khóa Square</button>
+  <button type="button" class="minor" id="squareForgetKey">Xóa khóa</button>
+  <a id="squareLastImage" target="_blank" rel="noopener noreferrer" href="/api/square/latest-chart.png">Xem ảnh chart</a>
+ </div>
+ <div class="small" id="squareStatus" role="status">Square đang OFF · chỉ đăng Entry đã khớp thật.</div>
+ <div class="small">Ảnh và nội dung: BTCUSDT LONG/SHORT, Entry, SL, TP1–TP3. Không lộ loại tín hiệu hay dữ liệu tài khoản.</div>
+</div>
    </div>
   </details>
  </div>
@@ -1578,5 +1602,41 @@ document.addEventListener('keydown',e=>{
   $('autoConfigDetails').open=false;
  }
 });
+
+async function squareRefresh(){
+ try{
+  const res=await fetch('/api/square/status',{cache:'no-store'});
+  if(!res.ok)throw Error('Square status HTTP '+res.status);
+  const s=await res.json();
+  $('squareEnabled').disabled=!s.keyStored;
+  $('squareEnabled').checked=s.enabled===true;
+  $('squareLastImage').style.display=s.last?.chartReady?'inline-block':'none';
+  $('squareStatus').textContent=(s.keyStored?'Square key đã mã hóa':'Chưa kết nối Square key')+
+   ' · '+(s.enabled?'AUTO ĐĂNG ON':'OFF')+
+   (s.last?' · Entry '+s.last.orderId+': '+s.last.status+
+    (s.last.url?' · '+s.last.url:'')+(s.last.error?' · '+s.last.error:''):'');
+ }catch(e){$('squareStatus').textContent='Square: '+String(e.message||e);}
+}
+$('squareSaveKey').onclick=async()=>{
+ const key=$('squareKey').value.trim();if(!key)return;
+ try{
+  await request('square/key',{key});
+  $('squareKey').value='';
+  await squareRefresh();
+ }catch(e){$('squareStatus').textContent='Square: '+e.message;}
+};
+$('squareForgetKey').onclick=async()=>{
+ if(!confirm('Xóa Square OpenAPI key? Chức năng tự đăng Square sẽ OFF.'))return;
+ try{await request('square/forget',{});$('squareKey').value='';await squareRefresh();}
+ catch(e){$('squareStatus').textContent=e.message;}
+};
+$('squareEnabled').onchange=async e=>{
+ const enabled=e.target.checked;
+ if(enabled&&!confirm('TỰ ĐỘNG ĐĂNG BÀI CÔNG KHAI LÊN BINANCE SQUARE sau khi lệnh BTCUSDT Futures khớp và có SL/TP? Chỉ chia sẻ giá Entry/SL/TP, không có tên chiến lược.')){e.target.checked=false;return;}
+ try{await request('square/on',{enabled});await squareRefresh();}
+ catch(err){$('squareStatus').textContent=err.message;await squareRefresh();}
+};
+squareRefresh();
+setInterval(squareRefresh,30000);
 </script>
 </body></html>
