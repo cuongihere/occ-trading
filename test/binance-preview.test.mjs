@@ -256,7 +256,9 @@ test('API, real Binance quote and minimized Auto config share a row without losi
  assert.match(config,/id="autoConfigSnapshot"/);
  assert.match(config,/class="configPrimary"/);
  assert.match(config,/class="configTargets"/);
- assert.equal((config.match(/<label/g)||[]).length,16);
+ assert.equal((config.match(/<label/g)||[]).length,17);
+ assert.match(config,/id="squareEnabled"/);
+ assert.match(config,/id="squareSaveKey"/);
  for(const id of ['entryMode','limitBasis','limitOffsetPct','limitWaitSeconds','cancelLimit','limitInfo'])
   assert.match(config,new RegExp('id="'+id+'"'));
  assert.match(html,/\.configPanel \.configTargets\{display:grid;grid-template-columns:/);
