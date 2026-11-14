@@ -71,15 +71,15 @@ test('An unfinished pause is displayed with no ending timestamp',t=>{
  const store=new Store(fixture(t)),e=new OCCEngine();record(store,'process_start',{initialState:e.serialize(),activity:{running:false,reason:'sync'}},e,100);
  assert.equal(store.activity()[0].to,null);store.close();
 });
-test('Dashboard defaults to all-time report and settings no longer reset accounts',()=>{
+test('Legacy Paper journal remains offline and cannot be served by the Futures-only app',()=>{
  const dashboard=readFileSync(new URL('./dashboard.html',import.meta.url),'utf8');
  const server=readFileSync(new URL('./server.mjs',import.meta.url),'utf8');
  assert.match(dashboard,/<option value="all" selected>/);
  assert.match(dashboard,/id="activity"/);
  assert.match(dashboard,/control\('configure'/);
  assert.doesNotMatch(dashboard,/control\('reset'/);
- assert.match(server,/\/api\/activity/);
- assert.match(server,/type==='process_stop'/);
- assert.match(server,/tradingEnabled/);
- assert.match(server,/const selected=url\.searchParams\.get\('session'\)\|\|'all'/);
+ assert.doesNotMatch(server,/\/api\/activity/);
+ assert.doesNotMatch(server,/type==='process_stop'/);
+ assert.doesNotMatch(server,/tradingEnabled/);
+ assert.doesNotMatch(server,/const selected=url\.searchParams\.get\('session'\)\|\|'all'/);
 });
