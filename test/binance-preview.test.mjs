@@ -2,11 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=path=>readFileSync(new URL('../'+path,import.meta.url),'utf8');
-test('Binance /binance dashboard is linked from paper page and served locally',()=>{
- const server=read('server.mjs'),dashboard=read('dashboard.html');
+test('Futures-only Windows app serves Binance as its only dashboard',()=>{
+ const server=read('server.mjs'),html=read('BINANCE_UI_PREVIEW.html');
  assert.match(server,/BINANCE_UI_PREVIEW\.html/);
  assert.match(server,/req\.url==='\/binance'/);
- assert.match(dashboard,/href="\/binance"/);
+ assert.match(server,/Location:'\/binance'/);
+ assert.doesNotMatch(html,/href="\/" class="link">Paper/);
+ assert.doesNotMatch(server,/dashboard\.html|\/control\/start|\/control\/pause/);
 });
 test('Real Binance single-screen UI shows account balance and position without price preview',()=>{
  const html=read('BINANCE_UI_PREVIEW.html');
@@ -254,7 +256,9 @@ test('API, real Binance quote and minimized Auto config share a row without losi
  assert.match(config,/id="autoConfigSnapshot"/);
  assert.match(config,/class="configPrimary"/);
  assert.match(config,/class="configTargets"/);
- assert.equal((config.match(/<label/g)||[]).length,16);
+ assert.equal((config.match(/<label/g)||[]).length,17);
+ assert.match(config,/id="squareEnabled"/);
+ assert.match(config,/id="squareSaveKey"/);
  for(const id of ['entryMode','limitBasis','limitOffsetPct','limitWaitSeconds','cancelLimit','limitInfo'])
   assert.match(config,new RegExp('id="'+id+'"'));
  assert.match(html,/\.configPanel \.configTargets\{display:grid;grid-template-columns:/);

@@ -1,7 +1,7 @@
 // Read-only OCC / Binance execution comparison. No trading or order mutations.
 import {DatabaseSync} from 'node:sqlite';
 import {existsSync} from 'node:fs';
-import {OCCEngine,M15} from './engine.mjs';
+import {OCCSignalEngine,M15} from './occ-signal-engine.mjs';
 
 const finite=n=>Number.isFinite(Number(n))?Number(n):null;
 const clean=c=>Array.isArray(c)&&c.length>=7?
@@ -33,7 +33,7 @@ export function buildOCCChartComparison({h4,m15,fills=[],settings={},now=Date.no
   b.low<=Math.min(b.open,b.close)&&b.high>=Math.max(b.open,b.close))
   .sort((a,b)=>a.time-b.time);
  if(candles.length<50)throw Error('Insufficient verified M15 candles');
- const engine=new OCCEngine();
+ const engine=new OCCSignalEngine();
  engine.warmup(h4,m15,now);
  const series=engine.history;
  const signals=[];
