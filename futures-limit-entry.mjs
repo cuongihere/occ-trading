@@ -119,6 +119,7 @@ export function installLimitEntry(BrowserFutures){
     clientId:p.clientId,role:'ENTRY',side:p.side==='LONG'?'BUY':'SELL'});}
    catch(e){this.log('HISTORY_FAILED','LIMIT đã bảo vệ nhưng chưa ghi lịch sử: '+e.message);}
    this.log('LIMIT_PROTECTED','LIMIT khớp đủ '+qty+' BTC; xác nhận STOP + 3 TP');
+   this.notifySquareProtected(result);
    return;
   }
   // If less than intended was filled, close only the verified executed BTC
