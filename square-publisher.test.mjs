@@ -23,7 +23,7 @@ function fixture(t,fetcher){
   save:({apiKey})=>{secret=apiKey;},delete:()=>{secret=null;}
  };
  const calls=[];
- const fetchImpl=fetcher||async(url,p)=>{
+ const fetchImpl=fetcher||(async(url,p)=>{
   calls.push({url,method:p.method,body:p.body});
   if(String(url).endsWith('/image/presignedUrl'))return {ok:true,status:200,json:async()=>({
    code:'000000',data:{presignedUrl:'https://mock.s3.amazonaws.com/trade.png',fileTicket:'T1'}})};
@@ -33,7 +33,7 @@ function fixture(t,fetcher){
   if(String(url).endsWith('/content/add'))return {ok:true,status:200,json:async()=>({
    code:'000000',data:{id:'998877',shareLink:'https://www.binance.com/square/post/998877'}})};
   throw Error('Unexpected network request');
- };
+ });
  const p=new SquarePublisher({dataDir:dir,fetcher:fetchImpl,vault,
   fetchKlines:async()=>fakeKlines,sleep:async()=>{}});
  return {p,dir,calls};
