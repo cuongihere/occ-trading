@@ -28,6 +28,7 @@ export class BrowserFutures{
   this.config=validateLiveConfig(existsSync(this.path)?JSON.parse(readFileSync(this.path,'utf8')):DEFAULT);
   this.transportFactory=transportFactory||((params)=>new FuturesTransport(params));
   this.vault=credentialVault||new WindowsCredentialVault(resolve(this.dir,'futures-api.dpapi.json'));
+  this.squarePublisher=null;
   this.lastAccountSync=null;
   this.api=null;this.environment=null;this.account=null;this.filters=null;
   this.armed=false;this.busy=false;this.halted=false;this.error=null;this.events=[];this.activeProtection=null;
@@ -47,6 +48,14 @@ export class BrowserFutures{
   }
  }
  log(type,message){this.events.push({at:Date.now(),type,message:String(message).slice(0,400)});this.events=this.events.slice(-50);}
+ setSquarePublisher(publisher){this.squarePublisher=publisher;}
+ // A Square failure MUST NOT alter BTC position, SL/TP, or halt trading.
+ notifySquareProtected(result){
+  if(!this.squarePublisher)return;
+  Promise.resolve().then(()=>this.squarePublisher.onProtected(result))
+   .then(out=>{if(out?.status==='SENT')this.log('SQUARE_POSTED','Bài BTCUSDT đã đăng Binance Square.');})
+   .catch(e=>this.log('SQUARE_FAILED','Square: '+String(e.message||e).slice(0,180)));
+ }
  // Store independently from Paper SQLite; reopening OCC must not reset real fills.
  registerRealOrder({orderId,groupId,clientId,role,side}){
   const path=resolve(this.dir,'binance-live-stats.sqlite');
@@ -887,6 +896,7 @@ this.log('ENTRY_REQUEST_TIMING','M15 '+new Date(signal.barTime).toISOString()+
    this.activeProtection=result; // No new signal while a position is managed.
 this.error=null;
 this.log('PROTECTED','Futures thật entry '+response.orderId+' có SL và '+result.tps.length+' TP trên sàn; chờ vị thế đóng');
+this.notifySquareProtected(result);
 }catch(e){
  if(reverseAttempted&&!reverseCompleted){
   // Unknown close/cancel outcomes: never retry or send an opposite-opening order.
