@@ -160,9 +160,9 @@ const server=createServer(async(req,res)=>{
    else if(req.url==='/control/live/history-refresh'){await browserFutures.refreshRealHistory({force:true});}
    else if(req.url==='/control/live/disconnect'){browserFutures.close();}
    else if(req.url==='/control/live/forget'){browserFutures.forgetSavedCredentials();}
-   else if(req.url==='/control/square/key'){square.connect(p.key);}
-   else if(req.url==='/control/square/on'){square.toggle(p.enabled);}
-   else if(req.url==='/control/square/forget'){square.forget();}
+   else if(req.url==='/control/live/square/key'){square.connect(p.key);}
+   else if(req.url==='/control/live/square/on'){square.toggle(p.enabled);}
+   else if(req.url==='/control/live/square/forget'){square.forget();}
    else throw Error('Unknown action');res.end(JSON.stringify({ok:true}));
   }catch(e){res.writeHead(400);res.end(JSON.stringify({error:e.message}));}return;
  }
