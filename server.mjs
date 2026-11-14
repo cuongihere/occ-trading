@@ -3,7 +3,7 @@ import {createServer} from 'node:http';
 import {mkdirSync,readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {DatabaseSync} from 'node:sqlite';
-import {OCCEngine} from './engine.mjs';
+import {OCCSignalEngine} from './occ-signal-engine.mjs';
 import {BinanceFeed} from './server-feed.mjs';
 import {BtcMarketQuote} from './btc-market-quote.mjs';
 import {readLiveReport} from './binance-live-stats.mjs';
@@ -19,7 +19,7 @@ const lock=new DatabaseSync(resolve(dir,'runner-lock.sqlite'));
 try{lock.exec('PRAGMA busy_timeout=0; BEGIN EXCLUSIVE; CREATE TABLE IF NOT EXISTS lock_owner(id INTEGER);');}
 catch{console.error('Another OCC Futures process owns this data directory.');process.exit(1);}
 const browserFutures=new BrowserFutures({dataDir:dir});
-const liveSignalEngine=new OCCEngine();
+const liveSignalEngine=new OCCSignalEngine();
 const btcMarketQuote=new BtcMarketQuote();
 const square=new SquarePublisher({dataDir:dir,fetchKlines:async({filledAt,limit=96})=>{
  const params=new URLSearchParams({symbol:'BTCUSDT',interval:'15m',
@@ -48,7 +48,6 @@ const feed=new BinanceFeed({
  },
  onCandle(bar,opts){
   const signal=liveSignalEngine.onCandle(bar,opts);
-  liveSignalEngine.pending=null; // signals only, no paper positions
   if(signal?.eligible&&opts.live&&feed.healthy()&&browserFutures.armed)
    browserFutures.signal(signal,true,
     ()=>btcMarketQuote.snapshot({healthy:feed.healthy(),state:feed.state}))
