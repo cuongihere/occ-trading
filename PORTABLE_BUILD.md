@@ -2,7 +2,7 @@
 
 ## Tải gói có runtime sẵn
 
-Vào [Actions: Build and test Windows portable](https://github.com/cuongihere/occ-trading/actions/workflows/windows-portable.yml); lấy artifact ở workflow **Success**. Giải nén ZIP của Actions, sau đó giải nén OCC_Portable_Windows_x64.zip. Folder OCC_Portable có runtime, server, dashboard và START_WINDOWS.bat. Tải ZIP nguồn từ Code → Download ZIP không phải gói đầy đủ; launcher sẽ tự bootstrap runtime vào folder app trong lần chạy đầu.
+Vào [Actions: Build and test Windows portable](https://github.com/cuongihere/occ-trading/actions/workflows/windows-portable.yml); lấy artifact ở workflow **Success**. Giải nén ZIP của Actions, sau đó giải nén OCC_Portable_Windows_x64.zip. Folder OCC_Portable có runtime, server, giao diện **Binance Futures duy nhất** và START_WINDOWS.bat. Paper Trading không còn được đóng gói. Tải ZIP nguồn từ Code → Download ZIP không phải gói đầy đủ; launcher sẽ tự bootstrap runtime vào folder app trong lần chạy đầu.
 
 ## Tự build trên Windows
 
