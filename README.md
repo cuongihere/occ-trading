@@ -1,37 +1,42 @@
-# OCC Trading — Windows Portable Paper Trader
+# OCC Trading — BTCUSDT Futures (Windows)
 
-**[Hướng dẫn tiếng Việt](README_VI.md)** · Windows x64 · BTCUSDT Binance USD-M Futures · chỉ mô phỏng.
+Live Binance USDⓈ-M Futures trading, OCC crossover signals, LIMIT/MARKET entries,
+exchange-confirmed STOP and TP1/TP2/TP3, and optional Binance Square chart posts.
 
-## Tải gói portable chạy ngay
+**Paper Trading is not available in the application or Windows build.** Historical
+paper fixtures remain only as development/regression tests and are never executed.
 
-1. Mở [GitHub Actions – Windows portable](https://github.com/cuongihere/occ-trading/actions/workflows/windows-portable.yml).
-2. Chọn lần chạy mới nhất **thành công** (dấu ✓), tải artifact **OCC_Portable_Windows_x64** trong mục Artifacts.
-3. Giải nén ZIP của GitHub, rồi giải nén file **OCC_Portable_Windows_x64.zip** bên trong.
-4. Vào thư mục **OCC_Portable** và bấm **START_WINDOWS.bat**. Dashboard mở tại http://127.0.0.1:8080.
+## Run on Windows
 
-Gói đã build có sẵn runtime/node.exe chính thức được xác minh SHA256, **không cần cài Node.js, npm hay thư viện nào**. Chạy app vẫn cần Internet để lấy dữ liệu Binance.
+1. Open [Windows Portable Actions](https://github.com/cuongihere/occ-trading/actions/workflows/windows-portable.yml) and select a successful run.
+2. Download the `OCC_Portable_Windows_x64` artifact, extract its inner ZIP, and run `START_WINDOWS.bat`.
+3. Dashboard: `http://127.0.0.1:8080/binance`. Live AUTO stays OFF until explicitly enabled.
+4. Preserve `data/` when upgrading; it holds encrypted credentials and live order checkpoints.
 
-Nếu chỉ tải bằng Code → Download ZIP, đó là mã nguồn chưa có runtime. START_WINDOWS.bat sẽ tự tải Node.js chính thức **một lần vào chính thư mục runtime/** rồi xác minh SHA256; cần mạng ở lần đầu.
+## Binance Square (optional)
 
-## Ứng dụng
+Binance Square provides a separate posting-only OpenAPI key. Create it in
+[Square Creator Center](https://www.binance.com/square/creator-center/home).
+Open **Cài đặt → Binance Square**, save that key (Windows DPAPI), then explicitly
+enable **Tự đăng Square**. This does not use the Binance Futures API key.
 
-- OCC R5.1: SMMA8, M15/H4, delay 0, BOTH; H4 đang hình thành có thể đổi tín hiệu.
-- Paper position ~10% equity, không đòn bẩy, chỉ dùng Multi TP v5, chốt từng phần TP1/TP2/TP3 và SL %, chưa tính funding.
-- Binance BTCUSDT perpetual public data; không API key, tài khoản hay lệnh thật.
-- Dashboard mới, biểu đồ P&L đã đóng, lịch sử phiên, thắng/thua, CSV/JSON.
-- SQLite và lịch sử trong data/ cùng thư mục. Xem [Pine SL/TP mapping](PINE_EXIT_MAPPING.md). Sau khi mở lại, ứng dụng tự tiếp tục nếu trước đó bạn đã bật mô phỏng (chỉ sau khi đồng bộ Binance); nếu đã tạm dừng thì vẫn tạm dừng.
+A Square post is created only after **a new live Binance Entry has FILLED and all
+exchange STOP/TP orders have been verified**. It includes a fresh PNG candlestick
+chart and public Entry / SL / TP1 / TP2 / TP3 levels and LONG/SHORT direction.
+No strategy name, indicator formula, position size, margin, order ID, account
+balance, PnL, or API secret is printed on the chart or caption.
 
-## Phát triển / kiểm thử
+Failures in Square publishing do not affect Futures execution. Each Entry ID
+is reserved before uploading and **never blindly retried** after an uncertain
+network or publish acknowledgement. Inspect the Square Creator Center before
+manually attempting to resend any failed post.
 
-Yêu cầu Node.js 24+ cho dev; không có npm dependencies:
+Square media support/API permissions depend on your Creator account and region.
+We cannot validate an actual Square post without your posting-only key.
+Posts are public and cryptocurrency futures trading is high risk.
 
-~~~sh
-node --test
-node server.mjs
-~~~
+## Development
 
-Kết quả mô phỏng chưa được xác minh parity TradingView hoặc khả năng khớp lệnh thật. Nếu nguồn Binance trả 451/403 theo vùng, app không bypass. Dùng Windows artifact chỉ khi workflow báo thành công. Xem README_VI.md để biết chi tiết.
-
-## Dữ liệu xuyên lần mở
-
-SQLite checkpoint giữ vốn, vị thế, lệnh, P&L và cấu hình. Sửa Multi TP khi tạm dừng/không còn vị thế không tạo phiên mới. Bảng thời gian gián đoạn ghi tắt app, mất kết nối, thời điểm khôi phục (giờ Việt Nam); không replay fills trong lúc offline. Thống kê mặc định là tổng lịch sử vị thế đóng; equity vẫn là số dư tài khoản hiện tại, không cộng vốn từng đợt thử cũ.
+Node.js >=24; no npm packages: `node --test`, `node server.mjs`.
+Paper UI and simulation journal are not served or bundled.
+See [Vietnamese documentation](README_VI.md).
