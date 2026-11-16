@@ -426,20 +426,117 @@ function draw(canvas,kind){
    }
   }
   markerHits=[];
-  if($('showFills').checked)for(const f of fills){
-   const xx=x(Math.floor(f.time/M15)*M15),yy=y(f.price);
-   const buy=f.side==='BUY';
-   const active=f.groupId===selectedGroupId;
-   ctx.globalAlpha=selectedGroupId&&!active?.38:1;
-   ctx.fillStyle=buy?colors.up:colors.down;
-   if(active){ctx.strokeStyle='#f8e6a1';ctx.lineWidth=1.5;
-    ctx.beginPath();ctx.arc(xx,yy,9,0,Math.PI*2);ctx.stroke();}
-   markerHits.push({x:xx,y:yy,groupId:f.groupId});
-   ctx.beginPath();ctx.moveTo(xx,yy+(buy?7:-7));ctx.lineTo(xx-5,yy+(buy?-5:5));
-   ctx.lineTo(xx+5,yy+(buy?-5:5));ctx.closePath();ctx.fill();ctx.globalAlpha=1;
-   if(active||!document.documentElement.classList.contains('realonly')){
-    ctx.font='bold 10px system-ui';ctx.fillStyle='#e4f3ff';
-    ctx.fillText(f.role,xx+7,yy-11);
+  const visibleSequences=(state.tradeSequences||[]).filter(seq=>
+   seq.events.some(ev=>ev.time>=first&&ev.time<last+M15));
+  const occupied=[];
+  if($('showFills').checked){
+   // Exchange-verified ENTRY → SL/TP/CLOSE/REVERSE lifecycle.
+   // A close's order role is ground truth; chronological next entries are
+   // never presented as a proven automatic reversal.
+   for(const seq of visibleSequences){
+    const entry=seq.entry,active=seq.groupId===selectedGroupId;
+    const ex=entry?x(Math.floor(entry.time/M15)*M15):null;
+    const ey=entry?y(entry.price):null;
+    if(entry&&entry.time>=first&&entry.time<last+M15){
+     for(const ev of seq.exits){
+      if(ev.time<first||ev.time>=last+M15)continue;
+      ctx.globalAlpha=active?.9:.3;
+      ctx.strokeStyle=active?'#f5df96':'#73a7c1';
+      ctx.lineWidth=active?2:1.25;ctx.setLineDash(active?[]:[3,4]);
+      ctx.beginPath();ctx.moveTo(ex,ey);
+      ctx.lineTo(x(Math.floor(ev.time/M15)*M15),y(ev.price));
+      ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1;
+     }
+    }
+    // Draw a dashed arrow only between actually recorded closing and
+    // subsequent opposite entry fills. Role REVERSE is an exchange order
+    // category; SL → new SHORT means 'later trade', not verified causality.
+    for(const link of seq.transitions){
+     if(link.fromGroupId!==seq.groupId||link.toTime<first||link.fromTime>last+M15)continue;
+     if(!active&&selectedGroupId&&link.toGroupId!==selectedGroupId)continue;
+     const a=x(Math.floor(link.fromTime/M15)*M15),b=x(Math.floor(link.toTime/M15)*M15);
+     const ya=y(link.fromPrice),yb=y(link.toPrice);
+     if(a>right||b<left)continue;
+     ctx.globalAlpha=active?.8:.4;ctx.lineWidth=active?2:1;
+     ctx.setLineDash([5,5]);ctx.strokeStyle=link.kind==='REVERSE_CLOSE_THEN_OPPOSITE_ENTRY'?
+      '#ffcf7c':'#86a9ca';
+     ctx.beginPath();ctx.moveTo(a,ya);ctx.lineTo(b,yb);ctx.stroke();
+     ctx.setLineDash([]);ctx.globalAlpha=1;
+     if((active||bars.length<=320)&&Math.abs(b-a)>45){
+      const label=link.kind==='REVERSE_CLOSE_THEN_OPPOSITE_ENTRY'?
+       'REV → '+(link.label.endsWith('SHORT')?'SHORT':'LONG'):
+       'SAU SL → LỆNH MỚI';
+      ctx.font='bold 10px system-ui';ctx.fillStyle='#d7e5ed';
+      ctx.fillText(label,(a+b)/2-35,(ya+yb)/2-11);
+     }
+    }
+   }
+   for(const seq of visibleSequences){
+    const related=seq.transitions.some(link=>link.fromGroupId===selectedGroupId||
+     link.toGroupId===selectedGroupId);
+    for(const event of seq.events){
+     if(event.time<first||event.time>=last+M15)continue;
+     const xx=x(Math.floor(event.time/M15)*M15),yy=y(event.price);
+     const active=seq.groupId===selectedGroupId;
+     const highlighted=active&&(!selectedEventId||selectedEventId===event.id);
+     const isEntry=event.role==='ENTRY',isStop=event.role==='SL',
+      isReverse=event.role==='REVERSE',isProfit=event.role.startsWith('TP');
+     const col=isStop?'#fa727e':isEntry?
+      (seq.side==='LONG'?'#3ddba3':'#f58b97'):
+      isProfit?'#b2eb6e':isReverse?'#ffc879':'#80beec';
+     ctx.globalAlpha=selectedGroupId&&!active&&!related?.37:1;
+     ctx.fillStyle=col;ctx.strokeStyle=highlighted?'#fff3bf':col;
+     ctx.lineWidth=highlighted?2.5:1;
+     ctx.beginPath();
+     if(isEntry){
+      // Real Entry fill: LONG upward triangle, SHORT downward triangle.
+      const up=seq.side==='LONG';
+      ctx.moveTo(xx,yy+(up?-8:8));ctx.lineTo(xx-7,yy+(up?5:-5));
+      ctx.lineTo(xx+7,yy+(up?5:-5));ctx.closePath();
+     }else if(isStop){
+      // STOP fill: red diamond. Not merely an unfilled STOP order.
+      ctx.moveTo(xx,yy-7);ctx.lineTo(xx+7,yy);
+      ctx.lineTo(xx,yy+7);ctx.lineTo(xx-7,yy);ctx.closePath();
+     }else{
+      ctx.arc(xx,yy,isReverse?7:5,0,Math.PI*2);
+     }
+     ctx.fill();if(highlighted)ctx.stroke();
+     ctx.globalAlpha=1;
+     const point={x:xx,y:yy,groupId:seq.groupId,eventId:event.id,event,
+      sequence:seq,labelBounds:null};
+     markerHits.push(point);
+     // Show prominent readable role tags at active/nearby Entry & SL;
+     // avoid dumping every partial fill label on the same M15 candle.
+     const tag=event.role==='SL'?'SL HIT':event.role==='REVERSE'?'REVERSE CLOSE':
+      event.role==='ENTRY'?seq.side+' ENTRY':event.label;
+     const showLabel=active||bars.length<=330||
+      (bars.length<=700&&(isEntry||isStop||isReverse));
+     if(showLabel){
+      ctx.font='bold 11px system-ui';
+      const w=Math.min(142,Math.max(48,ctx.measureText(tag).width+14)),h=21;
+      const placements=[
+       [xx+10,yy-32],[xx+10,yy+10],[xx-w-10,yy-32],
+       [xx-w-10,yy+10],[xx-w/2,yy-52],[xx-w/2,yy+22]
+      ];
+      let box=null;
+      for(const [bx,by] of placements){
+       if(bx<left+2||bx+w>right-3||by<top+2||by+h>bottom-3)continue;
+       const collide=occupied.some(o=>!(bx+w+3<o.x||bx>o.x+o.w+3||
+        by+h+2<o.y||by>o.y+o.h+2));
+       if(!collide){box={x:bx,y:by,w,h};break;}
+      }
+      if(box){
+       occupied.push(box);point.labelBounds=box;
+       ctx.globalAlpha=active?1:.95;
+       ctx.fillStyle='#0b2334';ctx.fillRect(box.x,box.y,box.w,box.h);
+       ctx.strokeStyle=col;ctx.lineWidth=active?1.6:1;
+       ctx.strokeRect(box.x+.5,box.y+.5,box.w-1,box.h-1);
+       ctx.fillStyle=col;ctx.textBaseline='middle';
+       ctx.fillText(tag,box.x+7,box.y+11,box.w-11);
+       ctx.globalAlpha=1;
+      }
+     }
+    }
    }
   }
  }
