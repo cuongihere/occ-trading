@@ -57,6 +57,25 @@ export class BrowserFutures{
    .catch(e=>this.log('SQUARE_FAILED','Square: '+String(e.message||e).slice(0,180)));
  }
  // Store independently from Paper SQLite; reopening OCC must not reset real fills.
+ // Provenance tracking is diagnostic only; failure must not affect
+ // Binance entry/protection, reverse logic or risk checkpoints.
+ recordVerifiedSignal({orderId,clientId,signal}){
+  try{
+   if(!signal||!Number.isSafeInteger(Number(signal.barTime)))return false;
+   const ledger=new LiveStatsLedger(resolve(this.dir,'binance-live-stats.sqlite'));
+   try{
+    return ledger.recordEntrySignal({
+     groupId:clientId,orderId,side:signal.side,
+     barTime:Number(signal.barTime),confirmAt:Number(signal.barTime)+900000,
+     signalClose:Number(signal.candleClose),triggerPrice:Number(signal.triggerPrice),
+     crossMA:Number(signal.crossPrice)
+    });
+   }finally{ledger.close();}
+  }catch(e){
+   this.log('SIGNAL_AUDIT_FAILED',String(e.message||e).slice(0,180));
+   return false;
+  }
+ }
  registerRealOrder({orderId,groupId,clientId,role,side}){
   const path=resolve(this.dir,'binance-live-stats.sqlite');
   mkdirSync(this.dir,{recursive:true});
@@ -896,6 +915,7 @@ this.log('ENTRY_REQUEST_TIMING','M15 '+new Date(signal.barTime).toISOString()+
    this.activeProtection=result; // No new signal while a position is managed.
 this.error=null;
 this.log('PROTECTED','Futures thật entry '+response.orderId+' có SL và '+result.tps.length+' TP trên sàn; chờ vị thế đóng');
+this.recordVerifiedSignal({orderId:response.orderId,clientId,signal});
 this.notifySquareProtected(result);
 }catch(e){
  if(reverseAttempted&&!reverseCompleted){
