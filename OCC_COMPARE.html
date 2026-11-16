@@ -508,7 +508,10 @@ function draw(canvas,kind){
      markerHits.push(point);
      // Show prominent readable role tags at active/nearby Entry & SL;
      // avoid dumping every partial fill label on the same M15 candle.
+     const prior=event.role==='ENTRY'?seq.transitions.find(t=>
+      t.toGroupId===seq.groupId&&t.kind==='REVERSE_CLOSE_THEN_OPPOSITE_ENTRY'):null;
      const tag=event.role==='SL'?'SL HIT':event.role==='REVERSE'?'REVERSE CLOSE':
+      prior?'REV '+seq.side:
       event.role==='ENTRY'?seq.side+' ENTRY':event.label;
      const showLabel=active||bars.length<=330||
       (bars.length<=700&&(isEntry||isStop||isReverse));
@@ -745,6 +748,7 @@ async function focusGroup(groupId){
  const selected=(state?.historyGroups||[]).find(g=>g.groupId===groupId);
  if(!selected)return;
  selectedGroupId=groupId;
+ selectedEventId=(state.tradeSequences||[]).find(x=>x.groupId===groupId)?.entry.id||null;
  const oldest=state.candles[0]?.time||0;
  if(selected.entryTime<oldest){
   // Only go as far back as the verified 30-day Binance chart.
@@ -761,7 +765,7 @@ async function focusGroup(groupId){
  focusAt=group.entryTime;
  if($('chartHistory').hidden)$('chartHistory').hidden=false;
  $('historyToggle').setAttribute('aria-expanded','true');
- renderHistory();drawAll();
+ renderHistory();drawAll();lastInspectorKey=null;renderInspector();
  $('execHover').textContent='Đã chọn '+group.groupId+' · '+group.side+
   ' · Entry '+format(group.entryPrice,1)+' · '+
   (exactLinkedSignal(group)?'có liên kết tín hiệu OCC':'chưa chứng minh tín hiệu OCC');
@@ -776,8 +780,8 @@ async function refresh(days=null){
    {cache:'no-store'});
   const data=await response.json();
   if(!response.ok)throw Error(data.error||'HTTP '+response.status);
-  state=data;loadingDays=requestDays;
-  $('status').classList.remove('error');drawAll();renderRows();renderHistory();
+  state=data;loadingDays=requestDays;lastInspectorKey=null;
+  $('status').classList.remove('error');drawAll();renderRows();renderHistory();renderInspector();
   $('lastSync').textContent='Đồng bộ '+vn(data.asOf);
   $('status').textContent=data.candles.length+' nến · '+data.signals.length+
    ' giao cắt · '+data.fills.length+' fill thật · '+
@@ -803,7 +807,18 @@ $('historyToggle').onclick=()=>{
  setTimeout(drawAll,50);
 };
 $('historySearch').oninput=renderHistory;
-$('historyClear').onclick=()=>{selectedGroupId=null;focusAt=null;renderHistory();drawAll();};
+$('historyClear').onclick=()=>{selectedGroupId=null;selectedEventId=null;focusAt=null;
+ lastInspectorKey=null;renderHistory();drawAll();renderInspector();};
+$('inspectorClear').onclick=$('historyClear').onclick;
+$('inspectorFocus').onclick=async()=>{
+ if(!selectedGroupId)return;
+ const eventId=selectedEventId;
+ await focusGroup(selectedGroupId);
+ const point=(state?.tradeSequences||[]).find(x=>x.groupId===selectedGroupId)
+  ?.events.find(x=>x.id===eventId);
+ if(point){selectedEventId=eventId;focusAt=point.time;
+  lastInspectorKey=null;drawAll();renderInspector();}
+};
 function pan(direction){
  if(!state?.candles.length)return;
  const displayed=windowBars();
