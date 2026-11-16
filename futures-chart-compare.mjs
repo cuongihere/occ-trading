@@ -4,6 +4,7 @@
 import {DatabaseSync} from 'node:sqlite';
 import {existsSync} from 'node:fs';
 import {OCCSignalEngine,M15} from './occ-signal-engine.mjs';
+import {buildVerifiedTradeSequences} from './futures-chart-lifecycle.mjs';
 
 const finite=x=>Number.isFinite(Number(x))?Number(x):null;
 const round=(x,n=5)=>Number(Number(x).toFixed(n));
@@ -179,6 +180,7 @@ export function buildOCCChartComparison({h4,m15,fills=[],signalLinks=[],settings
   note:'OCC computed causally from completed BTCUSDT Binance candles. Not actual TradingView Pine Strategy Tester fills. Only exchange-verified fills are plotted. Historical signal/order associations are unverified unless a durable matching Entry Order ID record exists.',
   candles:candles.slice(-3500),series:series.slice(-3500),signals:signals.slice(-3500),
   fills:validFills.slice(-5800),historyGroups:historyGroups.slice(0,500),
+  tradeSequences:buildVerifiedTradeSequences(historyGroups,validFills),
   comparisons:comparisons.slice(0,500),settings:{
    slPercent:targets.SL,tp1Val:targets.TP1,tp2Val:targets.TP2,
    tp3Val:targets.TP3,tpMode:settings?.tpMode||'Percent'}};
