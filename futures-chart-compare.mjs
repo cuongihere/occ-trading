@@ -75,7 +75,7 @@ export function buildOCCChartComparison({h4,m15,fills=[],signalLinks=[],settings
     signalClose:b.close,crossMA:round((h.openSeries+h.closeSeries)/2),
     triggerBTC:round(b.close-8*diff),
     h4Provisional:b.closeTime!==ht+16*M15-1,
-    source:'OCC_CAUSAL_H4_SMMA8'});
+    source:'OCC_ENGINE_CAUSAL_SMMA8'});
   }
   previous=diff;
  }
@@ -176,7 +176,7 @@ export function buildOCCChartComparison({h4,m15,fills=[],signalLinks=[],settings
  historyGroups.sort((a,b)=>b.entryTime-a.entryTime);
  comparisons.sort((a,b)=>b.fillTime-a.fillTime);
  return {symbol:'BTCUSDT',interval:'15m',asOf:now,
-  note:'OCC computed causally from completed BTCUSDT Binance candles. Only exchange-verified fills are plotted. Historical signal/order associations are unverified unless a durable matching Entry Order ID record exists.',
+  note:'OCC computed causally from completed BTCUSDT Binance candles. Not actual TradingView Pine Strategy Tester fills. Only exchange-verified fills are plotted. Historical signal/order associations are unverified unless a durable matching Entry Order ID record exists.',
   candles:candles.slice(-3500),series:series.slice(-3500),signals:signals.slice(-3500),
   fills:validFills.slice(-5800),historyGroups:historyGroups.slice(0,500),
   comparisons:comparisons.slice(0,500),settings:{
