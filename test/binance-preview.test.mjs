@@ -391,7 +391,7 @@ test('Windows resumed protected OCC accepts explicit MARKET reversal even with L
  assert.match(html,/KHÔNG đảo\/vào thêm|giám sát SL\/TP cũ|ĐẢO CHIỀU THẬT/i);
  assert.match(html,/s\.config\?\.reverseOnSignal/);
  assert.match(svc,/if\(existing&&this\.observeExistingOnly&&!this\.config\.reverseOnSignal\)/);
- assert.match(svc,/if\(this\.config\.entryMode==='LIMIT_PULLBACK'&&!reverseCompleted\)/);
+ assert.match(svc,/if\(!reverseCompleted&&this\.config\.entryMode==='LIMIT_PULLBACK'\)/);
  assert.match(svc,/const quotePrice=await liveQuote\(\)/);
  assert.match(svc,/if\(existing\)\{\s+const indicativeQuote=await liveQuote\(\)/);
  assert.doesNotThrow(()=>new Function(html.match(/<script>([\s\S]*?)<\/script>/)[1]));
