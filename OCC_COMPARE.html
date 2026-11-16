@@ -422,32 +422,121 @@ function renderRows(){
  }
 }
 function drawAll(){draw($('reference'),'ref');draw($('execution'),'real');}
-async function refresh(){
- $('reload').disabled=true;$('status').textContent='Đang đọc Binance Futures M15/H4 và fill OCC đã xác minh…';
+
+function renderHistory(){
+ const body=$('historyGroups');body.replaceChildren();
+ const all=state?.historyGroups||[];
+ const search=$('historySearch').value.trim().toLowerCase();
+ const rows=all.filter(g=>!search||[
+  g.groupId,g.entryOrderId,g.side,...(g.exitOrderIds||[])
+ ].some(x=>String(x).toLowerCase().includes(search))).slice(0,150);
+ $('historyCount').textContent=rows.length+'/'+all.length+' nhóm · '+
+  all.filter(g=>g.signalStatus==='VERIFIED_ORDER_SIGNAL').length+' có liên kết tín hiệu';
+ if(!rows.length){
+  const tr=document.createElement('tr'),td=document.createElement('td');
+  td.colSpan=8;td.textContent='Chưa có fill OCC đã được Binance xác minh trong khoảng quét.';
+  tr.append(td);body.append(tr);return;
+ }
+ for(const group of rows){
+  const tr=document.createElement('tr');
+  if(group.groupId===selectedGroupId)tr.classList.add('selected');
+  const fields=[
+   vn(group.entryTime),group.side,format(group.qtyBTC,5),
+   format(group.entryPrice,1),
+   group.exitPrice==null?'—':format(group.exitPrice,1)+' '+group.roles.join('/'),
+   group.netExFundingUSDT==null?'—':format(group.netExFundingUSDT,3),
+   exactLinkedSignal(group)?'✓ Order ID':'⚠ Chưa xác minh'
+  ];
+  for(const v of fields){
+   const td=document.createElement('td');td.textContent=v;tr.append(td);
+  }
+  const td=document.createElement('td'),btn=document.createElement('button');
+  btn.type='button';btn.textContent=group.groupId===selectedGroupId?'Đang xem':'Xem';
+  btn.title='Đến vị trí Entry/Exit BTCUSDT của nhóm '+group.groupId;
+  btn.onclick=()=>focusGroup(group.groupId);
+  td.append(btn);tr.append(td);
+  tr.onclick=e=>{if(e.target!==btn)focusGroup(group.groupId);};
+  body.append(tr);
+ }
+}
+async function focusGroup(groupId){
+ const selected=(state?.historyGroups||[]).find(g=>g.groupId===groupId);
+ if(!selected)return;
+ selectedGroupId=groupId;
+ const oldest=state.candles[0]?.time||0;
+ if(selected.entryTime<oldest){
+  // Only go as far back as the verified 30-day Binance chart.
+  const ok=await refresh(30);
+  if(!ok){$('execHover').textContent='Không tải được nến lịch sử cho Order ID này.';return;}
+ }
+ const group=(state?.historyGroups||[]).find(g=>g.groupId===groupId);
+ if(!group)return;
+ if(group.entryTime<(state.candles[0]?.time||0)){
+  $('execHover').textContent='Order ID này nằm ngoài phạm vi nến Binance 30 ngày.';
+  return;
+ }
+ if(Number($('bars').value)>3)$('bars').value='3';
+ focusAt=group.entryTime;
+ if($('chartHistory').hidden)$('chartHistory').hidden=false;
+ $('historyToggle').setAttribute('aria-expanded','true');
+ renderHistory();drawAll();
+ $('execHover').textContent='Đã chọn '+group.groupId+' · '+group.side+
+  ' · Entry '+format(group.entryPrice,1)+' · '+
+  (exactLinkedSignal(group)?'có liên kết tín hiệu OCC':'chưa chứng minh tín hiệu OCC');
+}
+async function refresh(days=null){
+ if($('reload').disabled)return false;
+ const requestDays=Math.max(loadingDays,days||Number($('bars').value));
+ $('reload').disabled=true;
+ $('status').textContent='Đang đọc Binance Futures M15/H4 và fill đã xác minh…';
  try{
-  const res=await fetch('/api/binance/occ-chart-compare',{cache:'no-store'});
-  const data=await res.json();
-  if(!res.ok)throw Error(data.error||'HTTP '+res.status);
-  state=data;$('status').classList.remove('error');drawAll();renderRows();
+  const response=await fetch('/api/binance/occ-chart-compare?days='+requestDays,
+   {cache:'no-store'});
+  const data=await response.json();
+  if(!response.ok)throw Error(data.error||'HTTP '+response.status);
+  state=data;loadingDays=requestDays;
+  $('status').classList.remove('error');drawAll();renderRows();renderHistory();
   $('lastSync').textContent='Đồng bộ '+vn(data.asOf);
-  $('status').textContent='Đã nạp '+data.candles.length+' nến M15 · '+
-   data.signals.length+' giao cắt · '+data.fills.length+' fill đã xác minh · '+
-   data.comparisons.length+' hàng đối chiếu.'+
-   (data.livePosition?.verified?' · SL/TP đang mở đã đối soát Binance.':'')+
+  $('status').textContent=data.candles.length+' nến · '+data.signals.length+
+   ' giao cắt · '+data.fills.length+' fill thật · '+
+   (data.historyGroups?.length||0)+' nhóm đã nhận dạng.'+
    (data.liveReadbackError?' · '+data.liveReadbackError:'');
- }catch(e){$('status').classList.add('error');$('status').textContent='Không đồng bộ được chart: '+e.message+
-   ' · Kiểm tra kết nối Binance hoặc nhấn Đồng bộ chart.';}
- finally{$('reload').disabled=false;}
+  return true;
+ }catch(e){
+  $('status').classList.add('error');
+  $('status').textContent='Không tải được chart: '+e.message;
+  $('execHover').textContent='Nguồn Binance chưa sẵn sàng: '+e.message;
+  return false;
+ }finally{$('reload').disabled=false;}
 }
-$('reload').onclick=refresh;
-$('bars').onchange=drawAll;$('showMA').onchange=drawAll;$('showLevels').onchange=drawAll;
-let resizeTimer=null;window.addEventListener('resize',()=>{
- clearTimeout(resizeTimer);resizeTimer=setTimeout(drawAll,180);
-});
-if(document.documentElement.classList.contains('realonly')){
- $('showMA').checked=false;
- $('showLevels').checked=false;
+$('reload').onclick=()=>refresh();
+$('bars').onchange=async()=>{focusAt=null;await refresh();drawAll();};
+for(const id of ['showMA','showCross','showFills','showLevels'])
+ $(id).onchange=drawAll;
+$('historyToggle').onclick=()=>{
+ const hidden=!$('chartHistory').hidden;
+ $('chartHistory').hidden=hidden;
+ $('historyToggle').setAttribute('aria-expanded',String(!hidden));
+ $('historyToggle').textContent=hidden?'Lịch sử ▸':'Lịch sử ▾';
+ setTimeout(drawAll,50);
+};
+$('historySearch').oninput=renderHistory;
+$('historyClear').onclick=()=>{selectedGroupId=null;focusAt=null;renderHistory();drawAll();};
+function pan(direction){
+ if(!state?.candles.length)return;
+ const displayed=windowBars();
+ if(!displayed.length)return;
+ const shift=Math.max(1,Math.floor(Number($('bars').value)*96/2))*M15;
+ const central=focusAt||displayed[Math.floor(displayed.length*.5)].time;
+ focusAt=Math.max(state.candles[0].time,Math.min(state.candles.at(-1).time,
+  central+direction*shift));
+ drawAll();
 }
+$('panPrev').onclick=()=>pan(-1);
+$('panNext').onclick=()=>pan(1);
+let resizeTimer=null;
+window.addEventListener('resize',()=>{clearTimeout(resizeTimer);
+ resizeTimer=setTimeout(drawAll,140);});
 $('tv').addEventListener('toggle',()=>{
  const frame=$('tvFrame');
  if($('tv').open&&!frame.hasAttribute('src'))frame.src='/occ-tradingview-widget';
