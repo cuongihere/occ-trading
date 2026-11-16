@@ -112,6 +112,41 @@ html.embed.realonly .execPanel canvas{display:block!important;flex:1 1 auto!impo
 html.embed.realonly #execHover{flex:0 0 17px!important;min-height:17px!important;height:17px!important;
  font-size:10px!important;line-height:16px!important;overflow:hidden!important;
  white-space:nowrap!important;text-overflow:ellipsis!important;margin:0!important;padding:0 7px!important}
+/* One-chart OCC verification and history focus, 2026-11-16. */
+.chartHistory{display:flex;flex-direction:column;min-height:0;background:#0e2135;border:1px solid #274362;border-radius:8px;margin:6px 0}
+.chartHistory[hidden]{display:none!important}
+.chartHistoryHead{display:flex;align-items:center;gap:8px;padding:6px 9px;min-height:33px}
+.chartHistoryHead strong{font-size:11px;white-space:nowrap}
+.chartHistoryHead #historyCount{margin-left:auto;font-size:10px;color:#a6c6df;white-space:nowrap}
+.chartHistoryHead input{min-height:25px;width:200px;max-width:32%;padding:3px 7px;border-radius:5px;background:#0b1929;color:#d9ebf7;border:1px solid #365473;font-size:10px}
+.chartHistoryHead button,.chartHistory td button{min-height:22px;padding:2px 7px;border-radius:5px;font-size:10px;background:#182e46;border:1px solid #486882;color:#d9eeff}
+.chartHistoryScroll{min-height:0;flex:1;overflow:auto}
+.chartHistory table{width:100%;font-size:10px;white-space:nowrap;border-collapse:collapse}
+.chartHistory th,.chartHistory td{text-align:left;padding:5px 7px;border-bottom:1px solid #24435b}
+.chartHistory th{position:sticky;top:0;background:#172d45;z-index:1}
+.chartHistory tr.selected{background:#1f4b5d}
+.chartHistory tr:hover{background:#193e54}
+html.realonly .grid{grid-template-columns:1fr}
+html.realonly .refPanel{display:none!important}
+html.realonly .chartHistory{display:flex}
+html.embed.realonly .controls{overflow:visible!important;white-space:nowrap}
+html.embed.realonly .controls label:has(#showMA),
+html.embed.realonly .controls label:has(#showLevels){display:flex!important}
+html.embed.realonly .controls label{display:inline-flex;align-items:center;gap:3px;font-size:10px!important}
+html.embed.realonly .controls input[type=checkbox]{width:12px;height:12px;min-height:12px;margin:0}
+html.embed.realonly .controls button{min-height:22px!important;height:22px!important;padding:2px 5px!important}
+html.embed.realonly .controls #panPrev,html.embed.realonly .controls #panNext{padding:1px 4px!important}
+html.embed.realonly .controls #lastSync{display:none!important}
+html.embed.realonly .chartHistory{flex:0 0 116px;margin:0;border:0;border-top:1px solid #31536b;border-radius:0}
+html.embed.realonly .chartHistory[hidden]{display:none!important}
+html.embed.realonly .chartHistoryHead{min-height:26px;padding:2px 6px}
+html.embed.realonly .chartHistoryScroll{height:86px}
+html.embed.realonly .chartHistory th,html.embed.realonly .chartHistory td{padding:3px 5px}
+html.embed.realonly .chartHistoryHead input{min-height:22px;height:22px}
+html.embed.realonly .execPanel canvas{height:0!important;flex:1 1 auto!important}
+html.embed.realonly .execPanel .legend{display:none!important}
+@media(max-width:900px){html.embed.realonly .controls{flex-wrap:wrap;height:auto!important;flex-basis:55px!important}
+ html.embed.realonly .controls #historyToggle{margin-left:auto}}
 </style>
 </head>
 <body>
@@ -125,10 +160,15 @@ html.embed.realonly #execHover{flex:0 0 17px!important;min-height:17px!important
 <main>
 <p class="note"><strong>Phân biệt nguồn dữ liệu:</strong> chart bên trái dựng lại OCC theo <strong>engine SMMA8 của app</strong>, không giả vờ chạy trực tiếp Pine của TradingView. Chart bên phải chỉ đánh dấu <strong>fill đã xác minh từ Binance và ghi vào OCC SQLite</strong>; không lấy giá đặt lệnh làm giá khớp. Mọi ghép cặp tín hiệu ↔ fill chỉ là <strong>đối chiếu theo thời gian</strong>, chưa chứng minh lệnh xuất phát từ tín hiệu nào.</p>
 <div class="controls">
-<label>Khoảng nến <select id="bars"><option value="192">2 ngày</option><option value="384">4 ngày</option><option value="576" selected>6 ngày</option><option value="960">10 ngày</option></select></label>
-<label><input type="checkbox" id="showMA" checked> Hiện đường OCC</label>
-<label><input type="checkbox" id="showLevels" checked> Mức tham chiếu SL/TP</label>
-<button id="reload">Đồng bộ chart</button>
+<label>Khoảng <select id="bars"><option value="1">1 ngày</option><option value="3">3 ngày</option><option value="7" selected>7 ngày</option><option value="14">14 ngày</option><option value="30">30 ngày</option></select></label>
+<label><input type="checkbox" id="showMA" checked> OCC</label>
+<label><input type="checkbox" id="showCross" checked> Giao cắt</label>
+<label><input type="checkbox" id="showFills" checked> Lệnh thật</label>
+<label><input type="checkbox" id="showLevels" checked> SL/TP thật</label>
+<button id="historyToggle" type="button" aria-expanded="true">Lịch sử ▾</button>
+<button id="panPrev" type="button" title="Xem các nến trước">◀</button>
+<button id="panNext" type="button" title="Xem các nến sau">▶</button>
+<button id="reload">Đồng bộ</button>
 <span id="lastSync" class="tag">Chưa đồng bộ</span>
 </div>
 <p id="status" class="status">Đang tải dữ liệu nến và fill đã xác minh…</p>
@@ -139,13 +179,25 @@ html.embed.realonly #execHover{flex:0 0 17px!important;min-height:17px!important
 <div class="legend"><span class="good">● Giao cắt LONG</span><span class="bad">● Giao cắt SHORT</span><span style="color:#f8bd4b">━ MA Open SMMA8</span><span style="color:#40d4ea">━ MA Close SMMA8</span></div>
 <div id="refHover" class="foot">Trỏ chuột lên nến để xem giá và thời điểm.</div>
 </section>
-<section class="panel execPanel"><h2>2. Binance thực tế · fill của bot OCC</h2>
-<div class="subtitle">ENTRY/EXIT đã FILLED + đường giá SL/TP hiện còn mở, chỉ khi Binance xác minh OCC Algo ID.</div>
+<section class="panel execPanel"><h2>BTCUSDT M15 · OCC & lệnh thật</h2>
+<div class="subtitle">SMMA8 H4 (cam/xanh) · Giao cắt L/S · Binance FILLED · SL/TP còn hiệu lực</div>
 <canvas id="execution"></canvas>
-<div class="legend"><span class="good">▲ BUY fill</span><span class="bad">▼ SELL fill</span><span style="color:#8deca9">━ TP Binance đang mở</span><span style="color:#ff7280">━ SL Binance đang mở</span></div>
-<div id="execHover" class="foot">Chỉ hiển thị lệnh đã ghép Order ID thuộc OCC; lệnh chưa ghép không được nhận làm lệnh bot.</div>
+<div class="legend"><span style="color:#f2b749">━ OCC Open</span><span style="color:#30c7e5">━ OCC Close</span><span class="good">● L / ▲ BUY</span><span class="bad">● S / ▼ SELL</span><span style="color:#8deca9">━ TP thật</span><span style="color:#ff7280">━ SL thật</span></div>
+<div id="execHover" class="foot">Rê chuột: nến, OCC cross, giá BTC kích hoạt và fill Binance (Order ID).</div>
 </section>
 </div>
+<section id="chartHistory" class="chartHistory" aria-label="Tra soát lịch sử OCC Binance">
+ <div class="chartHistoryHead">
+  <strong>Tra soát lệnh Binance</strong>
+  <input id="historySearch" type="search" placeholder="Order ID / LONG / SHORT" aria-label="Lọc lệnh theo ID hoặc chiều">
+  <span id="historyCount">Đang nạp…</span>
+  <button id="historyClear" type="button" title="Bỏ chọn nhóm lệnh">Bỏ chọn</button>
+ </div>
+ <div class="chartHistoryScroll"><table>
+ <thead><tr><th>Vào (VN)</th><th>Chiều</th><th>BTC</th><th>Entry</th><th>Thoát</th><th>Net USDT*</th><th>Tín hiệu</th><th>Chart</th></tr></thead>
+ <tbody id="historyGroups"><tr><td colspan="8">Đang đối soát Binance…</td></tr></tbody>
+ </table></div>
+</section>
 <section class="panel comparePanel" style="margin-top:14px">
 <h2>3. Bảng sai lệch giá & thời gian</h2>
 <div class="subtitle">Giá tham chiếu: ENTRY = close nến OCC; SL/TP = các mức % tính từ close nến OCC. Không dùng giá MA làm giá BTC. Lệnh LIMIT có thể khớp muộn.</div>
