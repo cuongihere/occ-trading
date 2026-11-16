@@ -291,7 +291,8 @@ html.embed.realonly .inspectTitle{font-size:16px}
 const $=id=>document.getElementById(id);
 const M15=900000,format=(x,n=1)=>x==null||!Number.isFinite(Number(x))?'—':Number(x).toLocaleString('en-US',{maximumFractionDigits:n});
 const vn=t=>new Date(t).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',hour12:false});
-let state=null,selectedGroupId=null,focusAt=null,loadingDays=0,markerHits=[];
+let state=null,selectedGroupId=null,selectedEventId=null,focusAt=null,loadingDays=0,markerHits=[];
+let lastInspectorKey=null;
 function windowBars(){
  const count=Number($('bars').value)*96,all=state?.candles||[];
  if(!all.length)return [];
@@ -566,6 +567,95 @@ function draw(canvas,kind){
    .sort((a,b)=>Math.hypot(a.x-x0,a.y-y0)-Math.hypot(b.x-x0,b.y-y0))[0];
   if(hit){selectedGroupId=hit.groupId;renderHistory();drawAll();}
  };
+}
+
+function inspectorField(label,value){
+ const box=document.createElement('div'),title=document.createElement('label'),
+  body=document.createElement('strong');
+ box.className='inspectField';title.textContent=label;
+ body.textContent=value===null||value===undefined||value===''?'—':String(value);
+ box.append(title,body);return box;
+}
+function inspectorSection(title,text){
+ const section=document.createElement('div'),heading=document.createElement('h3'),
+  body=document.createElement('div');
+ section.className='inspectSection';body.className='inspectText';
+ heading.textContent=title;body.textContent=text;section.append(heading,body);
+ return section;
+}
+function renderInspector(groupId=selectedGroupId,eventId=selectedEventId,hover=false){
+ const seqs=state?.tradeSequences||[];
+ const seq=seqs.find(x=>x.groupId===groupId)||seqs.at(-1);
+ const ev=seq?.events.find(x=>x.id===eventId)||seq?.entry||null;
+ const key=[seq?.groupId||'',ev?.id||'',hover?'hover':'selected',selectedGroupId||''].join('/');
+ if(lastInspectorKey===key)return;
+ lastInspectorKey=key;
+ const out=$('inspectorContent'),mode=$('inspectorMode');
+ out.replaceChildren();
+ if(!seq){
+  mode.textContent='Binance · chưa có fill';
+  const empty=document.createElement('div');
+  empty.className='inspectorEmpty';empty.textContent=
+   'Chưa có Entry/SL/TP thật được xác minh trong SQLite. Bấm Lịch sử để tra soát.';
+  out.append(empty);return;
+ }
+ mode.textContent=hover?'Di chuột':selectedGroupId===seq.groupId?'Đang chọn':'Lệnh gần nhất';
+ const title=document.createElement('div');
+ title.className='inspectTitle '+(seq.side==='LONG'?'long':'short');
+ title.textContent=seq.side+' · '+(ev?.label||'ENTRY');
+ const sub=document.createElement('div');sub.className='inspectSub';
+ sub.textContent='Mã nhóm: '+seq.groupId+' · '+(seq.status==='CLOSED'?
+  'Đã đóng đủ fill':seq.status==='PARTIAL'?'Đóng một phần':'Chưa ghép đủ fill đóng');
+ out.append(title,sub);
+ const fields=document.createElement('div');fields.className='inspectGrid';
+ fields.append(
+  inspectorField('Giá khớp',ev?format(ev.price,2):null),
+  inspectorField('BTC khớp',ev?format(ev.qtyBTC,6):null),
+  inspectorField('Thời gian Binance',ev?vn(ev.time):null),
+  inspectorField('Order ID',ev?.orderId),
+  inspectorField('Entry nhóm',format(seq.entry.price,2)),
+  inspectorField('SL / TP đã khớp',seq.exits.map(x=>x.role).join(' / ')||'Chưa khớp'),
+  inspectorField('Net đã ghi (chưa funding)',seq.netExFundingUSDT==null?
+   'Thiếu phí USDT':format(seq.netExFundingUSDT,3)+' USDT'),
+  inspectorField('Phí fill (USDT)',ev?.feeUSDT==null?'Chưa quy đổi':format(ev.feeUSDT,5))
+ );
+ out.append(fields);
+ const isVerified=seq.signalStatus==='VERIFIED_ORDER_SIGNAL';
+ const signalText=isVerified?
+  'OCC xác nhận: '+vn(seq.signalAt)+
+  ' · Close '+format(seq.signalClose,1)+
+  ' · MA cross '+format(seq.crossMA,1)+
+  ' · BTC kích hoạt '+format(seq.triggerBTC,1):
+  'Lịch sử cũ chưa lưu liên kết chính xác tín hiệu ↔ Order ID. Không suy ra bot đảo lệnh chỉ từ vị trí các nến.';
+ const sig=inspectorSection('TÍN HIỆU OCC',signalText);
+ if(!isVerified)sig.classList.add('inspectUnverified');
+ out.append(sig);
+ const life=document.createElement('div');life.className='inspectSection';
+ const headline=document.createElement('h3');headline.textContent='CHUỖI LỆNH BINANCE';
+ const steps=document.createElement('div');steps.className='inspectSteps';
+ for(const event of seq.events){
+  const row=document.createElement('div'),name=document.createElement('span'),
+   val=document.createElement('b');
+  row.className='inspectStep'+(event.id===ev?.id?' active':'');
+  name.textContent=event.label+' · '+vn(event.time);
+  val.textContent=format(event.price,1);
+  row.append(name,val);
+  row.onclick=()=>{selectedGroupId=seq.groupId;selectedEventId=event.id;
+   renderHistory();lastInspectorKey=null;renderInspector();drawAll();};
+  row.style.cursor='pointer';
+  steps.append(row);
+ }
+ life.append(headline,steps);out.append(life);
+ const forward=seq.transitions.filter(x=>x.fromGroupId===seq.groupId);
+ if(forward.length){
+  const t=forward[0],found=seqs.find(x=>x.groupId===t.toGroupId);
+  const label=t.kind==='REVERSE_CLOSE_THEN_OPPOSITE_ENTRY'?
+   'Có fill đóng REVERSE và ENTRY '+(found?.side||'đối ứng')+
+   ' ngay sau đó. Liên kết thời gian không chứng minh tín hiệu đảo tự động.':
+   'LONG/SHORT vừa chạm SL rồi có lệnh '+(found?.side||'đối ứng')+
+   ' tiếp theo. Đây là lệnh mới, không khẳng định bot tự đảo từ SL.';
+  out.append(inspectorSection('LỆNH TIẾP THEO',label));
+ }
 }
 function renderRows(){
  const body=$('rows');body.replaceChildren();
