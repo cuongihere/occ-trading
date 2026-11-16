@@ -147,6 +147,66 @@ html.embed.realonly .execPanel canvas{height:0!important;flex:1 1 auto!important
 html.embed.realonly .execPanel .legend{display:none!important}
 @media(max-width:900px){html.embed.realonly .controls{flex-wrap:wrap;height:auto!important;flex-basis:55px!important}
  html.embed.realonly .controls #historyToggle{margin-left:auto}}
+
+/* Lifecycle inspector in the SAME chart viewport; all tooltip data is readable. */
+.tradeInspector{display:flex;flex-direction:column;min-width:0;min-height:0;
+ background:linear-gradient(175deg,#152e45,#0d1f30);
+ border:1px solid #335574;border-radius:8px;color:#e4f2ff;overflow:hidden}
+.inspectorHead{min-height:42px;padding:12px 13px;display:flex;align-items:center;
+ justify-content:space-between;gap:6px;border-bottom:1px solid #31506c}
+.inspectorHead strong{font-size:14px;letter-spacing:.35px}
+.inspectorHead span{font-size:10px;color:#9ec5df}
+.inspectorContent{flex:1;min-height:0;overflow-y:auto;padding:12px 13px;
+ display:flex;flex-direction:column;gap:10px}
+.inspectorEmpty{font-size:13px;line-height:1.8;color:#b1c9dc}
+.inspectTitle{font-weight:800;font-size:17px;line-height:1.25}
+.inspectTitle.long{color:#55d6ab}.inspectTitle.short{color:#ff8493}
+.inspectSub{font-size:11px;color:#acc8dc;line-height:1.5;word-break:break-word}
+.inspectGrid{display:grid;grid-template-columns:1fr 1fr;gap:9px 8px}
+.inspectField{min-width:0;border:1px solid #304e66;border-radius:7px;
+ padding:8px 7px;background:#10263a}
+.inspectField label{display:block;color:#91b5d0;font-size:11px;margin-bottom:5px}
+.inspectField strong{font-size:14px;font-weight:800;word-break:break-word}
+.inspectSection{border-top:1px solid #2b4c64;padding-top:9px}
+.inspectSection h3{margin:0 0 7px;font-size:12px;color:#d3e9fc}
+.inspectSection .inspectText{font-size:12px;line-height:1.6;color:#d7e7f2}
+.inspectSteps{display:flex;flex-direction:column;gap:5px}
+.inspectStep{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;
+ padding:5px 7px;border:1px solid #2b4a64;border-radius:6px;font-size:11px}
+.inspectStep.active{border-color:#e9d090;background:#293d45}
+.inspectStep span{color:#bfd8e9}.inspectStep b{font-size:11px}
+.inspectUnverified{font-size:11px;color:#ffe0a1;line-height:1.6}
+.inspectorBottom{display:flex;gap:6px;padding:9px;border-top:1px solid #31506c}
+.inspectorBottom button{flex:1;min-width:0;font-size:11px;font-weight:700;
+ min-height:29px;padding:3px 5px;border-radius:6px;background:#193a52}
+html.realonly .grid{grid-template-columns:minmax(0,1fr) 300px}
+html.realonly .tradeInspector{display:flex}
+html:not(.realonly) .tradeInspector{display:none}
+html.embed.realonly .grid{display:grid!important;grid-template-columns:minmax(0,1fr) 300px!important;
+ gap:5px!important;min-height:0!important;overflow:hidden!important}
+html.embed.realonly .panel.execPanel{display:flex!important;min-width:0!important;width:100%;
+ height:100%!important;min-height:0!important;flex-direction:column}
+html.embed.realonly #execHover{display:none!important}
+html.embed.realonly .tradeInspector{height:100%;min-height:0;border-radius:0;border:0;
+ border-left:1px solid #365773!important}
+html.embed.realonly .inspectorContent{padding:10px}
+html.embed.realonly .inspectorHead{min-height:36px;padding:8px 10px}
+html.embed.realonly .inspectorHead strong{font-size:13px}
+html.embed.realonly .inspectTitle{font-size:16px}
+@media(max-width:1200px){
+ html.embed.realonly .grid{grid-template-columns:minmax(0,1fr) 250px!important}
+ html.embed.realonly .inspectGrid{gap:5px}
+ html.embed.realonly .inspectField{padding:6px}
+ html.embed.realonly .inspectField strong{font-size:12px}
+}
+@media(max-width:850px){
+ html.embed.realonly .grid{grid-template-columns:minmax(0,1fr) 210px!important}
+ html.embed.realonly .inspectorHead span{display:none}
+ html.embed.realonly .inspectorContent{padding:6px}
+ html.embed.realonly .inspectGrid{grid-template-columns:1fr 1fr;gap:4px}
+ html.embed.realonly .inspectField{padding:4px}
+ html.embed.realonly .inspectorBottom button{font-size:10px}
+}
 </style>
 </head>
 <body>
@@ -185,6 +245,19 @@ html.embed.realonly .execPanel .legend{display:none!important}
 <div class="legend"><span style="color:#f2b749">━ OCC Open</span><span style="color:#30c7e5">━ OCC Close</span><span class="good">● L / ▲ BUY</span><span class="bad">● S / ▼ SELL</span><span style="color:#8deca9">━ TP thật</span><span style="color:#ff7280">━ SL thật</span></div>
 <div id="execHover" class="foot">Rê chuột: nến, OCC cross, giá BTC kích hoạt và fill Binance (Order ID).</div>
 </section>
+<aside id="tradeInspector" class="tradeInspector" aria-label="Thông số lệnh đã khớp Binance">
+ <div class="inspectorHead">
+  <strong>CHI TIẾT LỆNH</strong>
+  <span id="inspectorMode">Binance · đã xác minh</span>
+ </div>
+ <div id="inspectorContent" class="inspectorContent" aria-live="polite">
+  <div class="inspectorEmpty">Chọn ENTRY, SL/TP hoặc một dòng lịch sử để xem thông số tại đây.</div>
+ </div>
+ <div class="inspectorBottom">
+  <button type="button" id="inspectorFocus">Đến vị trí lệnh</button>
+  <button type="button" id="inspectorClear">Bỏ chọn</button>
+ </div>
+</aside>
 </div>
 <section id="chartHistory" class="chartHistory" aria-label="Tra soát lịch sử OCC Binance">
  <div class="chartHistoryHead">
