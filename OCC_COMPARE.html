@@ -548,9 +548,20 @@ function draw(canvas,kind){
   ctx.font='10px system-ui';ctx.fillStyle=colors.text;
   ctx.fillText(new Date(b.time).toLocaleDateString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',month:'2-digit',day:'2-digit'}),x(b.time)-15,H-17);
  }
+ const hitFor=(mx,my)=>{
+  const matches=markerHits.filter(p=>{
+   const box=p.labelBounds;
+   return Math.hypot(p.x-mx,p.y-my)<15||
+    Boolean(box&&mx>=box.x&&mx<=box.x+box.w&&my>=box.y&&my<=box.y+box.h);
+  });
+  return matches.sort((a,b)=>{
+   const av=(a.groupId===selectedGroupId?0:1),bv=(b.groupId===selectedGroupId?0:1);
+   return av-bv||Math.hypot(a.x-mx,a.y-my)-Math.hypot(b.x-mx,b.y-my);
+  })[0]||null;
+ };
  canvas.onmousemove=e=>{
-  const rect=canvas.getBoundingClientRect();
-  const at=Math.min(bars.length-1,Math.max(0,Math.round((e.clientX-rect.left-left)/usable*(bars.length-1))));
+  const rect=canvas.getBoundingClientRect(),mx=e.clientX-rect.left,my=e.clientY-rect.top;
+  const at=Math.min(bars.length-1,Math.max(0,Math.round((mx-left)/usable*(bars.length-1))));
   const b=bars[at],dst=kind==='real'?'execHover':'refHover';
   const atBar=kind==='real'?fills.filter(f=>Math.floor(f.time/M15)*M15===b.time):[];
   const cross=kind==='real'?crosses.find(z=>z.time===b.time):null;
@@ -559,14 +570,25 @@ function draw(canvas,kind){
     ' · BTC kích hoạt '+format(cross.triggerBTC,1):'')+
    (atBar.length?' · '+atBar.map(f=>f.role+' '+format(f.price,1)+
     ' / '+f.qty+' BTC #'+f.orderId).join(' | '):'');
+  if(kind==='real'){
+   const hit=hitFor(mx,my);
+   canvas.style.cursor=hit?'pointer':'crosshair';
+   if(hit)renderInspector(hit.groupId,hit.eventId,true);
+   else renderInspector();
+  }
  };
- if(kind==='real')canvas.onclick=e=>{
-  const rect=canvas.getBoundingClientRect();
-  const x0=e.clientX-rect.left,y0=e.clientY-rect.top;
-  const hit=markerHits.filter(p=>Math.hypot(p.x-x0,p.y-y0)<13)
-   .sort((a,b)=>Math.hypot(a.x-x0,a.y-y0)-Math.hypot(b.x-x0,b.y-y0))[0];
-  if(hit){selectedGroupId=hit.groupId;renderHistory();drawAll();}
- };
+ if(kind==='real'){
+  canvas.onmouseleave=()=>{canvas.style.cursor='crosshair';lastInspectorKey=null;renderInspector();};
+  canvas.onclick=e=>{
+   const rect=canvas.getBoundingClientRect(),mx=e.clientX-rect.left,my=e.clientY-rect.top;
+   const hit=hitFor(mx,my);
+   if(hit){
+    selectedGroupId=hit.groupId;selectedEventId=hit.eventId;
+    focusAt=hit.event.time;
+    renderHistory();lastInspectorKey=null;renderInspector();drawAll();
+   }
+  };
+ }
 }
 
 function inspectorField(label,value){
