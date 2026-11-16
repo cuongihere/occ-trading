@@ -147,6 +147,66 @@ html.embed.realonly .execPanel canvas{height:0!important;flex:1 1 auto!important
 html.embed.realonly .execPanel .legend{display:none!important}
 @media(max-width:900px){html.embed.realonly .controls{flex-wrap:wrap;height:auto!important;flex-basis:55px!important}
  html.embed.realonly .controls #historyToggle{margin-left:auto}}
+
+/* Lifecycle inspector in the SAME chart viewport; all tooltip data is readable. */
+.tradeInspector{display:flex;flex-direction:column;min-width:0;min-height:0;
+ background:linear-gradient(175deg,#152e45,#0d1f30);
+ border:1px solid #335574;border-radius:8px;color:#e4f2ff;overflow:hidden}
+.inspectorHead{min-height:42px;padding:12px 13px;display:flex;align-items:center;
+ justify-content:space-between;gap:6px;border-bottom:1px solid #31506c}
+.inspectorHead strong{font-size:14px;letter-spacing:.35px}
+.inspectorHead span{font-size:10px;color:#9ec5df}
+.inspectorContent{flex:1;min-height:0;overflow-y:auto;padding:12px 13px;
+ display:flex;flex-direction:column;gap:10px}
+.inspectorEmpty{font-size:13px;line-height:1.8;color:#b1c9dc}
+.inspectTitle{font-weight:800;font-size:17px;line-height:1.25}
+.inspectTitle.long{color:#55d6ab}.inspectTitle.short{color:#ff8493}
+.inspectSub{font-size:11px;color:#acc8dc;line-height:1.5;word-break:break-word}
+.inspectGrid{display:grid;grid-template-columns:1fr 1fr;gap:9px 8px}
+.inspectField{min-width:0;border:1px solid #304e66;border-radius:7px;
+ padding:8px 7px;background:#10263a}
+.inspectField label{display:block;color:#91b5d0;font-size:11px;margin-bottom:5px}
+.inspectField strong{font-size:14px;font-weight:800;word-break:break-word}
+.inspectSection{border-top:1px solid #2b4c64;padding-top:9px}
+.inspectSection h3{margin:0 0 7px;font-size:12px;color:#d3e9fc}
+.inspectSection .inspectText{font-size:12px;line-height:1.6;color:#d7e7f2}
+.inspectSteps{display:flex;flex-direction:column;gap:5px}
+.inspectStep{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;
+ padding:5px 7px;border:1px solid #2b4a64;border-radius:6px;font-size:11px}
+.inspectStep.active{border-color:#e9d090;background:#293d45}
+.inspectStep span{color:#bfd8e9}.inspectStep b{font-size:11px}
+.inspectUnverified{font-size:11px;color:#ffe0a1;line-height:1.6}
+.inspectorBottom{display:flex;gap:6px;padding:9px;border-top:1px solid #31506c}
+.inspectorBottom button{flex:1;min-width:0;font-size:11px;font-weight:700;
+ min-height:29px;padding:3px 5px;border-radius:6px;background:#193a52}
+html.realonly .grid{grid-template-columns:minmax(0,1fr) 300px}
+html.realonly .tradeInspector{display:flex}
+html:not(.realonly) .tradeInspector{display:none}
+html.embed.realonly .grid{display:grid!important;grid-template-columns:minmax(0,1fr) 300px!important;
+ gap:5px!important;min-height:0!important;overflow:hidden!important}
+html.embed.realonly .panel.execPanel{display:flex!important;min-width:0!important;width:100%;
+ height:100%!important;min-height:0!important;flex-direction:column}
+html.embed.realonly #execHover{display:none!important}
+html.embed.realonly .tradeInspector{height:100%;min-height:0;border-radius:0;border:0;
+ border-left:1px solid #365773!important}
+html.embed.realonly .inspectorContent{padding:10px}
+html.embed.realonly .inspectorHead{min-height:36px;padding:8px 10px}
+html.embed.realonly .inspectorHead strong{font-size:13px}
+html.embed.realonly .inspectTitle{font-size:16px}
+@media(max-width:1200px){
+ html.embed.realonly .grid{grid-template-columns:minmax(0,1fr) 250px!important}
+ html.embed.realonly .inspectGrid{gap:5px}
+ html.embed.realonly .inspectField{padding:6px}
+ html.embed.realonly .inspectField strong{font-size:12px}
+}
+@media(max-width:850px){
+ html.embed.realonly .grid{grid-template-columns:minmax(0,1fr) 210px!important}
+ html.embed.realonly .inspectorHead span{display:none}
+ html.embed.realonly .inspectorContent{padding:6px}
+ html.embed.realonly .inspectGrid{grid-template-columns:1fr 1fr;gap:4px}
+ html.embed.realonly .inspectField{padding:4px}
+ html.embed.realonly .inspectorBottom button{font-size:10px}
+}
 </style>
 </head>
 <body>
@@ -185,6 +245,19 @@ html.embed.realonly .execPanel .legend{display:none!important}
 <div class="legend"><span style="color:#f2b749">━ OCC Open</span><span style="color:#30c7e5">━ OCC Close</span><span class="good">● L / ▲ BUY</span><span class="bad">● S / ▼ SELL</span><span style="color:#8deca9">━ TP thật</span><span style="color:#ff7280">━ SL thật</span></div>
 <div id="execHover" class="foot">Rê chuột: nến, OCC cross, giá BTC kích hoạt và fill Binance (Order ID).</div>
 </section>
+<aside id="tradeInspector" class="tradeInspector" aria-label="Thông số lệnh đã khớp Binance">
+ <div class="inspectorHead">
+  <strong>CHI TIẾT LỆNH</strong>
+  <span id="inspectorMode">Binance · đã xác minh</span>
+ </div>
+ <div id="inspectorContent" class="inspectorContent" aria-live="polite">
+  <div class="inspectorEmpty">Chọn ENTRY, SL/TP hoặc một dòng lịch sử để xem thông số tại đây.</div>
+ </div>
+ <div class="inspectorBottom">
+  <button type="button" id="inspectorFocus">Đến vị trí lệnh</button>
+  <button type="button" id="inspectorClear">Bỏ chọn</button>
+ </div>
+</aside>
 </div>
 <section id="chartHistory" class="chartHistory" aria-label="Tra soát lịch sử OCC Binance">
  <div class="chartHistoryHead">
@@ -218,7 +291,8 @@ html.embed.realonly .execPanel .legend{display:none!important}
 const $=id=>document.getElementById(id);
 const M15=900000,format=(x,n=1)=>x==null||!Number.isFinite(Number(x))?'—':Number(x).toLocaleString('en-US',{maximumFractionDigits:n});
 const vn=t=>new Date(t).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',hour12:false});
-let state=null,selectedGroupId=null,focusAt=null,loadingDays=0,markerHits=[];
+let state=null,selectedGroupId=null,selectedEventId=null,focusAt=null,loadingDays=0,markerHits=[];
+let lastInspectorKey=null;
 function windowBars(){
  const count=Number($('bars').value)*96,all=state?.candles||[];
  if(!all.length)return [];
@@ -353,20 +427,120 @@ function draw(canvas,kind){
    }
   }
   markerHits=[];
-  if($('showFills').checked)for(const f of fills){
-   const xx=x(Math.floor(f.time/M15)*M15),yy=y(f.price);
-   const buy=f.side==='BUY';
-   const active=f.groupId===selectedGroupId;
-   ctx.globalAlpha=selectedGroupId&&!active?.38:1;
-   ctx.fillStyle=buy?colors.up:colors.down;
-   if(active){ctx.strokeStyle='#f8e6a1';ctx.lineWidth=1.5;
-    ctx.beginPath();ctx.arc(xx,yy,9,0,Math.PI*2);ctx.stroke();}
-   markerHits.push({x:xx,y:yy,groupId:f.groupId});
-   ctx.beginPath();ctx.moveTo(xx,yy+(buy?7:-7));ctx.lineTo(xx-5,yy+(buy?-5:5));
-   ctx.lineTo(xx+5,yy+(buy?-5:5));ctx.closePath();ctx.fill();ctx.globalAlpha=1;
-   if(active||!document.documentElement.classList.contains('realonly')){
-    ctx.font='bold 10px system-ui';ctx.fillStyle='#e4f3ff';
-    ctx.fillText(f.role,xx+7,yy-11);
+  const visibleSequences=(state.tradeSequences||[]).filter(seq=>
+   seq.events.some(ev=>ev.time>=first&&ev.time<last+M15));
+  const occupied=[];
+  if($('showFills').checked){
+   // Exchange-verified ENTRY → SL/TP/CLOSE/REVERSE lifecycle.
+   // A close's order role is ground truth; chronological next entries are
+   // never presented as a proven automatic reversal.
+   for(const seq of visibleSequences){
+    const entry=seq.entry,active=seq.groupId===selectedGroupId;
+    const ex=entry?x(Math.floor(entry.time/M15)*M15):null;
+    const ey=entry?y(entry.price):null;
+    if(entry&&entry.time>=first&&entry.time<last+M15){
+     for(const ev of seq.exits){
+      if(ev.time<first||ev.time>=last+M15)continue;
+      ctx.globalAlpha=active?.9:.3;
+      ctx.strokeStyle=active?'#f5df96':'#73a7c1';
+      ctx.lineWidth=active?2:1.25;ctx.setLineDash(active?[]:[3,4]);
+      ctx.beginPath();ctx.moveTo(ex,ey);
+      ctx.lineTo(x(Math.floor(ev.time/M15)*M15),y(ev.price));
+      ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1;
+     }
+    }
+    // Draw a dashed arrow only between actually recorded closing and
+    // subsequent opposite entry fills. Role REVERSE is an exchange order
+    // category; SL → new SHORT means 'later trade', not verified causality.
+    for(const link of seq.transitions){
+     if(link.fromGroupId!==seq.groupId||link.toTime<first||link.fromTime>last+M15)continue;
+     if(!active&&selectedGroupId&&link.toGroupId!==selectedGroupId)continue;
+     const a=x(Math.floor(link.fromTime/M15)*M15),b=x(Math.floor(link.toTime/M15)*M15);
+     const ya=y(link.fromPrice),yb=y(link.toPrice);
+     if(a>right||b<left)continue;
+     ctx.globalAlpha=active?.8:.4;ctx.lineWidth=active?2:1;
+     ctx.setLineDash([5,5]);ctx.strokeStyle=link.kind==='REVERSE_CLOSE_THEN_OPPOSITE_ENTRY'?
+      '#ffcf7c':'#86a9ca';
+     ctx.beginPath();ctx.moveTo(a,ya);ctx.lineTo(b,yb);ctx.stroke();
+     ctx.setLineDash([]);ctx.globalAlpha=1;
+     if((active||bars.length<=320)&&Math.abs(b-a)>45){
+      const label=link.kind==='REVERSE_CLOSE_THEN_OPPOSITE_ENTRY'?
+       'REV → '+(link.label.endsWith('SHORT')?'SHORT':'LONG'):
+       'SAU SL → LỆNH MỚI';
+      ctx.font='bold 10px system-ui';ctx.fillStyle='#d7e5ed';
+      ctx.fillText(label,(a+b)/2-35,(ya+yb)/2-11);
+     }
+    }
+   }
+   for(const seq of visibleSequences){
+    const related=seq.transitions.some(link=>link.fromGroupId===selectedGroupId||
+     link.toGroupId===selectedGroupId);
+    for(const event of seq.events){
+     if(event.time<first||event.time>=last+M15)continue;
+     const xx=x(Math.floor(event.time/M15)*M15),yy=y(event.price);
+     const active=seq.groupId===selectedGroupId;
+     const highlighted=active&&(!selectedEventId||selectedEventId===event.id);
+     const isEntry=event.role==='ENTRY',isStop=event.role==='SL',
+      isReverse=event.role==='REVERSE',isProfit=event.role.startsWith('TP');
+     const col=isStop?'#fa727e':isEntry?
+      (seq.side==='LONG'?'#3ddba3':'#f58b97'):
+      isProfit?'#b2eb6e':isReverse?'#ffc879':'#80beec';
+     ctx.globalAlpha=selectedGroupId&&!active&&!related?.37:1;
+     ctx.fillStyle=col;ctx.strokeStyle=highlighted?'#fff3bf':col;
+     ctx.lineWidth=highlighted?2.5:1;
+     ctx.beginPath();
+     if(isEntry){
+      // Real Entry fill: LONG upward triangle, SHORT downward triangle.
+      const up=seq.side==='LONG';
+      ctx.moveTo(xx,yy+(up?-8:8));ctx.lineTo(xx-7,yy+(up?5:-5));
+      ctx.lineTo(xx+7,yy+(up?5:-5));ctx.closePath();
+     }else if(isStop){
+      // STOP fill: red diamond. Not merely an unfilled STOP order.
+      ctx.moveTo(xx,yy-7);ctx.lineTo(xx+7,yy);
+      ctx.lineTo(xx,yy+7);ctx.lineTo(xx-7,yy);ctx.closePath();
+     }else{
+      ctx.arc(xx,yy,isReverse?7:5,0,Math.PI*2);
+     }
+     ctx.fill();if(highlighted)ctx.stroke();
+     ctx.globalAlpha=1;
+     const point={x:xx,y:yy,groupId:seq.groupId,eventId:event.id,event,
+      sequence:seq,labelBounds:null};
+     markerHits.push(point);
+     // Show prominent readable role tags at active/nearby Entry & SL;
+     // avoid dumping every partial fill label on the same M15 candle.
+     const prior=event.role==='ENTRY'?seq.transitions.find(t=>
+      t.toGroupId===seq.groupId&&t.kind==='REVERSE_CLOSE_THEN_OPPOSITE_ENTRY'):null;
+     const tag=event.role==='SL'?'SL HIT':event.role==='REVERSE'?'REVERSE CLOSE':
+      prior?'REV '+seq.side:
+      event.role==='ENTRY'?seq.side+' ENTRY':event.label;
+     const showLabel=active||bars.length<=330||
+      (bars.length<=700&&(isEntry||isStop||isReverse));
+     if(showLabel){
+      ctx.font='bold 11px system-ui';
+      const w=Math.min(142,Math.max(48,ctx.measureText(tag).width+14)),h=21;
+      const placements=[
+       [xx+10,yy-32],[xx+10,yy+10],[xx-w-10,yy-32],
+       [xx-w-10,yy+10],[xx-w/2,yy-52],[xx-w/2,yy+22]
+      ];
+      let box=null;
+      for(const [bx,by] of placements){
+       if(bx<left+2||bx+w>right-3||by<top+2||by+h>bottom-3)continue;
+       const collide=occupied.some(o=>!(bx+w+3<o.x||bx>o.x+o.w+3||
+        by+h+2<o.y||by>o.y+o.h+2));
+       if(!collide){box={x:bx,y:by,w,h};break;}
+      }
+      if(box){
+       occupied.push(box);point.labelBounds=box;
+       ctx.globalAlpha=active?1:.95;
+       ctx.fillStyle='#0b2334';ctx.fillRect(box.x,box.y,box.w,box.h);
+       ctx.strokeStyle=col;ctx.lineWidth=active?1.6:1;
+       ctx.strokeRect(box.x+.5,box.y+.5,box.w-1,box.h-1);
+       ctx.fillStyle=col;ctx.textBaseline='middle';
+       ctx.fillText(tag,box.x+7,box.y+11,box.w-11);
+       ctx.globalAlpha=1;
+      }
+     }
+    }
    }
   }
  }
@@ -377,9 +551,20 @@ function draw(canvas,kind){
   ctx.font='10px system-ui';ctx.fillStyle=colors.text;
   ctx.fillText(new Date(b.time).toLocaleDateString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',month:'2-digit',day:'2-digit'}),x(b.time)-15,H-17);
  }
+ const hitFor=(mx,my)=>{
+  const matches=markerHits.filter(p=>{
+   const box=p.labelBounds;
+   return Math.hypot(p.x-mx,p.y-my)<15||
+    Boolean(box&&mx>=box.x&&mx<=box.x+box.w&&my>=box.y&&my<=box.y+box.h);
+  });
+  return matches.sort((a,b)=>{
+   const av=(a.groupId===selectedGroupId?0:1),bv=(b.groupId===selectedGroupId?0:1);
+   return av-bv||Math.hypot(a.x-mx,a.y-my)-Math.hypot(b.x-mx,b.y-my);
+  })[0]||null;
+ };
  canvas.onmousemove=e=>{
-  const rect=canvas.getBoundingClientRect();
-  const at=Math.min(bars.length-1,Math.max(0,Math.round((e.clientX-rect.left-left)/usable*(bars.length-1))));
+  const rect=canvas.getBoundingClientRect(),mx=e.clientX-rect.left,my=e.clientY-rect.top;
+  const at=Math.min(bars.length-1,Math.max(0,Math.round((mx-left)/usable*(bars.length-1))));
   const b=bars[at],dst=kind==='real'?'execHover':'refHover';
   const atBar=kind==='real'?fills.filter(f=>Math.floor(f.time/M15)*M15===b.time):[];
   const cross=kind==='real'?crosses.find(z=>z.time===b.time):null;
@@ -388,14 +573,114 @@ function draw(canvas,kind){
     ' · BTC kích hoạt '+format(cross.triggerBTC,1):'')+
    (atBar.length?' · '+atBar.map(f=>f.role+' '+format(f.price,1)+
     ' / '+f.qty+' BTC #'+f.orderId).join(' | '):'');
+  if(kind==='real'){
+   const hit=hitFor(mx,my);
+   canvas.style.cursor=hit?'pointer':'crosshair';
+   if(hit)renderInspector(hit.groupId,hit.eventId,true);
+   else renderInspector();
+  }
  };
- if(kind==='real')canvas.onclick=e=>{
-  const rect=canvas.getBoundingClientRect();
-  const x0=e.clientX-rect.left,y0=e.clientY-rect.top;
-  const hit=markerHits.filter(p=>Math.hypot(p.x-x0,p.y-y0)<13)
-   .sort((a,b)=>Math.hypot(a.x-x0,a.y-y0)-Math.hypot(b.x-x0,b.y-y0))[0];
-  if(hit){selectedGroupId=hit.groupId;renderHistory();drawAll();}
- };
+ if(kind==='real'){
+  canvas.onmouseleave=()=>{canvas.style.cursor='crosshair';lastInspectorKey=null;renderInspector();};
+  canvas.onclick=e=>{
+   const rect=canvas.getBoundingClientRect(),mx=e.clientX-rect.left,my=e.clientY-rect.top;
+   const hit=hitFor(mx,my);
+   if(hit){
+    selectedGroupId=hit.groupId;selectedEventId=hit.eventId;
+    focusAt=hit.event.time;
+    renderHistory();lastInspectorKey=null;renderInspector();drawAll();
+   }
+  };
+ }
+}
+
+function inspectorField(label,value){
+ const box=document.createElement('div'),title=document.createElement('label'),
+  body=document.createElement('strong');
+ box.className='inspectField';title.textContent=label;
+ body.textContent=value===null||value===undefined||value===''?'—':String(value);
+ box.append(title,body);return box;
+}
+function inspectorSection(title,text){
+ const section=document.createElement('div'),heading=document.createElement('h3'),
+  body=document.createElement('div');
+ section.className='inspectSection';body.className='inspectText';
+ heading.textContent=title;body.textContent=text;section.append(heading,body);
+ return section;
+}
+function renderInspector(groupId=selectedGroupId,eventId=selectedEventId,hover=false){
+ const seqs=state?.tradeSequences||[];
+ const seq=seqs.find(x=>x.groupId===groupId)||seqs.at(-1);
+ const ev=seq?.events.find(x=>x.id===eventId)||seq?.entry||null;
+ const key=[seq?.groupId||'',ev?.id||'',hover?'hover':'selected',selectedGroupId||''].join('/');
+ if(lastInspectorKey===key)return;
+ lastInspectorKey=key;
+ const out=$('inspectorContent'),mode=$('inspectorMode');
+ out.replaceChildren();
+ if(!seq){
+  mode.textContent='Binance · chưa có fill';
+  const empty=document.createElement('div');
+  empty.className='inspectorEmpty';empty.textContent=
+   'Chưa có Entry/SL/TP thật được xác minh trong SQLite. Bấm Lịch sử để tra soát.';
+  out.append(empty);return;
+ }
+ mode.textContent=hover?'Di chuột':selectedGroupId===seq.groupId?'Đang chọn':'Lệnh gần nhất';
+ const title=document.createElement('div');
+ title.className='inspectTitle '+(seq.side==='LONG'?'long':'short');
+ title.textContent=seq.side+' · '+(ev?.label||'ENTRY');
+ const sub=document.createElement('div');sub.className='inspectSub';
+ sub.textContent='Mã nhóm: '+seq.groupId+' · '+(seq.status==='CLOSED'?
+  'Đã đóng đủ fill':seq.status==='PARTIAL'?'Đóng một phần':'Chưa ghép đủ fill đóng');
+ out.append(title,sub);
+ const fields=document.createElement('div');fields.className='inspectGrid';
+ fields.append(
+  inspectorField('Giá khớp',ev?format(ev.price,2):null),
+  inspectorField('BTC khớp',ev?format(ev.qtyBTC,6):null),
+  inspectorField('Thời gian Binance',ev?vn(ev.time):null),
+  inspectorField('Order ID',ev?.orderId),
+  inspectorField('Entry nhóm',format(seq.entry.price,2)),
+  inspectorField('SL / TP đã khớp',seq.exits.map(x=>x.role).join(' / ')||'Chưa khớp'),
+  inspectorField('Net đã ghi (chưa funding)',seq.netExFundingUSDT==null?
+   'Thiếu phí USDT':format(seq.netExFundingUSDT,3)+' USDT'),
+  inspectorField('Phí fill (USDT)',ev?.feeUSDT==null?'Chưa quy đổi':format(ev.feeUSDT,5))
+ );
+ out.append(fields);
+ const isVerified=seq.signalStatus==='VERIFIED_ORDER_SIGNAL';
+ const signalText=isVerified?
+  'OCC xác nhận: '+vn(seq.signalAt)+
+  ' · Close '+format(seq.signalClose,1)+
+  ' · MA cross '+format(seq.crossMA,1)+
+  ' · BTC kích hoạt '+format(seq.triggerBTC,1):
+  'Lịch sử cũ chưa lưu liên kết chính xác tín hiệu ↔ Order ID. Không suy ra bot đảo lệnh chỉ từ vị trí các nến.';
+ const sig=inspectorSection('TÍN HIỆU OCC',signalText);
+ if(!isVerified)sig.classList.add('inspectUnverified');
+ out.append(sig);
+ const life=document.createElement('div');life.className='inspectSection';
+ const headline=document.createElement('h3');headline.textContent='CHUỖI LỆNH BINANCE';
+ const steps=document.createElement('div');steps.className='inspectSteps';
+ for(const event of seq.events){
+  const row=document.createElement('div'),name=document.createElement('span'),
+   val=document.createElement('b');
+  row.className='inspectStep'+(event.id===ev?.id?' active':'');
+  name.textContent=event.label+' · '+vn(event.time);
+  val.textContent=format(event.price,1);
+  row.append(name,val);
+  row.onclick=()=>{selectedGroupId=seq.groupId;selectedEventId=event.id;
+   renderHistory();lastInspectorKey=null;renderInspector();drawAll();};
+  row.style.cursor='pointer';
+  steps.append(row);
+ }
+ life.append(headline,steps);out.append(life);
+ const forward=seq.transitions.filter(x=>x.fromGroupId===seq.groupId);
+ if(forward.length){
+  const t=forward[0],found=seqs.find(x=>x.groupId===t.toGroupId);
+  const label=t.kind==='REVERSE_CLOSE_THEN_OPPOSITE_ENTRY'?
+   'Có fill đóng REVERSE và ENTRY '+(found?.side||'đối ứng')+
+   ' ngay sau đó. Liên kết thời gian không chứng minh tín hiệu đảo tự động.':
+   'LONG/SHORT vừa chạm SL rồi có lệnh '+(found?.side||'đối ứng')+
+   ' tiếp theo. Đây là lệnh mới, không khẳng định bot tự đảo từ SL.';
+  out.append(inspectorSection('LỆNH TIẾP THEO',label));
+ }
 }
 function renderRows(){
  const body=$('rows');body.replaceChildren();
@@ -463,6 +748,7 @@ async function focusGroup(groupId){
  const selected=(state?.historyGroups||[]).find(g=>g.groupId===groupId);
  if(!selected)return;
  selectedGroupId=groupId;
+ selectedEventId=(state.tradeSequences||[]).find(x=>x.groupId===groupId)?.entry.id||null;
  const oldest=state.candles[0]?.time||0;
  if(selected.entryTime<oldest){
   // Only go as far back as the verified 30-day Binance chart.
@@ -479,7 +765,7 @@ async function focusGroup(groupId){
  focusAt=group.entryTime;
  if($('chartHistory').hidden)$('chartHistory').hidden=false;
  $('historyToggle').setAttribute('aria-expanded','true');
- renderHistory();drawAll();
+ renderHistory();drawAll();lastInspectorKey=null;renderInspector();
  $('execHover').textContent='Đã chọn '+group.groupId+' · '+group.side+
   ' · Entry '+format(group.entryPrice,1)+' · '+
   (exactLinkedSignal(group)?'có liên kết tín hiệu OCC':'chưa chứng minh tín hiệu OCC');
@@ -494,8 +780,8 @@ async function refresh(days=null){
    {cache:'no-store'});
   const data=await response.json();
   if(!response.ok)throw Error(data.error||'HTTP '+response.status);
-  state=data;loadingDays=requestDays;
-  $('status').classList.remove('error');drawAll();renderRows();renderHistory();
+  state=data;loadingDays=requestDays;lastInspectorKey=null;
+  $('status').classList.remove('error');drawAll();renderRows();renderHistory();renderInspector();
   $('lastSync').textContent='Đồng bộ '+vn(data.asOf);
   $('status').textContent=data.candles.length+' nến · '+data.signals.length+
    ' giao cắt · '+data.fills.length+' fill thật · '+
@@ -521,7 +807,18 @@ $('historyToggle').onclick=()=>{
  setTimeout(drawAll,50);
 };
 $('historySearch').oninput=renderHistory;
-$('historyClear').onclick=()=>{selectedGroupId=null;focusAt=null;renderHistory();drawAll();};
+$('historyClear').onclick=()=>{selectedGroupId=null;selectedEventId=null;focusAt=null;
+ lastInspectorKey=null;renderHistory();drawAll();renderInspector();};
+$('inspectorClear').onclick=$('historyClear').onclick;
+$('inspectorFocus').onclick=async()=>{
+ if(!selectedGroupId)return;
+ const eventId=selectedEventId;
+ await focusGroup(selectedGroupId);
+ const point=(state?.tradeSequences||[]).find(x=>x.groupId===selectedGroupId)
+  ?.events.find(x=>x.id===eventId);
+ if(point){selectedEventId=eventId;focusAt=point.time;
+  lastInspectorKey=null;drawAll();renderInspector();}
+};
 function pan(direction){
  if(!state?.candles.length)return;
  const displayed=windowBars();

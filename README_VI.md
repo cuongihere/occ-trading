@@ -1,5 +1,16 @@
 # OCC Trading — Binance Futures Windows
 
+## Chart Windows: chuỗi lệnh thật và khung thông số (16/11/2026)
+
+- Một chart nến BTCUSDT: OCC Open/Close + giao cắt LONG/SHORT + fill Binance thực tế.
+- Gom lệnh theo Group ID và Binance Order ID, vẽ nối ENTRY → SL/TP/CLOSE/REVERSE bằng giá và thời gian khớp thực.
+- Nhãn ngay trên chart: LONG ENTRY, SL HIT, SHORT ENTRY, TP1/TP2/TP3, REVERSE CLOSE. Rê chuột hoặc click marker/nhãn để mở thông số tại khung CHI TIẾT LỆNH bên phải chart.
+- Khung chính hiện giá khớp, khối lượng BTC, thời gian, Order ID, P&L nhóm (chưa funding), phí, mức OCC và các bước Entry/Exit. Click bước lệnh hoặc nút Đến vị trí lệnh để xem tại nến giao dịch.
+- LONG dính SL rồi xuất hiện SHORT được ghi SAU SL → LỆNH MỚI. Đây chỉ là hai fill Binance theo thời gian, không mặc nhiên là đảo chiều tự động. REVERSE chỉ được gắn khi lệnh thoát thực tế có role REVERSE.
+- Lệnh cũ thiếu liên kết Order ID với tín hiệu vẫn báo chưa xác minh; SL/TP đang mở chỉ vẽ từ Binance Algo đã xác minh.
+- Không thay đổi logic thực thi lệnh, quản lý SL/TP hoặc Android. Giữ nguyên thư mục data khi cập nhật.
+
+
 **Chỉ giao dịch BTCUSDT Futures thực tế.** Đã bỏ Paper Trading khỏi ứng dụng,
 trang web và gói Portable. Phần kiểm thử mã mô phỏng cũ chỉ tồn tại trong
 mã nguồn để kiểm tra chiến lược; hoàn toàn không chạy trong ứng dụng.

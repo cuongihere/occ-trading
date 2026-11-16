@@ -32,8 +32,9 @@ test('Main screen keeps actual LIVE controls and makes secondary settings/histor
 test('Actual Binance fill markers remain read-only and show role/quantity on hover',()=>{
  const chart=read('OCC_COMPARE.html'),srv=read('server.mjs');
  assert.match(chart,/const atBar=kind==='real'/);
- assert.match(chart,/ctx\.fillText\(f\.role/);
- assert.match(chart,/document\.documentElement\.classList\.contains\('realonly'\)/);
+ assert.match(chart,/ctx\.fillText\(tag/);
+ assert.match(chart,/function renderInspector\(/);
+ assert.match(chart,/html\.embed\.realonly \.grid\{display:grid!important/);
  assert.match(srv,/readVerifiedChartHistory/);
  assert.doesNotMatch(chart,/\/control\/live\/on|\/control\/live\/manual-exit/);
  const scripts=[...chart.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g)];
