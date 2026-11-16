@@ -25,6 +25,7 @@ export class BrowserFutures{
   this.dir=resolve(dataDir);this.path=resolve(this.dir,'futures-browser-settings.json');
   this.intentPath=resolve(this.dir,'futures-live-intent.json');
   this.protectionPath=resolve(this.dir,'futures-live-protection.json');
+  this.reversalPath=resolve(this.dir,'futures-last-reversal.json');
   this.config=validateLiveConfig(existsSync(this.path)?JSON.parse(readFileSync(this.path,'utf8')):DEFAULT);
   this.transportFactory=transportFactory||((params)=>new FuturesTransport(params));
   this.vault=credentialVault||new WindowsCredentialVault(resolve(this.dir,'futures-api.dpapi.json'));
@@ -33,6 +34,8 @@ export class BrowserFutures{
   this.api=null;this.environment=null;this.account=null;this.filters=null;
   this.armed=false;this.busy=false;this.halted=false;this.error=null;this.events=[];this.activeProtection=null;
   this.recoveryStatus='idle';this.lastRecoveryCheck=null;this.restoreTask=null;
+  this.lastReversal=existsSync(this.reversalPath)?JSON.parse(readFileSync(this.reversalPath,'utf8')):null;
+  this.reverseSettleWait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
   this.pendingLimit=null;this.observeExistingOnly=false;
   this.historySyncTask=null;this.lastHistorySync=0;this.lastIncomeSync=0;this.lastExchangeTradeSync=0;this.lastExchangeTradeAttempt=0;this.historyError=null;this.historyCount=0;this.lastEntryTiming=null;
   const unresolved=existsSync(this.intentPath)?JSON.parse(readFileSync(this.intentPath,'utf8')):null;
@@ -48,6 +51,18 @@ export class BrowserFutures{
   }
  }
  log(type,message){this.events.push({at:Date.now(),type,message:String(message).slice(0,400)});this.events=this.events.slice(-50);}
+ // Diagnostic only. Never let a log write interrupt a partially executed reversal.
+ markReversal(stage,info={}){
+  this.lastReversal={...this.lastReversal,...info,stage,updatedAt:Date.now()};
+  try{
+   mkdirSync(dirname(this.reversalPath),{recursive:true});
+   const path=this.reversalPath+'.tmp';
+   writeFileSync(path,JSON.stringify(this.lastReversal,null,2),{mode:0o600});
+   renameSync(path,this.reversalPath);
+  }catch(e){this.log('REVERSE_STATUS_WRITE_FAILED',String(e.message||e).slice(0,140));}
+  this.log('REVERSE_STATUS',stage+(info.targetSide?' '+info.targetSide:'')+
+   (info.reason?' · '+String(info.reason).slice(0,110):''));
+ }
  setSquarePublisher(publisher){this.squarePublisher=publisher;}
  // A Square failure MUST NOT alter BTC position, SL/TP, or halt trading.
  notifySquareProtected(result){
@@ -153,7 +168,7 @@ export class BrowserFutures{
    protectedPosition:this.activeProtection?{entry:this.activeProtection.entry,stop:this.activeProtection.stop,tps:this.activeProtection.tps}:null,
    config:this.config,account:this.account,credentialSaved:this.vault.exists(),lastAccountSync:this.lastAccountSync,
    canResumeManaged:this.canResumeManagedPosition(),observeExistingOnly:this.observeExistingOnly,
-   lastEntryTiming:this.lastEntryTiming,
+   lastEntryTiming:this.lastEntryTiming,lastReversal:this.lastReversal,
    pendingLimit:this.pendingLimit?{
     side:this.pendingLimit.side,price:this.pendingLimit.price,qty:this.pendingLimit.qty,
     expiresAt:this.pendingLimit.expiresAt,clientId:this.pendingLimit.clientId,
@@ -788,8 +803,11 @@ export class BrowserFutures{
    side:from==='LONG'?'SELL':'BUY',type:'MARKET',reduceOnly:'true',quantity:String(qty),
    newClientOrderId:closeId,newOrderRespType:'RESULT'});
   if(!ack?.orderId||ack.status!=='FILLED')throw Error('Reduce-only close not confirmed FILLED');
-  this.registerRealOrder({orderId:ack.orderId,groupId:managed.entry.clientPrefix,
-   clientId:closeId,role:'REVERSE',side:from==='LONG'?'SELL':'BUY'});
+  // Optional SQLite writes must never strand an exchange-confirmed close.
+  try{this.registerRealOrder({orderId:ack.orderId,groupId:managed.entry.clientPrefix,
+   clientId:closeId,role:'REVERSE',side:from==='LONG'?'SELL':'BUY'});}
+  catch(e){this.log('REVERSE_HISTORY_FAILED','Đã đóng '+from+
+   ' nhưng chưa ghi được lịch sử: '+e.message);}
   const flat=await this.inspect();
   if(flat.positionBTC!==0)throw Error('Binance did not confirm BTCUSDT FLAT');
   const remaining=await this.api.get('/fapi/v1/openAlgoOrders',{symbol:'BTCUSDT'});
@@ -810,7 +828,7 @@ export class BrowserFutures{
   this.saveIntent({phase:'CLEARED',at:Date.now()});
   this.activeProtection=null;this.previousProtection=null;this.observeExistingOnly=false;
   this.log('REVERSE_FLAT','Đã đóng vị thế cũ và dọn SL/TP; Binance xác nhận FLAT');
-  return true;
+  return clean;
  }
  async signal(signal,feedHealthy,quoteProvider=null){
   if(!this.armed||this.busy||this.halted||this.pendingLimit||this.environment!=='production'||!feedHealthy||!signal?.side)return;
