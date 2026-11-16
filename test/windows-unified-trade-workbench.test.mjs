@@ -58,7 +58,7 @@ test('Trading core and native credential storage unchanged by unified dashboard'
  const build=read('BUILD_PORTABLE.ps1'),server=read('server.mjs');
  assert.match(build,/'BINANCE_UI_PREVIEW\.html'/);
  assert.match(build,/'OCC_COMPARE\.html'/);
- assert.match(server,/readVerifiedChartFills/);
+ assert.match(server,/readVerifiedChartHistory/);
  assert.match(server,/browserFutures\.signal\(signal,true,/);
  assert.match(server,/req\.url==='\/binance'/);
 });
