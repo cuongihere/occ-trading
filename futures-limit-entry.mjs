@@ -59,6 +59,8 @@ export function installLimitEntry(BrowserFutures){
   const clientId='OCCBTC-'+randomBytes(7).toString('hex');
   const now=Date.now(),goodTillDate=Math.floor((now+660000)/1000)*1000;
   const p={clientId,side,qty:plan.qtyBTC,price,signalId:signal.id,
+    signalBarTime:Number(signal.barTime),signalClose:Number(signal.candleClose),
+    signalTriggerPrice:Number(signal.triggerPrice),signalCrossMA:Number(signal.crossPrice),
    orderId:null,startedAt:now,expiresAt:now+c.limitWaitSeconds*1000,goodTillDate,
    stepSize:Number(lot.stepSize),tickSize:tick};
   // From this durable checkpoint onwards a Binance order may have been sent.
@@ -119,6 +121,10 @@ export function installLimitEntry(BrowserFutures){
     clientId:p.clientId,role:'ENTRY',side:p.side==='LONG'?'BUY':'SELL'});}
    catch(e){this.log('HISTORY_FAILED','LIMIT đã bảo vệ nhưng chưa ghi lịch sử: '+e.message);}
    this.log('LIMIT_PROTECTED','LIMIT khớp đủ '+qty+' BTC; xác nhận STOP + 3 TP');
+   this.recordVerifiedSignal({orderId:p.orderId,clientId:p.clientId,signal:{
+    side:p.side,barTime:p.signalBarTime,candleClose:p.signalClose,
+    triggerPrice:p.signalTriggerPrice,crossPrice:p.signalCrossMA
+   }});
    this.notifySquareProtected(result);
    return;
   }

@@ -7,7 +7,7 @@ import {OCCSignalEngine} from './occ-signal-engine.mjs';
 import {BinanceFeed} from './server-feed.mjs';
 import {BtcMarketQuote} from './btc-market-quote.mjs';
 import {readLiveReport} from './binance-live-stats.mjs';
-import {buildOCCChartComparison,readVerifiedChartFills} from './futures-chart-compare.mjs';
+import {buildOCCChartComparison,readVerifiedChartHistory} from './futures-chart-compare.mjs';
 import {BrowserFutures} from './futures-browser-service.mjs';
 import {SquarePublisher} from './square-publisher.mjs';
 
@@ -59,33 +59,65 @@ const feed=new BinanceFeed({
 const binancePreviewHtml=readFileSync(new URL('./BINANCE_UI_PREVIEW.html',import.meta.url),'utf8');
 const comparisonHtml=readFileSync(new URL('./OCC_COMPARE.html',import.meta.url),'utf8');
 const tradingViewReferenceHtml=readFileSync(new URL('./OCC_TV_WIDGET.html',import.meta.url),'utf8');
-let compareCandleCache=null,compareCandleTask=null;
-async function getComparisonCandles(){
- const now=Date.now();
- if(compareCandleCache&&compareCandleCache.expiresAt>now)return compareCandleCache;
- if(compareCandleTask)return compareCandleTask;
- compareCandleTask=(async()=>{
-  const get=async interval=>{
-   const url='https://fapi.binance.com/fapi/v1/klines?symbol=BTCUSDT&interval='+
-    encodeURIComponent(interval)+'&limit='+(interval==='4h'?500:1000);
+// Public Binance Futures candles; chart endpoints remain GET/read-only.
+const compareCandleCache=new Map(),compareCandleTasks=new Map();
+const DAY=86400000,M15=900000,H4=14400000;
+const CHART_DAYS=new Set([1,3,7,14,30]);
+export const chartDaysParam=value=>{
+ const d=Number(value);
+ if(!Number.isSafeInteger(d)||!CHART_DAYS.has(d))
+  throw Error('Unsupported chart range. Choose 1, 3, 7, 14 or 30 days.');
+ return d;
+};
+async function getComparisonCandles(days=7){
+ const now=Date.now(),cache=compareCandleCache.get(days);
+ if(cache&&cache.expiresAt>now)return cache;
+ if(compareCandleTasks.has(days))return compareCandleTasks.get(days);
+ const task=(async()=>{
+  const start=Math.floor((now-days*DAY)/M15)*M15;
+  const get=async(interval,params)=>{
+   const url='https://fapi.binance.com/fapi/v1/klines?'+
+    new URLSearchParams({symbol:'BTCUSDT',interval,...params}).toString();
    const response=await fetch(url,{signal:AbortSignal.timeout(12000),cache:'no-store'});
-   if(!response.ok)throw Error('Binance candles HTTP '+response.status+' ('+interval+')');
+   if(!response.ok)throw Error('Binance candles '+interval+' HTTP '+response.status);
    const data=await response.json();
-   if(!Array.isArray(data)||data.length<50)throw Error('Binance '+interval+' candles incomplete');
+   if(!Array.isArray(data))throw Error('Binance '+interval+' candles malformed');
    return data;
   };
-  const [h4,m15]=await Promise.all([get('4h'),get('15m')]);
-  compareCandleCache={h4,m15,expiresAt:Date.now()+45000};
-  return compareCandleCache;
+  const h4=get('4h',{startTime:String(start-12*H4),endTime:String(now),limit:'300'});
+  const m15=[],ids=new Set();
+  let cursor=start;
+  for(let page=0;page<6&&cursor<=now;page++){
+   const batch=await get('15m',{startTime:String(cursor),endTime:String(now),limit:'1000'});
+   if(!batch.length)throw Error('Binance M15 history missing near '+new Date(cursor).toISOString());
+   let prev=cursor-M15;
+   for(const bar of batch){
+    const t=Number(bar?.[0]);
+    if(!Number.isSafeInteger(t)||t<cursor||t<=prev||ids.has(t))
+     throw Error('Invalid or duplicate Binance M15 kline');
+    ids.add(t);m15.push(bar);prev=t;
+   }
+   cursor=prev+M15;
+   if(batch.length<1000)break;
+  }
+  const h=await h4;
+  if(h.length<20||m15.length<50)
+   throw Error('Not enough Binance M15/H4 history for OCC chart');
+  const last=Number(m15.at(-1)?.[0]);
+  if(last<now-3*M15)throw Error('Stale Binance M15 chart history');
+  const result={h4:h,m15,days,expiresAt:Date.now()+45000};
+  compareCandleCache.set(days,result);
+  return result;
  })();
- try{return await compareCandleTask;}
- finally{compareCandleTask=null;}
+ compareCandleTasks.set(days,task);
+ try{return await task;}finally{compareCandleTasks.delete(days);}
 }
-async function readChartComparison(){
- const {h4,m15}=await getComparisonCandles();
+async function readChartComparison(days=7){
+ const {h4,m15}=await getComparisonCandles(days),now=Date.now();
+ const saved=readVerifiedChartHistory(resolve(dir,'binance-live-stats.sqlite'),now-30*DAY);
  const model=buildOCCChartComparison({h4,m15,
-  fills:readVerifiedChartFills(resolve(dir,'binance-live-stats.sqlite')),
-  settings:browserFutures.config,now:Date.now()});
+  fills:saved.fills,signalLinks:saved.signalLinks,
+  settings:browserFutures.config,now});
  // A second independent, exchange-signed read-only source gives the current
  // real STOP and TP levels. Never plot guessed SL/TP from the saved config
  // as though they were Binance live orders.
@@ -184,10 +216,12 @@ const server=createServer(async(req,res)=>{
    "img-src https: data:; font-src https: data:; frame-src https:; connect-src https: wss:; object-src 'none'");
   return res.end(tradingViewReferenceHtml);
  }
- if(req.url==='/api/binance/occ-chart-compare'){
+ if(new URL(req.url,'http://localhost').pathname==='/api/binance/occ-chart-compare'){
   res.setHeader('Content-Type','application/json;charset=utf-8');
-  try{return res.end(JSON.stringify(await readChartComparison()));}
-  catch(e){res.writeHead(503);return res.end(JSON.stringify({error:'Chart chỉ đọc: '+e.message}));}
+  try{
+   const range=new URL(req.url,'http://localhost').searchParams.get('days')||'7';
+   return res.end(JSON.stringify(await readChartComparison(chartDaysParam(range))));
+  }catch(e){res.writeHead(503);return res.end(JSON.stringify({error:'Chart chỉ đọc: '+e.message}));}
  }
  if(req.url==='/api/binance/market'){res.setHeader('Content-Type','application/json;charset=utf-8');return res.end(JSON.stringify(btcMarketQuote.snapshot({healthy:feed.healthy(),state:feed.state})));}
 if(req.url==='/api/binance/live-status'){res.setHeader('Content-Type','application/json;charset=utf-8');return res.end(JSON.stringify({...browserFutures.snapshot(),marketHealthy:feed.healthy(),marketState:feed.state}));}

@@ -11,7 +11,7 @@ test('Desktop Futures fits one viewport and chart gets all remaining height',()=
  assert.match(ui,/id="tradeCompareFrame"[\s\S]*?src="\/occ-compare\?embed=1&view=real"/);
  assert.match(chart,/html\.embed\.realonly main\{height:100%!important/);
  assert.match(chart,/html\.embed\.realonly \.execPanel canvas\{[\s\S]*?height:0!important/);
- assert.match(chart,/\$\('showMA'\)\.checked=false/);
+ assert.match(chart,/id="showMA" checked/);
 });
 test('Main screen keeps actual LIVE controls and makes secondary settings/history modal',()=>{
  const ui=read('BINANCE_UI_PREVIEW.html');
@@ -34,7 +34,7 @@ test('Actual Binance fill markers remain read-only and show role/quantity on hov
  assert.match(chart,/const atBar=kind==='real'/);
  assert.match(chart,/ctx\.fillText\(f\.role/);
  assert.match(chart,/document\.documentElement\.classList\.contains\('realonly'\)/);
- assert.match(srv,/readVerifiedChartFills/);
+ assert.match(srv,/readVerifiedChartHistory/);
  assert.doesNotMatch(chart,/\/control\/live\/on|\/control\/live\/manual-exit/);
  const scripts=[...chart.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g)];
  assert.ok(scripts.length>0);

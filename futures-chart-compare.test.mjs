@@ -89,10 +89,10 @@ test('Windows routes use no API keys and render two comparison charts with isola
   portable:readFileSync(new URL('./BUILD_PORTABLE.ps1',import.meta.url),'utf8'),
   main:readFileSync(new URL('./BINANCE_UI_PREVIEW.html',import.meta.url),'utf8')
  };
- assert.match(files.server,/req\.url==='\/api\/binance\/occ-chart-compare'/);
+ assert.match(files.server,/pathname==='\/api\/binance\/occ-chart-compare'/);
  assert.match(files.server,/req\.url\.startsWith\('\/occ-compare'\)/);
  assert.match(files.server,/req\.url==='\/occ-tradingview-widget'/);
- assert.match(files.server,/readVerifiedChartFills/);
+ assert.match(files.server,/readVerifiedChartHistory/);
  assert.match(files.page,/id="reference"/);
  assert.match(files.page,/id="execution"/);
  assert.match(files.page,/id="rows"/);
@@ -111,8 +111,8 @@ test('Windows routes use no API keys and render two comparison charts with isola
 test('Live chart lines require Binance-verified OCC ownership and never send trades',()=>{
  const server=readFileSync(new URL('./server.mjs',import.meta.url),'utf8');
  const page=readFileSync(new URL('./OCC_COMPARE.html',import.meta.url),'utf8');
- const section=server.slice(server.indexOf('async function readChartComparison(){'),
-  server.indexOf('const server=createServer',server.indexOf('async function readChartComparison(){')));
+ const section=server.slice(server.indexOf('async function readChartComparison(days=7){'),
+  server.indexOf('const server=createServer',server.indexOf('async function readChartComparison(days=7){')));
  assert.match(section,/browserFutures\.positionAnalysis\(\)/);
  assert.match(section,/current\.ownershipVerified===true/);
  assert.match(section,/confirmed===true/);

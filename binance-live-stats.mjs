@@ -10,7 +10,8 @@ const schema=[
 "CREATE TABLE IF NOT EXISTS fills (fill_id TEXT PRIMARY KEY,order_id TEXT NOT NULL REFERENCES orders(order_id),side TEXT NOT NULL,qty REAL NOT NULL,price REAL NOT NULL,realized REAL NOT NULL,fee REAL NOT NULL,asset TEXT NOT NULL,filled_at INTEGER NOT NULL)",
 "CREATE TABLE IF NOT EXISTS income_events (income_type TEXT NOT NULL,tran_id TEXT NOT NULL,trade_id TEXT,asset TEXT NOT NULL,amount REAL NOT NULL,occurred_at INTEGER NOT NULL,PRIMARY KEY(income_type,tran_id))",
 "CREATE TABLE IF NOT EXISTS exchange_fills (fill_id TEXT PRIMARY KEY,order_id TEXT NOT NULL,side TEXT NOT NULL,qty REAL NOT NULL,price REAL NOT NULL,realized REAL NOT NULL,fee REAL NOT NULL,asset TEXT NOT NULL,filled_at INTEGER NOT NULL)",
-"CREATE TABLE IF NOT EXISTS history_meta (key TEXT PRIMARY KEY,value TEXT NOT NULL)"
+"CREATE TABLE IF NOT EXISTS history_meta (key TEXT PRIMARY KEY,value TEXT NOT NULL)",
+"CREATE TABLE IF NOT EXISTS entry_signals (group_id TEXT PRIMARY KEY,order_id TEXT NOT NULL,side TEXT NOT NULL,bar_time INTEGER NOT NULL,confirm_at INTEGER NOT NULL,signal_close REAL NOT NULL,trigger_price REAL NOT NULL,cross_ma REAL NOT NULL,recorded_at INTEGER NOT NULL)"
 ].join(';')+';';
 export const emptyLiveReport=()=>({source:'BINANCE_VERIFIED_OCC_ONLY',asOf:null,registeredOrders:0,
  summary:{closed:0,open:0,wins:0,losses:0,breakeven:0,winRate:null,grossRealizedUSDT:0,
@@ -39,6 +40,31 @@ export class LiveStatsLedger{
   this.#db.prepare('INSERT INTO orders(order_id,group_id,client_id,role,side) VALUES (?,?,?,?,?)').run(...item);return true;
  }
  orders(){return this.#db.prepare('SELECT * FROM orders ORDER BY rowid').all();}
+ // Provenance is captured only for a verified Entry with exchange-side SL/TP.
+ // Never infer the identity of historical trades by candle time alone.
+ recordEntrySignal({groupId,orderId,side,barTime,confirmAt,signalClose,triggerPrice,crossMA}){
+  if(!/^OCCBTC-[A-Za-z0-9_-]{1,29}$/.test(String(groupId))||
+    !/^[0-9]{1,24}$/.test(String(orderId))||!['LONG','SHORT'].includes(side)||
+    ![barTime,confirmAt].every(Number.isSafeInteger)||barTime<=0||
+    confirmAt!==barTime+900000||
+    ![signalClose,triggerPrice,crossMA].every(x=>Number.isFinite(Number(x))&&Number(x)>0))
+   throw Error('Invalid OCC signal provenance');
+  const entry=this.#db.prepare("SELECT * FROM orders WHERE order_id=? AND group_id=? AND role='ENTRY'")
+   .get(String(orderId),String(groupId));
+  if(!entry||entry.side!==(side==='LONG'?'BUY':'SELL'))
+   throw Error('Binance Entry is not registered to this OCC group');
+  const vals=[String(groupId),String(orderId),side,barTime,confirmAt,
+   Number(signalClose),Number(triggerPrice),Number(crossMA)];
+  const old=this.#db.prepare('SELECT * FROM entry_signals WHERE group_id=?').get(String(groupId));
+  if(old){
+   if(['group_id','order_id','side','bar_time','confirm_at','signal_close','trigger_price','cross_ma']
+    .some((k,i)=>old[k]!==vals[i]))throw Error('Conflicting OCC Entry signal provenance');
+   return false;
+  }
+  this.#db.prepare('INSERT INTO entry_signals VALUES (?,?,?,?,?,?,?,?,?)').run(...vals,Date.now());
+  return true;
+ }
+ entrySignals(){return this.#db.prepare('SELECT * FROM entry_signals ORDER BY bar_time').all();}
  dueOrders(limit=24){return this.#db.prepare(
   'SELECT * FROM orders ORDER BY synced_at ASC,rowid DESC LIMIT ?'
  ).all(limit);}

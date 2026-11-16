@@ -112,6 +112,41 @@ html.embed.realonly .execPanel canvas{display:block!important;flex:1 1 auto!impo
 html.embed.realonly #execHover{flex:0 0 17px!important;min-height:17px!important;height:17px!important;
  font-size:10px!important;line-height:16px!important;overflow:hidden!important;
  white-space:nowrap!important;text-overflow:ellipsis!important;margin:0!important;padding:0 7px!important}
+/* One-chart OCC verification and history focus, 2026-11-16. */
+.chartHistory{display:flex;flex-direction:column;min-height:0;background:#0e2135;border:1px solid #274362;border-radius:8px;margin:6px 0}
+.chartHistory[hidden]{display:none!important}
+.chartHistoryHead{display:flex;align-items:center;gap:8px;padding:6px 9px;min-height:33px}
+.chartHistoryHead strong{font-size:11px;white-space:nowrap}
+.chartHistoryHead #historyCount{margin-left:auto;font-size:10px;color:#a6c6df;white-space:nowrap}
+.chartHistoryHead input{min-height:25px;width:200px;max-width:32%;padding:3px 7px;border-radius:5px;background:#0b1929;color:#d9ebf7;border:1px solid #365473;font-size:10px}
+.chartHistoryHead button,.chartHistory td button{min-height:22px;padding:2px 7px;border-radius:5px;font-size:10px;background:#182e46;border:1px solid #486882;color:#d9eeff}
+.chartHistoryScroll{min-height:0;flex:1;overflow:auto}
+.chartHistory table{width:100%;font-size:10px;white-space:nowrap;border-collapse:collapse}
+.chartHistory th,.chartHistory td{text-align:left;padding:5px 7px;border-bottom:1px solid #24435b}
+.chartHistory th{position:sticky;top:0;background:#172d45;z-index:1}
+.chartHistory tr.selected{background:#1f4b5d}
+.chartHistory tr:hover{background:#193e54}
+html.realonly .grid{grid-template-columns:1fr}
+html.realonly .refPanel{display:none!important}
+html.realonly .chartHistory{display:flex}
+html.embed.realonly .controls{overflow:visible!important;white-space:nowrap}
+html.embed.realonly .controls label:has(#showMA),
+html.embed.realonly .controls label:has(#showLevels){display:flex!important}
+html.embed.realonly .controls label{display:inline-flex;align-items:center;gap:3px;font-size:10px!important}
+html.embed.realonly .controls input[type=checkbox]{width:12px;height:12px;min-height:12px;margin:0}
+html.embed.realonly .controls button{min-height:22px!important;height:22px!important;padding:2px 5px!important}
+html.embed.realonly .controls #panPrev,html.embed.realonly .controls #panNext{padding:1px 4px!important}
+html.embed.realonly .controls #lastSync{display:none!important}
+html.embed.realonly .chartHistory{flex:0 0 116px;margin:0;border:0;border-top:1px solid #31536b;border-radius:0}
+html.embed.realonly .chartHistory[hidden]{display:none!important}
+html.embed.realonly .chartHistoryHead{min-height:26px;padding:2px 6px}
+html.embed.realonly .chartHistoryScroll{height:86px}
+html.embed.realonly .chartHistory th,html.embed.realonly .chartHistory td{padding:3px 5px}
+html.embed.realonly .chartHistoryHead input{min-height:22px;height:22px}
+html.embed.realonly .execPanel canvas{height:0!important;flex:1 1 auto!important}
+html.embed.realonly .execPanel .legend{display:none!important}
+@media(max-width:900px){html.embed.realonly .controls{flex-wrap:wrap;height:auto!important;flex-basis:55px!important}
+ html.embed.realonly .controls #historyToggle{margin-left:auto}}
 </style>
 </head>
 <body>
@@ -125,10 +160,15 @@ html.embed.realonly #execHover{flex:0 0 17px!important;min-height:17px!important
 <main>
 <p class="note"><strong>Phân biệt nguồn dữ liệu:</strong> chart bên trái dựng lại OCC theo <strong>engine SMMA8 của app</strong>, không giả vờ chạy trực tiếp Pine của TradingView. Chart bên phải chỉ đánh dấu <strong>fill đã xác minh từ Binance và ghi vào OCC SQLite</strong>; không lấy giá đặt lệnh làm giá khớp. Mọi ghép cặp tín hiệu ↔ fill chỉ là <strong>đối chiếu theo thời gian</strong>, chưa chứng minh lệnh xuất phát từ tín hiệu nào.</p>
 <div class="controls">
-<label>Khoảng nến <select id="bars"><option value="192">2 ngày</option><option value="384">4 ngày</option><option value="576" selected>6 ngày</option><option value="960">10 ngày</option></select></label>
-<label><input type="checkbox" id="showMA" checked> Hiện đường OCC</label>
-<label><input type="checkbox" id="showLevels" checked> Mức tham chiếu SL/TP</label>
-<button id="reload">Đồng bộ chart</button>
+<label>Khoảng <select id="bars"><option value="1">1 ngày</option><option value="3">3 ngày</option><option value="7" selected>7 ngày</option><option value="14">14 ngày</option><option value="30">30 ngày</option></select></label>
+<label><input type="checkbox" id="showMA" checked> OCC</label>
+<label><input type="checkbox" id="showCross" checked> Giao cắt</label>
+<label><input type="checkbox" id="showFills" checked> Lệnh thật</label>
+<label><input type="checkbox" id="showLevels" checked> SL/TP thật</label>
+<button id="historyToggle" type="button" aria-expanded="true">Lịch sử ▾</button>
+<button id="panPrev" type="button" title="Xem các nến trước">◀</button>
+<button id="panNext" type="button" title="Xem các nến sau">▶</button>
+<button id="reload">Đồng bộ</button>
 <span id="lastSync" class="tag">Chưa đồng bộ</span>
 </div>
 <p id="status" class="status">Đang tải dữ liệu nến và fill đã xác minh…</p>
@@ -139,13 +179,25 @@ html.embed.realonly #execHover{flex:0 0 17px!important;min-height:17px!important
 <div class="legend"><span class="good">● Giao cắt LONG</span><span class="bad">● Giao cắt SHORT</span><span style="color:#f8bd4b">━ MA Open SMMA8</span><span style="color:#40d4ea">━ MA Close SMMA8</span></div>
 <div id="refHover" class="foot">Trỏ chuột lên nến để xem giá và thời điểm.</div>
 </section>
-<section class="panel execPanel"><h2>2. Binance thực tế · fill của bot OCC</h2>
-<div class="subtitle">ENTRY/EXIT đã FILLED + đường giá SL/TP hiện còn mở, chỉ khi Binance xác minh OCC Algo ID.</div>
+<section class="panel execPanel"><h2>BTCUSDT M15 · OCC & lệnh thật</h2>
+<div class="subtitle">SMMA8 H4 (cam/xanh) · Giao cắt L/S · Binance FILLED · SL/TP còn hiệu lực</div>
 <canvas id="execution"></canvas>
-<div class="legend"><span class="good">▲ BUY fill</span><span class="bad">▼ SELL fill</span><span style="color:#8deca9">━ TP Binance đang mở</span><span style="color:#ff7280">━ SL Binance đang mở</span></div>
-<div id="execHover" class="foot">Chỉ hiển thị lệnh đã ghép Order ID thuộc OCC; lệnh chưa ghép không được nhận làm lệnh bot.</div>
+<div class="legend"><span style="color:#f2b749">━ OCC Open</span><span style="color:#30c7e5">━ OCC Close</span><span class="good">● L / ▲ BUY</span><span class="bad">● S / ▼ SELL</span><span style="color:#8deca9">━ TP thật</span><span style="color:#ff7280">━ SL thật</span></div>
+<div id="execHover" class="foot">Rê chuột: nến, OCC cross, giá BTC kích hoạt và fill Binance (Order ID).</div>
 </section>
 </div>
+<section id="chartHistory" class="chartHistory" aria-label="Tra soát lịch sử OCC Binance">
+ <div class="chartHistoryHead">
+  <strong>Tra soát lệnh Binance</strong>
+  <input id="historySearch" type="search" placeholder="Order ID / LONG / SHORT" aria-label="Lọc lệnh theo ID hoặc chiều">
+  <span id="historyCount">Đang nạp…</span>
+  <button id="historyClear" type="button" title="Bỏ chọn nhóm lệnh">Bỏ chọn</button>
+ </div>
+ <div class="chartHistoryScroll"><table>
+ <thead><tr><th>Vào (VN)</th><th>Chiều</th><th>BTC</th><th>Entry</th><th>Thoát</th><th>Net USDT*</th><th>Tín hiệu</th><th>Chart</th></tr></thead>
+ <tbody id="historyGroups"><tr><td colspan="8">Đang đối soát Binance…</td></tr></tbody>
+ </table></div>
+</section>
 <section class="panel comparePanel" style="margin-top:14px">
 <h2>3. Bảng sai lệch giá & thời gian</h2>
 <div class="subtitle">Giá tham chiếu: ENTRY = close nến OCC; SL/TP = các mức % tính từ close nến OCC. Không dùng giá MA làm giá BTC. Lệnh LIMIT có thể khớp muộn.</div>
@@ -166,7 +218,20 @@ html.embed.realonly #execHover{flex:0 0 17px!important;min-height:17px!important
 const $=id=>document.getElementById(id);
 const M15=900000,format=(x,n=1)=>x==null||!Number.isFinite(Number(x))?'—':Number(x).toLocaleString('en-US',{maximumFractionDigits:n});
 const vn=t=>new Date(t).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',hour12:false});
-let state=null;
+let state=null,selectedGroupId=null,focusAt=null,loadingDays=0,markerHits=[];
+function windowBars(){
+ const count=Number($('bars').value)*96,all=state?.candles||[];
+ if(!all.length)return [];
+ if(!focusAt)return all.slice(-count);
+ const target=Math.floor(focusAt/M15)*M15;
+ let index=all.findIndex(x=>x.time>=target);
+ if(index<0)index=all.length-1;
+ const start=Math.min(Math.max(0,index-Math.floor(count*.35)),Math.max(0,all.length-count));
+ return all.slice(start,start+count);
+}
+function exactLinkedSignal(group){
+ return group?.signalStatus==='VERIFIED_ORDER_SIGNAL'&&Number.isFinite(group.signalAt);
+}
 const colors={up:'#0bb785',down:'#f25a65',open:'#f2b749',close:'#30c7e5',grid:'#203449',text:'#9eb7cf'};
 function line(ctx,pts,color,width=1.5){
  ctx.beginPath();ctx.strokeStyle=color;ctx.lineWidth=width;
@@ -176,7 +241,7 @@ function line(ctx,pts,color,width=1.5){
 }
 function draw(canvas,kind){
  if(!state)return;
- const n=Number($('bars').value),bars=state.candles.slice(-n);
+ const bars=windowBars();
  const W=Math.max(420,canvas.clientWidth||760),H=canvas.clientHeight||455,dpr=window.devicePixelRatio||1;
  canvas.width=Math.ceil(W*dpr);canvas.height=Math.ceil(H*dpr);
  const ctx=canvas.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);
@@ -192,8 +257,8 @@ function draw(canvas,kind){
  const live=state.livePosition?.verified?state.livePosition:null;
  // Both canvases MUST use the same price scale; otherwise visual
  // separation would misleadingly exaggerate or conceal execution slippage.
- for(const f of fills)prices.push(f.price);
- if(live){
+ if($('showFills').checked)for(const f of fills)prices.push(f.price);
+ if(live&&$('showLevels').checked){
   if(live.entryPrice>0)prices.push(live.entryPrice);
   for(const level of live.levels||[])if(level.price>0)prices.push(level.price);
  }
@@ -244,7 +309,38 @@ function draw(canvas,kind){
    }
   }
  }else{
-  if(live){
+  if($('showCross').checked){
+   for(const sig of crosses){
+    const xx=x(sig.time),yy=y(sig.crossMA),isLong=sig.side==='LONG';
+    ctx.fillStyle=isLong?colors.up:colors.down;
+    ctx.beginPath();ctx.arc(xx,yy,4,0,Math.PI*2);ctx.fill();
+    if(bars.length<700){ctx.fillStyle='#ebf6ff';ctx.font='bold 9px system-ui';
+     ctx.fillText(isLong?'L':'S',xx+6,yy-9);}
+   }
+  }
+  const selected=(state.historyGroups||[]).find(g=>g.groupId===selectedGroupId);
+  if(selected){
+   const begin=Math.max(first,selected.entryTime-M15);
+   const end=Math.min(last+M15,selected.exitTime||last+M15);
+   if(end>=begin){
+    const xx1=x(Math.floor(begin/M15)*M15),xx2=x(Math.floor(end/M15)*M15);
+    ctx.globalAlpha=.72;
+    line(ctx,[[xx1,y(selected.entryPrice)],[xx2,y(selected.entryPrice)]],'#7ec8ff',2);
+    ctx.globalAlpha=1;
+    if(selected.signalAt&&exactLinkedSignal(selected)){
+     const anchor=Math.floor((selected.signalAt-1)/M15)*M15;
+     if(anchor>=first&&anchor<=last){
+      const spot=state.signals.find(z=>z.time===anchor&&z.side===selected.side);
+      if(spot){
+       ctx.strokeStyle='#fce28c';ctx.lineWidth=1;
+       ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(x(anchor),top);
+       ctx.lineTo(x(anchor),bottom);ctx.stroke();ctx.setLineDash([]);
+      }
+     }
+    }
+   }
+  }
+  if(live&&$('showLevels').checked){
    const liveLevels=[{role:'ENTRY BINANCE',price:live.entryPrice},
     ...(live.levels||[]).map(x=>({role:x.role==='SL'?'SL BINANCE':x.role+' BINANCE',price:x.price}))];
    for(const level of liveLevels){
@@ -256,13 +352,19 @@ function draw(canvas,kind){
     ctx.fillText(level.role+' '+format(level.price,1),right-145,yy-8);
    }
   }
-  for(const f of fills){
+  markerHits=[];
+  if($('showFills').checked)for(const f of fills){
    const xx=x(Math.floor(f.time/M15)*M15),yy=y(f.price);
    const buy=f.side==='BUY';
+   const active=f.groupId===selectedGroupId;
+   ctx.globalAlpha=selectedGroupId&&!active?.38:1;
    ctx.fillStyle=buy?colors.up:colors.down;
+   if(active){ctx.strokeStyle='#f8e6a1';ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.arc(xx,yy,9,0,Math.PI*2);ctx.stroke();}
+   markerHits.push({x:xx,y:yy,groupId:f.groupId});
    ctx.beginPath();ctx.moveTo(xx,yy+(buy?7:-7));ctx.lineTo(xx-5,yy+(buy?-5:5));
-   ctx.lineTo(xx+5,yy+(buy?-5:5));ctx.closePath();ctx.fill();
-   if(!document.documentElement.classList.contains('realonly')){
+   ctx.lineTo(xx+5,yy+(buy?-5:5));ctx.closePath();ctx.fill();ctx.globalAlpha=1;
+   if(active||!document.documentElement.classList.contains('realonly')){
     ctx.font='bold 10px system-ui';ctx.fillStyle='#e4f3ff';
     ctx.fillText(f.role,xx+7,yy-11);
    }
@@ -280,9 +382,19 @@ function draw(canvas,kind){
   const at=Math.min(bars.length-1,Math.max(0,Math.round((e.clientX-rect.left-left)/usable*(bars.length-1))));
   const b=bars[at],dst=kind==='real'?'execHover':'refHover';
   const atBar=kind==='real'?fills.filter(f=>Math.floor(f.time/M15)*M15===b.time):[];
+  const cross=kind==='real'?crosses.find(z=>z.time===b.time):null;
   $(dst).textContent=vn(b.time)+' · O '+format(b.open)+' H '+format(b.high)+' L '+format(b.low)+' C '+format(b.close)+
-   (atBar.length?' · '+atBar.map(f=>f.role+' '+format(f.price,1)+' ('+format(f.qty,5)+' BTC)').join(' | '):
-    kind==='real'?' · Fill Binance':' · SMMA8 H4');
+   (cross?' · OCC '+cross.side+' · MA '+format(cross.crossMA,1)+
+    ' · BTC kích hoạt '+format(cross.triggerBTC,1):'')+
+   (atBar.length?' · '+atBar.map(f=>f.role+' '+format(f.price,1)+
+    ' / '+f.qty+' BTC #'+f.orderId).join(' | '):'');
+ };
+ if(kind==='real')canvas.onclick=e=>{
+  const rect=canvas.getBoundingClientRect();
+  const x0=e.clientX-rect.left,y0=e.clientY-rect.top;
+  const hit=markerHits.filter(p=>Math.hypot(p.x-x0,p.y-y0)<13)
+   .sort((a,b)=>Math.hypot(a.x-x0,a.y-y0)-Math.hypot(b.x-x0,b.y-y0))[0];
+  if(hit){selectedGroupId=hit.groupId;renderHistory();drawAll();}
  };
 }
 function renderRows(){
@@ -310,32 +422,121 @@ function renderRows(){
  }
 }
 function drawAll(){draw($('reference'),'ref');draw($('execution'),'real');}
-async function refresh(){
- $('reload').disabled=true;$('status').textContent='Đang đọc Binance Futures M15/H4 và fill OCC đã xác minh…';
+
+function renderHistory(){
+ const body=$('historyGroups');body.replaceChildren();
+ const all=state?.historyGroups||[];
+ const search=$('historySearch').value.trim().toLowerCase();
+ const rows=all.filter(g=>!search||[
+  g.groupId,g.entryOrderId,g.side,...(g.exitOrderIds||[])
+ ].some(x=>String(x).toLowerCase().includes(search))).slice(0,150);
+ $('historyCount').textContent=rows.length+'/'+all.length+' nhóm · '+
+  all.filter(g=>g.signalStatus==='VERIFIED_ORDER_SIGNAL').length+' có liên kết tín hiệu';
+ if(!rows.length){
+  const tr=document.createElement('tr'),td=document.createElement('td');
+  td.colSpan=8;td.textContent='Chưa có fill OCC đã được Binance xác minh trong khoảng quét.';
+  tr.append(td);body.append(tr);return;
+ }
+ for(const group of rows){
+  const tr=document.createElement('tr');
+  if(group.groupId===selectedGroupId)tr.classList.add('selected');
+  const fields=[
+   vn(group.entryTime),group.side,format(group.qtyBTC,5),
+   format(group.entryPrice,1),
+   group.exitPrice==null?'—':format(group.exitPrice,1)+' '+group.roles.join('/'),
+   group.netExFundingUSDT==null?'—':format(group.netExFundingUSDT,3),
+   exactLinkedSignal(group)?'✓ Order ID':'⚠ Chưa xác minh'
+  ];
+  for(const v of fields){
+   const td=document.createElement('td');td.textContent=v;tr.append(td);
+  }
+  const td=document.createElement('td'),btn=document.createElement('button');
+  btn.type='button';btn.textContent=group.groupId===selectedGroupId?'Đang xem':'Xem';
+  btn.title='Đến vị trí Entry/Exit BTCUSDT của nhóm '+group.groupId;
+  btn.onclick=()=>focusGroup(group.groupId);
+  td.append(btn);tr.append(td);
+  tr.onclick=e=>{if(e.target!==btn)focusGroup(group.groupId);};
+  body.append(tr);
+ }
+}
+async function focusGroup(groupId){
+ const selected=(state?.historyGroups||[]).find(g=>g.groupId===groupId);
+ if(!selected)return;
+ selectedGroupId=groupId;
+ const oldest=state.candles[0]?.time||0;
+ if(selected.entryTime<oldest){
+  // Only go as far back as the verified 30-day Binance chart.
+  const ok=await refresh(30);
+  if(!ok){$('execHover').textContent='Không tải được nến lịch sử cho Order ID này.';return;}
+ }
+ const group=(state?.historyGroups||[]).find(g=>g.groupId===groupId);
+ if(!group)return;
+ if(group.entryTime<(state.candles[0]?.time||0)){
+  $('execHover').textContent='Order ID này nằm ngoài phạm vi nến Binance 30 ngày.';
+  return;
+ }
+ if(Number($('bars').value)>3)$('bars').value='3';
+ focusAt=group.entryTime;
+ if($('chartHistory').hidden)$('chartHistory').hidden=false;
+ $('historyToggle').setAttribute('aria-expanded','true');
+ renderHistory();drawAll();
+ $('execHover').textContent='Đã chọn '+group.groupId+' · '+group.side+
+  ' · Entry '+format(group.entryPrice,1)+' · '+
+  (exactLinkedSignal(group)?'có liên kết tín hiệu OCC':'chưa chứng minh tín hiệu OCC');
+}
+async function refresh(days=null){
+ if($('reload').disabled)return false;
+ const requestDays=Math.max(loadingDays,days||Number($('bars').value));
+ $('reload').disabled=true;
+ $('status').textContent='Đang đọc Binance Futures M15/H4 và fill đã xác minh…';
  try{
-  const res=await fetch('/api/binance/occ-chart-compare',{cache:'no-store'});
-  const data=await res.json();
-  if(!res.ok)throw Error(data.error||'HTTP '+res.status);
-  state=data;$('status').classList.remove('error');drawAll();renderRows();
+  const response=await fetch('/api/binance/occ-chart-compare?days='+requestDays,
+   {cache:'no-store'});
+  const data=await response.json();
+  if(!response.ok)throw Error(data.error||'HTTP '+response.status);
+  state=data;loadingDays=requestDays;
+  $('status').classList.remove('error');drawAll();renderRows();renderHistory();
   $('lastSync').textContent='Đồng bộ '+vn(data.asOf);
-  $('status').textContent='Đã nạp '+data.candles.length+' nến M15 · '+
-   data.signals.length+' giao cắt · '+data.fills.length+' fill đã xác minh · '+
-   data.comparisons.length+' hàng đối chiếu.'+
-   (data.livePosition?.verified?' · SL/TP đang mở đã đối soát Binance.':'')+
+  $('status').textContent=data.candles.length+' nến · '+data.signals.length+
+   ' giao cắt · '+data.fills.length+' fill thật · '+
+   (data.historyGroups?.length||0)+' nhóm đã nhận dạng.'+
    (data.liveReadbackError?' · '+data.liveReadbackError:'');
- }catch(e){$('status').classList.add('error');$('status').textContent='Không đồng bộ được chart: '+e.message+
-   ' · Kiểm tra kết nối Binance hoặc nhấn Đồng bộ chart.';}
- finally{$('reload').disabled=false;}
+  return true;
+ }catch(e){
+  $('status').classList.add('error');
+  $('status').textContent='Không tải được chart: '+e.message;
+  $('execHover').textContent='Nguồn Binance chưa sẵn sàng: '+e.message;
+  return false;
+ }finally{$('reload').disabled=false;}
 }
-$('reload').onclick=refresh;
-$('bars').onchange=drawAll;$('showMA').onchange=drawAll;$('showLevels').onchange=drawAll;
-let resizeTimer=null;window.addEventListener('resize',()=>{
- clearTimeout(resizeTimer);resizeTimer=setTimeout(drawAll,180);
-});
-if(document.documentElement.classList.contains('realonly')){
- $('showMA').checked=false;
- $('showLevels').checked=false;
+$('reload').onclick=()=>refresh();
+$('bars').onchange=async()=>{focusAt=null;await refresh();drawAll();};
+for(const id of ['showMA','showCross','showFills','showLevels'])
+ $(id).onchange=drawAll;
+$('historyToggle').onclick=()=>{
+ const hidden=!$('chartHistory').hidden;
+ $('chartHistory').hidden=hidden;
+ $('historyToggle').setAttribute('aria-expanded',String(!hidden));
+ $('historyToggle').textContent=hidden?'Lịch sử ▸':'Lịch sử ▾';
+ setTimeout(drawAll,50);
+};
+$('historySearch').oninput=renderHistory;
+$('historyClear').onclick=()=>{selectedGroupId=null;focusAt=null;renderHistory();drawAll();};
+function pan(direction){
+ if(!state?.candles.length)return;
+ const displayed=windowBars();
+ if(!displayed.length)return;
+ const shift=Math.max(1,Math.floor(Number($('bars').value)*96/2))*M15;
+ const central=focusAt||displayed[Math.floor(displayed.length*.5)].time;
+ focusAt=Math.max(state.candles[0].time,Math.min(state.candles.at(-1).time,
+  central+direction*shift));
+ drawAll();
 }
+$('panPrev').onclick=()=>pan(-1);
+$('panNext').onclick=()=>pan(1);
+let resizeTimer=null;
+window.addEventListener('resize',()=>{clearTimeout(resizeTimer);
+ resizeTimer=setTimeout(drawAll,140);});
 $('tv').addEventListener('toggle',()=>{
  const frame=$('tvFrame');
  if($('tv').open&&!frame.hasAttribute('src'))frame.src='/occ-tradingview-widget';
