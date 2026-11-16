@@ -25,6 +25,7 @@ export class BrowserFutures{
   this.dir=resolve(dataDir);this.path=resolve(this.dir,'futures-browser-settings.json');
   this.intentPath=resolve(this.dir,'futures-live-intent.json');
   this.protectionPath=resolve(this.dir,'futures-live-protection.json');
+  this.reversalPath=resolve(this.dir,'futures-last-reversal.json');
   this.config=validateLiveConfig(existsSync(this.path)?JSON.parse(readFileSync(this.path,'utf8')):DEFAULT);
   this.transportFactory=transportFactory||((params)=>new FuturesTransport(params));
   this.vault=credentialVault||new WindowsCredentialVault(resolve(this.dir,'futures-api.dpapi.json'));
@@ -33,6 +34,8 @@ export class BrowserFutures{
   this.api=null;this.environment=null;this.account=null;this.filters=null;
   this.armed=false;this.busy=false;this.halted=false;this.error=null;this.events=[];this.activeProtection=null;
   this.recoveryStatus='idle';this.lastRecoveryCheck=null;this.restoreTask=null;
+  this.lastReversal=existsSync(this.reversalPath)?JSON.parse(readFileSync(this.reversalPath,'utf8')):null;
+  this.reverseSettleWait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
   this.pendingLimit=null;this.observeExistingOnly=false;
   this.historySyncTask=null;this.lastHistorySync=0;this.lastIncomeSync=0;this.lastExchangeTradeSync=0;this.lastExchangeTradeAttempt=0;this.historyError=null;this.historyCount=0;this.lastEntryTiming=null;
   const unresolved=existsSync(this.intentPath)?JSON.parse(readFileSync(this.intentPath,'utf8')):null;
@@ -48,6 +51,18 @@ export class BrowserFutures{
   }
  }
  log(type,message){this.events.push({at:Date.now(),type,message:String(message).slice(0,400)});this.events=this.events.slice(-50);}
+ // Diagnostic only. Never let a log write interrupt a partially executed reversal.
+ markReversal(stage,info={}){
+  this.lastReversal={...this.lastReversal,...info,stage,updatedAt:Date.now()};
+  try{
+   mkdirSync(dirname(this.reversalPath),{recursive:true});
+   const path=this.reversalPath+'.tmp';
+   writeFileSync(path,JSON.stringify(this.lastReversal,null,2),{mode:0o600});
+   renameSync(path,this.reversalPath);
+  }catch(e){this.log('REVERSE_STATUS_WRITE_FAILED',String(e.message||e).slice(0,140));}
+  this.log('REVERSE_STATUS',stage+(info.targetSide?' '+info.targetSide:'')+
+   (info.reason?' · '+String(info.reason).slice(0,110):''));
+ }
  setSquarePublisher(publisher){this.squarePublisher=publisher;}
  // A Square failure MUST NOT alter BTC position, SL/TP, or halt trading.
  notifySquareProtected(result){
@@ -153,7 +168,7 @@ export class BrowserFutures{
    protectedPosition:this.activeProtection?{entry:this.activeProtection.entry,stop:this.activeProtection.stop,tps:this.activeProtection.tps}:null,
    config:this.config,account:this.account,credentialSaved:this.vault.exists(),lastAccountSync:this.lastAccountSync,
    canResumeManaged:this.canResumeManagedPosition(),observeExistingOnly:this.observeExistingOnly,
-   lastEntryTiming:this.lastEntryTiming,
+   lastEntryTiming:this.lastEntryTiming,lastReversal:this.lastReversal,
    pendingLimit:this.pendingLimit?{
     side:this.pendingLimit.side,price:this.pendingLimit.price,qty:this.pendingLimit.qty,
     expiresAt:this.pendingLimit.expiresAt,clientId:this.pendingLimit.clientId,
@@ -788,8 +803,11 @@ export class BrowserFutures{
    side:from==='LONG'?'SELL':'BUY',type:'MARKET',reduceOnly:'true',quantity:String(qty),
    newClientOrderId:closeId,newOrderRespType:'RESULT'});
   if(!ack?.orderId||ack.status!=='FILLED')throw Error('Reduce-only close not confirmed FILLED');
-  this.registerRealOrder({orderId:ack.orderId,groupId:managed.entry.clientPrefix,
-   clientId:closeId,role:'REVERSE',side:from==='LONG'?'SELL':'BUY'});
+  // Optional SQLite writes must never strand an exchange-confirmed close.
+  try{this.registerRealOrder({orderId:ack.orderId,groupId:managed.entry.clientPrefix,
+   clientId:closeId,role:'REVERSE',side:from==='LONG'?'SELL':'BUY'});}
+  catch(e){this.log('REVERSE_HISTORY_FAILED','Đã đóng '+from+
+   ' nhưng chưa ghi được lịch sử: '+e.message);}
   const flat=await this.inspect();
   if(flat.positionBTC!==0)throw Error('Binance did not confirm BTCUSDT FLAT');
   const remaining=await this.api.get('/fapi/v1/openAlgoOrders',{symbol:'BTCUSDT'});
@@ -810,7 +828,28 @@ export class BrowserFutures{
   this.saveIntent({phase:'CLEARED',at:Date.now()});
   this.activeProtection=null;this.previousProtection=null;this.observeExistingOnly=false;
   this.log('REVERSE_FLAT','Đã đóng vị thế cũ và dọn SL/TP; Binance xác nhận FLAT');
-  return true;
+  return clean;
+ }
+ // Previous position is already FLAT. Only signed READS are retried;
+ // no second quote dependency and no blind retry of a submitted entry.
+ async preflightReverseEntryAfterFlat({side,account,quotePrice}){
+  for(let attempt=0;attempt<6;attempt++){
+   if(!this.armed||!this.config.reverseOnSignal)
+    throw Error('AUTO/đảo chiều đã OFF trước khi mở vị thế ngược');
+   try{
+    const plan=draftProtectedOrder({side,account,filters:this.filters,quotePrice},this.config);
+    return {account,plan};
+   }catch(e){
+    if(!/Insufficient available USDT/.test(String(e.message))||attempt===5)
+     throw e;
+    this.log('REVERSE_MARGIN_WAIT','Binance chưa giải phóng đủ availableBalance, lần '+(attempt+1)+'/6');
+    await this.reverseSettleWait(200);
+    account=await this.inspect(); // exchange READ ONLY
+    if(account.positionBTC!==0||account.hasUnknownOrders||account.hasOtherPositions)
+     throw Error('Trong lúc đợi ký quỹ, Binance không còn FLAT và sạch lệnh');
+   }
+  }
+  throw Error('Binance chưa giải phóng ký quỹ sau khi xác nhận FLAT');
  }
  async signal(signal,feedHealthy,quoteProvider=null){
   if(!this.armed||this.busy||this.halted||this.pendingLimit||this.environment!=='production'||!feedHealthy||!signal?.side)return;
@@ -829,6 +868,7 @@ export class BrowserFutures{
   }
 this.busy=true;
 let reverseAttempted=false,reverseCompleted=false,entrySubmissionPossible=false;
+let reversedFlatAccount=null,preparedReversePrice=null;
 try{
  // Check a fresh executable BTC price BEFORE closing the managed position.
  // If the feed is stale, keep its exchange-side STOP/TP untouched.
@@ -847,43 +887,63 @@ try{
   return price;
  };
  if(existing){
-  const indicativeQuote=await liveQuote();
-  // Validate minimum BTC lot and all three TP legs BEFORE reduceOnly closes
-  // the old trade. This is only a sizing preflight, not a margin guarantee:
-  // the actual free balance is still rechecked after Binance confirms FLAT.
-  const indicative=previewLiveSizing(this.config,this.filters,indicativeQuote,
-   this.config.marginUSDT);
+  // Complete quote/lot/collateral validation BEFORE reduceOnly closes LONG.
+  const quote=await liveQuote();
+  const indicative=previewLiveSizing(this.config,this.filters,quote,this.config.marginUSDT);
   if(indicative.status!=='valid')
-   throw Error('Đảo chiều chưa thực hiện: khối lượng chiều mới không đủ an toàn: '+indicative.message);
+   throw Error('Giữ vị thế cũ: không đủ lô BTC cho chiều ngược: '+indicative.message);
+  const before=await this.inspect();
+  const reserve=Math.min(Number(before.equityUSDT),
+   Number(before.walletUSDT)+Number(before.btcUnrealizedUSDT));
+  const buffer=Math.max(1,this.config.marginUSDT*.01);
+  if(!before.canTrade||before.dualSidePosition!==false||
+   before.marginType!=='ISOLATED'||before.leverage!==this.config.leverage||
+   before.hasOtherPositions||before.openOrders!==0||
+   !Number.isFinite(reserve)||reserve<this.config.marginUSDT+buffer)
+   throw Error('Giữ vị thế cũ: không đủ tài sản ký quỹ dự kiến cho chiều ngược');
+  preparedReversePrice=quote;
+  this.markReversal('PREFLIGHT_OK',{fromSide:existing.entry.side,
+   targetSide:signal.side,barTime:signal.barTime,preflightPrice:quote,
+   plannedQty:indicative.quantityBTC,reason:null});
  }
  if(existing){
   reverseAttempted=true;
+  this.markReversal('CLOSE_SENDING');
   const closed=await this.reverseManagedPosition(signal);
   if(!closed)return;
-  reverseCompleted=true;
+  reverseCompleted=true;reversedFlatAccount=closed;
+  this.markReversal('FLAT_CONFIRMED');
   if(!this.armed||!this.config.reverseOnSignal){
+   this.markReversal('CANCELLED_BY_OPERATOR',{reason:'AUTO/đảo chiều đã OFF sau khi đóng'});
    this.log('REVERSE_STOPPED','Đã đóng vị thế cũ nhưng Auto/đảo chiều đã OFF; không mở vị thế mới.');
    return;
   }
  }
- const a=await this.inspect();
- // Verify price again after any exchange-side reduceOnly closure.
- // A true OCC reversal uses MARKET for both close and opposite Entry.
- // LIMIT at the historical trigger could stay unfilled or marketable and
- // silently leave the user FLAT rather than actually reversed.
- const quotePrice=await liveQuote();
- if(this.config.entryMode==='LIMIT_PULLBACK'&&!reverseCompleted){
+ // Do not request a second potentially stale aggTrade after closing LONG.
+ // Reverse reuses the price preflighted before closing, with post-close
+ // Binance balance settlement reconciled only through read-only calls.
+ const quotePrice=reverseCompleted?preparedReversePrice:await liveQuote();
+ if(!reverseCompleted&&this.config.entryMode==='LIMIT_PULLBACK'){
+  const a=await this.inspect();
   await this.submitLimit(signal,a,quotePrice);
   return;
  }
- if(reverseCompleted)this.log('REVERSE_ENTRY_MARKET',
-  'Vị thế cũ đã FLAT; mở chiều '+signal.side+
-  ' bằng MARKET dù Entry thông thường cấu hình LIMIT, rồi xác minh SL/TP.');
- const plan=draftProtectedOrder({side:signal.side,account:a,filters:this.filters,
-  quotePrice},this.config);
+ let plan;
+ if(reverseCompleted){
+  const verified=await this.preflightReverseEntryAfterFlat({
+   side:signal.side,account:reversedFlatAccount,quotePrice});
+  plan=verified.plan;
+  this.markReversal('ENTRY_READY',{plannedQty:plan.qtyBTC});
+  this.log('REVERSE_ENTRY_MARKET','Vị thế cũ FLAT, mở '+signal.side+
+   ' MARKET '+plan.qtyBTC+' BTC (ENTRY thông thường: '+this.config.entryMode+')');
+ }else{
+  const a=await this.inspect();
+  plan=draftProtectedOrder({side:signal.side,account:a,filters:this.filters,quotePrice},this.config);
+ }
 const clientId='OCCBTC-'+randomBytes(7).toString('hex');
 // From this point an entry might be sent; unknown outcomes require a safety halt.
 entrySubmissionPossible=true;
+if(reverseCompleted)this.markReversal('ENTRY_SENDING');
 this.saveIntent({phase:'ENTRY_SENDING',clientId,side:signal.side,barTime:signal.barTime});
 const sentAt=Date.now(),signalTime=Number(signal.time);
 this.lastEntryTiming={barTime:signal.barTime,
@@ -904,8 +964,8 @@ this.log('ENTRY_REQUEST_TIMING','M15 '+new Date(signal.barTime).toISOString()+
     ' ms · tổng sau mở nến '+(this.lastEntryTiming.signalToSendMs+
       this.lastEntryTiming.exchangeAckMs)+' ms');
    this.saveIntent({phase:'ENTRY_ACK',clientId,orderId:String(response.orderId),side:signal.side});
-   this.registerRealOrder({orderId:response.orderId,groupId:clientId,clientId,
-    role:'ENTRY',side:signal.side==='LONG'?'BUY':'SELL'});
+   if(reverseCompleted)this.markReversal('ENTRY_ACK',{newOrderId:String(response.orderId)});
+   // A broken history database must NEVER prevent submitting the STOP.
    const coordinator=new ProtectionCoordinator({api:this.api,
     checkpoint:new ProtectionCheckpoint(this.protectionPath),settings:this.config,
     notify:note=>this.log('CRITICAL',note.reason)});
@@ -913,11 +973,17 @@ this.log('ENTRY_REQUEST_TIMING','M15 '+new Date(signal.barTime).toISOString()+
     stepSize:this.filters.stepSize,tickSize:this.filters.tickSize,clientPrefix:clientId});
    this.saveIntent({phase:'PROTECTED',clientId,orderId:String(response.orderId)});
    this.activeProtection=result; // No new signal while a position is managed.
+   if(reverseCompleted)this.markReversal('PROTECTED',{newOrderId:String(response.orderId),reason:null});
+   try{this.registerRealOrder({orderId:response.orderId,groupId:clientId,clientId,
+    role:'ENTRY',side:signal.side==='LONG'?'BUY':'SELL'});}
+   catch(e){this.log('HISTORY_FAILED','Entry đã bảo vệ nhưng chưa ghi lịch sử: '+e.message);}
 this.error=null;
 this.log('PROTECTED','Futures thật entry '+response.orderId+' có SL và '+result.tps.length+' TP trên sàn; chờ vị thế đóng');
 this.recordVerifiedSignal({orderId:response.orderId,clientId,signal});
 this.notifySquareProtected(result);
 }catch(e){
+ if(reverseAttempted)this.markReversal('FAILED',{reason:String(e.message||e).slice(0,240),
+  failedAfterFlat:reverseCompleted});
  if(reverseAttempted&&!reverseCompleted){
   // Unknown close/cancel outcomes: never retry or send an opposite-opening order.
   this.halted=true;this.error='Đảo chiều chưa được xác nhận: '+e.message;

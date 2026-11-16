@@ -694,6 +694,121 @@ test('Unknown reduceOnly close outcome cannot send opposing Entry and leaves old
  assert.equal(fx.calls.filter(x=>x.method==='POST').length,before);
 });
 
+test('Opposite SHORT is sent after the LONG close even if the aggTrade quote turns stale during close',async t=>{
+ const dir=tmp(t),fx=fake(),svc=new BrowserFutures({dataDir:dir,
+  transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await svc.connect(creds);svc.saveConfig({marginUSDT:500,leverage:5,reverseOnSignal:true});
+ await svc.arm('CHAP NHAN BTC FUTURES',77000);
+ await svc.signal({side:'LONG',barTime:900000},true);
+ let quotes=0;
+ await svc.signal({side:'SHORT',barTime:1800000},true,()=>{
+  quotes++;
+  return {symbol:'BTCUSDT',live:true,lastPrice:77000,
+   lastReceivedAt:quotes===1?Date.now():Date.now()-12000};
+ });
+ assert.equal(quotes,1,'No second quote read after closing LONG');
+ assert.equal(svc.snapshot().halted,false,svc.snapshot().error);
+ assert.equal(fx.position.qty,-.032);
+ assert.equal(svc.snapshot().protectedPosition.entry.side,'SHORT');
+ assert.equal(svc.snapshot().lastReversal.stage,'PROTECTED');
+ assert.equal(svc.snapshot().lastReversal.targetSide,'SHORT');
+ assert.ok(svc.snapshot().lastReversal.newOrderId);
+ const again=new BrowserFutures({dataDir:dir,transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ assert.equal(again.snapshot().lastReversal.stage,'PROTECTED');
+});
+test('Read-only balance settlement retries after LONG close, then opens SHORT exactly once',async t=>{
+ const dir=tmp(t),fx=fake(),svc=new BrowserFutures({dataDir:dir,
+  transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await svc.connect(creds);svc.saveConfig({marginUSDT:500,leverage:5,reverseOnSignal:true});
+ await svc.arm('CHAP NHAN BTC FUTURES',77000);
+ await svc.signal({side:'LONG',barTime:900000},true);
+ let stale=0;
+ const get=fx.api.get.bind(fx.api);
+ fx.api.get=async(path,p={})=>{
+  const data=await get(path,p);
+  if(path==='/fapi/v2/account'&&fx.position.qty===0&&
+    fx.calls.some(c=>c.method==='POST'&&c.p?.reduceOnly==='true')&&stale++<3)
+   return {...data,assets:[{...data.assets[0],availableBalance:'2'}]};
+  return data;
+ };
+ svc.reverseSettleWait=async()=>{}; // no timer in test
+ await svc.signal({side:'SHORT',barTime:1800000},true);
+ const orders=fx.calls.filter(c=>c.method==='POST'&&c.path==='/fapi/v1/order');
+ assert.deepEqual(orders.map(c=>c.p.side),['BUY','SELL','SELL']);
+ assert.equal(orders[1].p.reduceOnly,'true');
+ assert.equal(orders[2].p.reduceOnly,undefined);
+ assert.ok(stale>=4);
+ assert.equal(svc.snapshot().halted,false);
+ assert.equal(svc.snapshot().lastReversal.stage,'PROTECTED');
+ assert.ok(svc.snapshot().events.some(x=>x.type==='REVERSE_MARGIN_WAIT'));
+ assert.equal(fx.position.qty,-.032);
+});
+test('SQLite history error on close or new Entry does not cancel the verified SHORT and STOP',async t=>{
+ const dir=tmp(t),fx=fake(),svc=new BrowserFutures({dataDir:dir,
+  transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await svc.connect(creds);svc.saveConfig({marginUSDT:500,leverage:5,reverseOnSignal:true});
+ await svc.arm('CHAP NHAN BTC FUTURES',77000);
+ await svc.signal({side:'LONG',barTime:900000},true);
+ const original=svc.registerRealOrder.bind(svc);
+ svc.registerRealOrder=o=>{
+  if(o.role==='REVERSE'||o.side==='SELL'&&o.role==='ENTRY')
+   throw Error('simulated SQLite busy');
+  return original(o);
+ };
+ await svc.signal({side:'SHORT',barTime:1800000},true);
+ assert.equal(fx.position.qty,-.032);
+ assert.equal(svc.snapshot().halted,false);
+ assert.equal(svc.snapshot().protectedPosition.entry.side,'SHORT');
+ assert.equal(svc.snapshot().lastReversal.stage,'PROTECTED');
+ assert.equal(fx.algo.filter(x=>x.orderType==='STOP_MARKET').length,1);
+ assert.ok(svc.snapshot().events.some(x=>x.type==='REVERSE_HISTORY_FAILED'));
+ assert.ok(svc.snapshot().events.some(x=>x.type==='HISTORY_FAILED'));
+});
+test('If reverse budget is inadequate, bot retains LONG and its STOP; never closes first',async t=>{
+ const dir=tmp(t),fx=fake(),svc=new BrowserFutures({dataDir:dir,
+  transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await svc.connect(creds);svc.saveConfig({marginUSDT:500,leverage:5,reverseOnSignal:true});
+ await svc.arm('CHAP NHAN BTC FUTURES',77000);
+ await svc.signal({side:'LONG',barTime:900000},true);
+ const old=fx.api.get.bind(fx.api);
+ fx.api.get=async(path,p={})=>{
+  const data=await old(path,p);
+  if(path==='/fapi/v2/account')
+   return {...data,totalMarginBalance:'300',totalWalletBalance:'300',
+    assets:[{...data.assets[0],walletBalance:'300',availableBalance:'300'}]};
+  return data;
+ };
+ const before=fx.calls.filter(c=>c.method==='POST').length;
+ await svc.signal({side:'SHORT',barTime:1800000},true);
+ assert.equal(fx.calls.filter(c=>c.method==='POST').length,before);
+ assert.equal(fx.position.qty,.032);
+ assert.equal(fx.algo.filter(x=>x.orderType==='STOP_MARKET').length,1);
+ assert.equal(svc.snapshot().halted,false);
+ assert.ok(svc.snapshot().events.some(e=>e.type==='SIGNAL_SKIPPED'));
+});
+test('If Binance rejects the opposite Entry after FLAT, halt with explicit FAILED phase; do not duplicate',async t=>{
+ const dir=tmp(t),fx=fake(),svc=new BrowserFutures({dataDir:dir,
+  transportFactory:()=>fx.api,credentialVault:makeVault(dir)});
+ await svc.connect(creds);svc.saveConfig({marginUSDT:500,leverage:5,reverseOnSignal:true});
+ await svc.arm('CHAP NHAN BTC FUTURES',77000);
+ await svc.signal({side:'LONG',barTime:900000},true);
+ const original=fx.api.post.bind(fx.api);
+ fx.api.post=async(path,p)=>{
+  if(path==='/fapi/v1/order'&&p.side==='SELL'&&p.reduceOnly!=='true')
+   throw Error('Binance rejected opposite Entry');
+  return original(path,p);
+ };
+ await svc.signal({side:'SHORT',barTime:1800000},true);
+ assert.equal(fx.position.qty,0);
+ assert.equal(svc.snapshot().halted,true);
+ assert.equal(svc.snapshot().lastReversal.stage,'FAILED');
+ assert.equal(svc.snapshot().lastReversal.targetSide,'SHORT');
+ assert.equal(svc.snapshot().lastReversal.failedAfterFlat,true);
+ const n=fx.calls.filter(x=>x.method==='POST'&&x.path==='/fapi/v1/order').length;
+ await svc.signal({side:'SHORT',barTime:2700000},true);
+ assert.equal(fx.calls.filter(x=>x.method==='POST'&&x.path==='/fapi/v1/order').length,n);
+ assert.ok(svc.snapshot().events.some(x=>x.type==='REVERSE_STATUS'&&x.message.startsWith('FAILED')));
+});
 test('Reverse switch rejects malformed values and cannot change during an in-flight order',async t=>{
  const dir=tmp(t),svc=new BrowserFutures({dataDir:dir,transportFactory:()=>fake().api,credentialVault:makeVault(dir)});
  assert.throws(()=>svc.setReverseOnSignal('true'),/ON hoặc OFF/);
