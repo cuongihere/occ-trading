@@ -834,6 +834,7 @@ body:has(#credentialEditor[open])::before{content:'';position:fixed;inset:0;z-in
    <span class="key">Lệnh chờ:</span> <strong id="openOrderCount">—</strong> ·
    <span class="key">SL/TP:</span> <strong id="openAlgoCount">—</strong>
    <div><span class="key">Bot:</span> <strong id="botState">OFF</strong></div>
+   <div id="reverseState" role="status" title="Trạng thái đảo chiều gần nhất" style="font-size:10px;font-weight:800"></div>
    <div class="small" id="autoHint">Bật Auto mới cho phép mở lệnh.</div>
   </div>
   <div class="compactOutcomes" id="positionAnalysis" aria-label="Lệnh SL TP đang mở thực tế trên Binance" hidden>
@@ -1186,7 +1187,21 @@ $('botState').textContent=!s.armed&&s.canResumeManaged?'VỊ THẾ OCC · CHỜ 
  s.halted?'KHÓA AN TOÀN · KHÔNG ĐẶT LỆNH':
  s.armed&&s.observeExistingOnly?
   (s.config?.reverseOnSignal?'THEO DÕI OCC · ĐẢO MARKET KHI CÓ TÍN HIỆU NGƯỢC':'GIÁM SÁT VỊ THẾ OCC · CHỜ FLAT'):s.armed?(s.marketHealthy?'Đang chạy':'Chờ Binance đồng bộ'):'Tạm dừng';
-$('autoHint').textContent=!s.armed&&s.canResumeManaged?'AUTO OFF · có thể bật giám sát vị thế OCC hiện tại sau khi app kiểm tra Entry, STOP và các TP trực tiếp từ Binance.':
+const rev=s.lastReversal;
+ if(rev){
+  const statusLabels={PREFLIGHT_OK:'ĐÃ KIỂM TRA',CLOSE_SENDING:'ĐANG ĐÓNG',
+   FLAT_CONFIRMED:'ĐÃ ĐÓNG',ENTRY_READY:'SẴN SÀNG MỞ',
+   ENTRY_SENDING:'ĐANG MỞ',ENTRY_ACK:'ENTRY ACK',
+   PROTECTED:'ĐẢO XONG',FAILED:'ĐẢO THẤT BẠI',
+   CANCELLED_BY_OPERATOR:'ĐÃ HỦY'};
+  $('reverseState').textContent='ĐẢO '+(rev.targetSide||'')+' · '+
+   (statusLabels[rev.stage]||rev.stage);
+  $('reverseState').title=rev.reason||'Giai đoạn: '+rev.stage+
+   (rev.newOrderId?' · Entry Order ID: '+rev.newOrderId:'');
+  $('reverseState').style.color=rev.stage==='PROTECTED'?'#64e3ac':
+   rev.stage==='FAILED'?'#ff7681':'#ffd489';
+ }else $('reverseState').textContent='';
+ $('autoHint').textContent=!s.armed&&s.canResumeManaged?'AUTO OFF · có thể bật giám sát vị thế OCC hiện tại sau khi app kiểm tra Entry, STOP và các TP trực tiếp từ Binance.':
  s.halted?'Auto đang khóa lệnh do trạng thái Binance chưa chắc chắn; kiểm tra và đối soát trước khi bật.':
  s.armed&&s.observeExistingOnly?
   (s.config?.reverseOnSignal?
