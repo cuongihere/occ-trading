@@ -1,3 +1,12 @@
+## Windows — gia cố đảo chiều OCC sau khi đã đóng vị thế (16/11/2026)
+
+- Trước khi gửi MARKET reduceOnly đóng LONG/SHORT, AUTO phải có giá Binance trực tiếp còn hiệu lực, bộ ba TP BTC chia được, cấu hình One-way/ISOLATED/đòn bẩy đúng và tài sản dự kiến đủ ký quỹ chiều ngược. Nếu không đủ, **không đóng vị thế cũ**; STOP cũ vẫn hoạt động.
+- Khi Binance xác nhận đã FLAT và dọn sạch SL/TP cũ, bot **không đòi cập nhật aggTrade lần hai** (giá có thể bất ngờ quá hạn khi đang đóng). Dùng giá đã kiểm tra để tính khối lượng, xác nhận tài khoản FLAT và thử **đọc lại** số dư khả dụng tối đa 6 lần nếu Binance đang chậm giải phóng ký quỹ. Không thử lại bất cứ POST đặt lệnh nào có kết quả chưa rõ.
+- Khi đủ điều kiện, mở ngay MARKET chiều ngược, xác minh fill, đặt STOP close-all trước TP1/2/3. Bất kỳ POST/FILLED/STOP chưa chắc chắn đều khóa an toàn thay vì gửi trùng.
+- Ghi SQLite và báo cáo lịch sử bị lỗi không được phép chặn thao tác đảo chiều hay việc đặt STOP. Trạng thái đảo chiều gần nhất được lưu tại `data/futures-last-reversal.json`, đồng thời hiển thị trong khung Bot: **ĐANG ĐÓNG → ĐÃ ĐÓNG → ĐANG MỞ → ĐẢO XONG**, hoặc **ĐẢO THẤT BẠI**.
+- Đây là chuỗi nhiều API Binance, **không có lệnh đảo chiều nguyên tử**; không thể cam kết SHORT luôn khớp khi Binance từ chối lệnh, mạng lỗi, ký quỹ thiếu hay người dùng tắt AUTO giữa chừng. Khi xảy ra lỗi sau khi đã FLAT, bot khóa và báo rõ để kiểm tra; không tự đoán gửi lại.
+- Test tự động gồm: giá aggTrade hết hạn sau khi đóng, Binance chậm cập nhật balance, SQLite lỗi khi ghi REVERSE/ENTRY, vốn không đủ trước khi đóng và Binance từ chối MARKET mở chiều ngược. Không thay đổi Android.
+
 # OCC Trading — Binance Futures Windows
 
 ## Chart Windows: chuỗi lệnh thật và khung thông số (16/11/2026)
