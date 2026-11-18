@@ -49,3 +49,102 @@ test('BTCUSDT leverage update is signed, strict and never sent to other markets'
  assert.equal(calls.length,1);
  t.close();
 });
+
+test('Binance -1021 automatically resyncs by server time and retries ONLY signed GET once',async()=>{
+ const start=1000000,serverTime=start+120000,seen=[];
+ const transport=new FuturesTransport({apiKey:'key',apiSecret:'secret',
+  environment:'production',productionConsent:'I_ACCEPT_LIVE_BTCUSDT',
+  clock:()=>start,
+  fetchFn:async url=>{
+   const u=new URL(url),params=u.searchParams;
+   seen.push({path:u.pathname,timestamp:params.get('timestamp'),
+    recvWindow:params.get('recvWindow')});
+   if(u.pathname==='/fapi/v1/time')return {ok:true,status:200,
+    json:async()=>({serverTime})};
+   if(u.pathname==='/fapi/v2/account'){
+    const valid=Math.abs(Number(params.get('timestamp'))-serverTime)<1000;
+    return valid?{ok:true,status:200,json:async()=>({assets:[{asset:'USDT'}]})}:
+     {ok:false,status:400,json:async()=>({code:-1021,msg:'Timestamp outside recvWindow'})};
+   }
+   throw Error('Unexpected '+u.pathname);
+  }});
+ const result=await transport.get('/fapi/v2/account');
+ assert.equal(result.assets[0].asset,'USDT');
+ assert.deepEqual(seen.map(x=>x.path),[
+  '/fapi/v2/account','/fapi/v1/time','/fapi/v2/account']);
+ assert.equal(Number(seen.at(-1).timestamp),serverTime);
+ assert.equal(seen[0].recvWindow,'10000');
+ assert.equal(transport.offset,120000);
+ assert.equal(transport.clockSyncVersion,1);
+ transport.close();
+});
+
+test('Concurrent Binance GET -1021 errors share a single automatic /time synchronization',async()=>{
+ let resolveTime;
+ let calls=0,syncCalls=0,now=1000000,offset=90000;
+ const gate=new Promise(r=>resolveTime=r);
+ const t=new FuturesTransport({apiKey:'key',apiSecret:'secret',clock:()=>now,
+  fetchFn:async url=>{
+   const u=new URL(url);
+   if(u.pathname==='/fapi/v1/time'){
+    syncCalls++;await gate;
+    return {ok:true,status:200,json:async()=>({serverTime:now+offset})};
+   }
+   if(u.pathname==='/fapi/v2/account'||u.pathname==='/fapi/v3/positionRisk'){
+    calls++;
+    const valid=Number(u.searchParams.get('timestamp'))===now+offset;
+    return valid?{ok:true,status:200,json:async()=>({valid:true})}:
+     {ok:false,status:400,json:async()=>({code:-1021,msg:'Timestamp mismatch'})};
+   }
+   throw Error('Unexpected '+u.pathname);
+  }});
+ const a=t.get('/fapi/v2/account'),b=t.get('/fapi/v3/positionRisk',{symbol:'BTCUSDT'});
+ await Promise.resolve();resolveTime();
+ const result=await Promise.all([a,b]);
+ assert.equal(syncCalls,1);
+ assert.equal(calls,4);
+ assert.ok(result.every(x=>x.valid));
+});
+
+test('Repeated GET -1021 after resync stops after one retry; no infinite loop',async()=>{
+ let reads=0,clockCalls=0;
+ const t=new FuturesTransport({apiKey:'key',apiSecret:'secret',clock:()=>1000000,
+  fetchFn:async url=>{
+   const path=new URL(url).pathname;
+   if(path==='/fapi/v1/time'){
+    clockCalls++;return {ok:true,status:200,json:async()=>({serverTime:1090000})};
+   }
+   reads++;return {ok:false,status:400,json:async()=>({code:-1021,msg:'Timestamp mismatch'})};
+  }});
+ await assert.rejects(t.get('/fapi/v2/account'),/code -1021/);
+ assert.equal(reads,2);assert.equal(clockCalls,1);
+});
+
+test('A Binance POST timestamp rejection is NEVER automatically resent',async()=>{
+ let orderCalls=0,timeCalls=0;
+ const t=new FuturesTransport({apiKey:'key',apiSecret:'secret',clock:()=>1000000,
+  environment:'production',productionConsent:'I_ACCEPT_LIVE_BTCUSDT',
+  fetchFn:async url=>{
+   const path=new URL(url).pathname;
+   if(path==='/fapi/v1/time')timeCalls++;
+   if(path==='/fapi/v1/order')orderCalls++;
+   return {ok:false,status:400,json:async()=>({code:-1021,msg:'Timestamp mismatch'})};
+  }});
+ await assert.rejects(t.post('/fapi/v1/order',{symbol:'BTCUSDT',positionSide:'BOTH',
+  side:'BUY',type:'MARKET',quantity:'.004',newClientOrderId:'OCCBTC-11223344556677',
+  newOrderRespType:'RESULT'}),/code -1021/);
+ assert.equal(orderCalls,1);
+ assert.equal(timeCalls,0);
+});
+
+test('Binance server-time response must be valid before any GET retry',async()=>{
+ let reads=0;
+ const t=new FuturesTransport({apiKey:'key',apiSecret:'secret',clock:()=>1000000,
+  fetchFn:async url=>{
+   const path=new URL(url).pathname;
+   if(path==='/fapi/v1/time')return {ok:true,status:200,json:async()=>({serverTime:'invalid'})};
+   reads++;return {ok:false,status:400,json:async()=>({code:-1021,msg:'Timestamp mismatch'})};
+  }});
+ await assert.rejects(t.get('/fapi/v2/account'),/Không thể xác minh giờ Binance/);
+ assert.equal(reads,1);
+});
