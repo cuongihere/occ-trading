@@ -15,8 +15,9 @@ export class FuturesTransport{
    throw Error('Explicit real-money constructor consent required');
   this.baseUrl=HOSTS[environment];this.environment=environment;
   this.key=apiKey;this.secret=apiSecret;this.fetchFn=fetchFn;this.clock=clock;this.offset=0;
+  this.clockSyncTask=null;this.clockSyncVersion=0;this.clockSyncedAt=null;
  }
- async request(method,path,params={}){
+ async request(method,path,params={},timeRetried=false){
   if(!(method==='GET'?GETS:method==='POST'?POSTS:DELETES).has(path))throw Error('Endpoint not allowed');
   if(params.symbol&&params.symbol!=='BTCUSDT')throw Error('Only BTCUSDT permitted');
   if(method==='POST'&&path==='/fapi/v1/leverage'){
@@ -55,9 +56,12 @@ export class FuturesTransport{
   const qs=new URLSearchParams(Object.entries(params).map(([k,v])=>[k,String(v)]));
   const isPublic=path==='/fapi/v1/time'||path==='/fapi/v1/ticker/price'||path==='/fapi/v1/exchangeInfo';
   if(!isPublic){
-   qs.append('recvWindow','5000');qs.append('timestamp',String(Math.floor(this.clock()+this.offset)));
+   // Read-only gets tolerate network jitter; mutations keep the 5s window.
+   qs.append('recvWindow',method==='GET'?'10000':'5000');
+   qs.append('timestamp',String(Math.floor(this.clock()+this.offset)));
    qs.append('signature',createHmac('sha256',this.secret).update(qs.toString()).digest('hex'));
   }
+  const offsetVersion=this.clockSyncVersion;
   const url=this.baseUrl+path+((method==='GET'||method==='DELETE')?'?'+qs:'');
   const opts={method,headers:{'X-MBX-APIKEY':this.key},signal:AbortSignal.timeout(9000)};
   if(method==='POST'){opts.headers['Content-Type']='application/x-www-form-urlencoded';opts.body=qs.toString();}
@@ -67,6 +71,12 @@ export class FuturesTransport{
   let body;
   try{body=await response.json();}catch{throw Error('Binance response unreadable; reconcile before any subsequent order');}
   if(!response.ok||(typeof body?.code==='number'&&body.code<0)){
+   // Binance -1021: only auto-resync and re-sign an idempotent GET ONCE.
+   // Never retry a POST/DELETE order, including one rejected by the exchange.
+   if(body?.code===-1021&&method==='GET'&&path!=='/fapi/v1/time'&&!timeRetried){
+    if(offsetVersion===this.clockSyncVersion)await this.syncClockShared();
+    return this.request(method,path,params,true);
+   }
    // Return endpoint, HTTP status and Binance error code without printing signed URL or API keys.
    const code=Number.isInteger(body?.code)?String(body.code):'unknown';
    const message=typeof body?.msg==='string'?body.msg.replace(/[A-Za-z0-9_-]{40,}/g,'[redacted]').slice(0,160):'';
@@ -75,11 +85,27 @@ export class FuturesTransport{
   return body;
  }
  async syncClock(){
-  const a=this.clock(),r=await this.request('GET','/fapi/v1/time');this.offset=Number(r.serverTime)-(a+this.clock())/2;
-  if(!Number.isFinite(this.offset)||Math.abs(this.offset)>30000)throw Error('System clock exceeds 30 second offset');
+  // Keep a Binance UTC offset only inside this app; do not change Windows settings.
+  const started=this.clock(),response=await this.request('GET','/fapi/v1/time');
+  const ended=this.clock(),remote=Number(response?.serverTime);
+  if(!Number.isSafeInteger(remote)||remote<=0||
+     !Number.isFinite(started)||!Number.isFinite(ended)||
+     ended<started||ended-started>15000)
+   throw Error('Không thể xác minh giờ Binance; không gửi lệnh khi chưa đồng bộ');
+  const offset=remote-(started+ended)/2;
+  if(!Number.isFinite(offset)||!Number.isSafeInteger(Math.floor(ended+offset)))
+   throw Error('Giờ Binance không hợp lệ; không gửi lệnh');
+  this.offset=offset;this.clockSyncedAt=ended;this.clockSyncVersion++;
+  return offset;
+ }
+ async syncClockShared(){
+  // If multiple signed GETs fail simultaneously, one Binance /time read suffices.
+  if(this.clockSyncTask)return this.clockSyncTask;
+  const task=this.syncClock();this.clockSyncTask=task;
+  try{return await task;}finally{if(this.clockSyncTask===task)this.clockSyncTask=null;}
  }
  get(path,p={}){return this.request('GET',path,p);}
  post(path,p={}){return this.request('POST',path,p);}
  del(path,p={}){return this.request('DELETE',path,p);}
- close(){this.secret='';this.key='';}
+ close(){this.secret='';this.key='';this.clockSyncedAt=null;}
 }
