@@ -32,6 +32,22 @@ mã nguồn để kiểm tra chiến lược; hoàn toàn không chạy trong �
 4. Kết nối API Binance Futures; AUTO mặc định OFF. Chỉ bật khi nắm rõ
    cấu hình giao dịch, SL/TP và rủi ro.
 
+## OCC Scanner → Binance Square · Toàn bộ USDⓈ-M Perpetual (PC, 20/11/2026)
+
+- Mở tab **OCC Scanner · Square** tại `http://127.0.0.1:8080/occ-scanner`. Chức năng **tách độc lập khỏi AUTO Trading BTCUSDT**; bật Scanner hoặc tắt AUTO Trade không làm thay đổi lệnh Binance Futures. Code chỉ truy vấn các endpoint công khai `exchangeInfo`, `ticker/24hr`, `klines`; **không có API đặt lệnh cho các mã khác**.
+- Scanner lấy **toàn bộ hợp đồng USD-M Perpetual đang TRADING có quote asset USDT** trên Binance, khởi tạo SMMA8 H4/M15 từ dữ liệu quá khứ. Khi vừa bật hoặc mở lại app chỉ khởi tạo, **không phát lại tín hiệu cũ**; tín hiệu mới xuất hiện khi nến M15 đóng sau khi scanner đã sẵn sàng. Bỏ qua giao cắt bị trễ trên 10 phút và backfill có khoảng trống; tự tái khởi tạo từng mã khi mất nến.
+- **Tự đăng Square mặc định OFF riêng**, phải tích chọn và xác nhận. Dùng Square OpenAPI key đã lưu mã hóa Windows DPAPI ở phần Cài đặt BTC (không phải Futures API). Scanner vẫn quét và hiển thị LONG/SHORT ngay cả khi AUTO Trade BTC hoặc chế độ đăng Square sau Entry thật đang OFF.
+- **Lọc bài đăng**, không lọc phạm vi quét: thanh khoản 24h mặc định từ **10 triệu USDT**, tối đa **3 bài/chu kỳ**, **15 bài/ngày** (tính cả bài Trade BTC), chỉnh được trong Scanner với trần 20 bài/ngày. Ưu tiên mã có quote volume cao; không tuyên bố kết quả hay xác suất thắng.
+- **Tín hiệu chưa khớp** chỉ ghi giá đóng nến M15, SL và TP1/TP2/TP3 tham khảo từ các phần trăm Scanner, mặc định 0,8% / 1,5% / 3% / 5%. Đây không phải lệnh limit/market, không đặt SL/TP lên sàn. Hình chart từ nến Binance M15, tiêu đề đúng ký hiệu Futures, không hiện tên chỉ báo OCC/SMMA.
+- **Câu bắt buộc trong MỌI bài tín hiệu Scanner (nguyên văn):**
+
+  **Đây là Tín hiệu phân tích kỹ thuật, chưa phải giao dịch đã khớp.**
+
+- Bài Square **sau khi khớp Entry BTC thật** vẫn ở chế độ riêng, ghi Entry đã khớp thực sự và không được mô tả sai thành tín hiệu chưa khớp. Câu cảnh báo trên chỉ dành cho các bài phân tích chưa thực thi.
+- Mọi bài tín hiệu có khóa chống trùng `SYMBOL:M15:barTime:side`, lưu bền trong `data/square-publisher.json`. Nếu Square trả ACK không rõ / HTTP 504, ghi `REVIEW_REQUIRED` và **không retry** nhằm tránh đăng lặp. Cấu hình, dấu lịch sử tín hiệu lưu trong `data/occ-square-scanner.json`; cần giữ `data/` khi cập nhật Portable.
+- Lượng request lớn khi quét toàn bộ Futures; scanner giới hạn chạy đồng thời, làm mới universe sau 3 giờ và dừng tạm thời nếu Binance trả 429/418. Cần có mạng và app PC đang chạy; không chạy nền khi app tắt.
+- Cảnh báo đăng bài giúp phân biệt tín hiệu và lệnh đã khớp nhưng **không tự động miễn trừ nghĩa vụ pháp lý**; người vận hành vẫn phải tuân thủ quy định nền tảng và pháp luật.
+
 ## Tự đăng Binance Square sau khi có giao dịch thực
 
 - Vào [Square Creator Center](https://www.binance.com/square/creator-center/home) → tạo **Square OpenAPI key đăng bài**, KHÔNG phải API Futures.
@@ -56,10 +72,10 @@ Về API: Binance Square OpenAPI dùng `/image/presignedUrl`,
 
 ## Quy tắc an toàn
 
+- **Hai nhánh Square độc lập:** bài BTC Futures đã khớp từ lệnh OCC và bài tín hiệu phân tích Scanner chưa khớp; không dùng tín hiệu Scanner làm lệnh giao dịch thật.\n
 - API Futures và API Square được lưu **riêng biệt**. Không chia sẻ API key.
 - Binance Square có giới hạn bài/ảnh, chính sách nội dung và giới hạn theo khu vực.
-- Chỉ đẩy bài **khi Entry đã khớp và SL/TP đã xác minh**; LIMIT còn chờ hoặc
-  tín hiệu mới xuất hiện không được coi là vị thế đã vào.
+- Nhánh bài **TRADE BTC** chỉ đẩy khi Entry đã khớp và SL/TP xác minh. Nhánh **SIGNAL Scanner** được phép đăng giao cắt M15 mới nhưng bắt buộc ghi rõ *chưa phải giao dịch đã khớp* và không được gửi lệnh.
 - Không phát lại tín hiệu trong thời gian mất kết nối. AUTO OFF khi khởi động lại.
 - Đảo chiều thực tế: kiểm tra trạng thái Binance, đóng reduceOnly MARKET,
   xác nhận FLAT, mở chiều ngược MARKET và đặt STOP trước các TP.
