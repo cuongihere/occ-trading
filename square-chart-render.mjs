@@ -53,7 +53,7 @@ function png(p){const raw=Buffer.alloc((W*4+1)*H);for(let j=0;j<H;j++){const a=j
 const ok=x=>Number.isFinite(Number(x))&&Number(x)>0;
 const price=x=>{const n=Number(x),digits=n>=100?1:n>=1?4:n>=0.01?6:9;return n.toFixed(digits);};
 export function renderSquareTradeChart({klines,side,entry,sl,tps,filledAt=Date.now(),symbol='BTCUSDT',signal=false}){
- if(!Array.isArray(klines)||klines.length<24||!/^[A-Z0-9]{3,20}USDT$/.test(symbol)||!['LONG','SHORT'].includes(side)||
+ if(!Array.isArray(klines)||klines.length<24||!/^[A-Z0-9]{1,20}USDT$/.test(symbol)||!['LONG','SHORT'].includes(side)||
   !ok(entry)||!ok(sl)||!Array.isArray(tps)||tps.length!==3||!tps.every(ok))throw Error('Invalid verified Binance trade/chart');
  if(side==='LONG'&&!(sl<entry&&tps.every(x=>x>entry))||
     side==='SHORT'&&!(sl>entry&&tps.every(x=>x<entry)))throw Error('Invalid directional SL/TP');
