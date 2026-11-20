@@ -23,7 +23,7 @@ const browserFutures=new BrowserFutures({dataDir:dir});
 const liveSignalEngine=new OCCSignalEngine();
 const btcMarketQuote=new BtcMarketQuote();
 const square=new SquarePublisher({dataDir:dir,fetchKlines:async({symbol='BTCUSDT',filledAt,limit=96})=>{
- if(!/^[A-Z0-9]{3,20}USDT$/.test(symbol))throw Error('Invalid Square chart symbol');
+ if(!/^[A-Z0-9]{1,20}USDT$/.test(symbol))throw Error('Invalid Square chart symbol');
  const params=new URLSearchParams({symbol,interval:'15m',
   endTime:String(Math.floor(Number(filledAt)+60000)),limit:String(Math.min(150,limit))});
  const result=await fetch('https://fapi.binance.com/fapi/v1/klines?'+params,{
