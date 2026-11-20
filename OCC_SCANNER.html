@@ -81,7 +81,7 @@ Tắt AUTO Trade BTC vẫn có thể chạy Scanner và Square. Mọi tín hiệ
 const $=id=>document.getElementById(id),keys=['minQuoteVolumeUSDT','maxDailyPosts','maxPerCycle','slPercent','tp1Percent','tp2Percent','tp3Percent'];
 let first=true,saving=false;
 function fmt(x,d=5){return Number.isFinite(Number(x))?Number(x).toLocaleString('en-US',{maximumFractionDigits:d}):'—';}
-function date(x){return Number.isFinite(Number(x))?new Date(Number(x)).toLocaleString('vi-VN',{hour12:false}):'—';}
+function date(x){return x!=null&&Number.isFinite(Number(x))?new Date(Number(x)).toLocaleString('vi-VN',{hour12:false}):'—';}
 async function api(body){
  const response=await fetch('/control/scanner/config',{method:'POST',
  headers:{'Content-Type':'application/json','X-OCC-Local':'1'},body:JSON.stringify(body)});
