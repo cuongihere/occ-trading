@@ -71,22 +71,34 @@ function verifyUploadUrl(value){
   throw Error('Square upload URL không thuộc nhà cung cấp được cho phép');
  return u.toString();
 }
-async function publishImage(fetcher,key,png,caption,sleep,imageName='BTCUSDT_trade.png'){
- const ticket=await requestJson(fetcher,API_V2+'/image/presignedUrl',key,{imageName});
- if(!ticket?.fileTicket||!ticket?.presignedUrl)throw Error('Square chưa cấp phép upload ảnh');
- const upload=verifyUploadUrl(ticket.presignedUrl);
- const put=await fetcher(upload,{method:'PUT',headers:{'Content-Type':'image/png'},
-  body:png,signal:AbortSignal.timeout(30000)});
- if(!put.ok)throw Error('Square upload ảnh thất bại HTTP '+put.status);
+async function publishImage(fetcher,key,png,caption,sleep,imageName='BTCUSDT_trade.png',textFallback=false){
  let imageUrl=null;
- for(let i=0;i<10;i++){
-  const state=await requestJson(fetcher,API_V2+'/image/imageStatus',key,{fileTicket:ticket.fileTicket});
-  if(state?.status===1&&state.imageUrl){imageUrl=state.imageUrl;break;}
-  if(state?.status===2)throw Error('Square xử lý ảnh thất bại');
-  if(i!==9)await sleep(3000);
+ try{
+  // No Square content/add request is made during the media preparation stage.
+  const ticket=await requestJson(fetcher,API_V2+'/image/presignedUrl',key,{imageName});
+  if(!ticket?.fileTicket||!ticket?.presignedUrl)throw Error('Square chưa cấp phép upload ảnh');
+  const upload=verifyUploadUrl(ticket.presignedUrl);
+  const put=await fetcher(upload,{method:'PUT',headers:{'Content-Type':'image/png'},
+   body:png,signal:AbortSignal.timeout(30000)});
+  if(!put.ok)throw Error('Square upload ảnh thất bại HTTP '+put.status);
+  for(let i=0;i<10;i++){
+   const state=await requestJson(fetcher,API_V2+'/image/imageStatus',key,{fileTicket:ticket.fileTicket});
+   if(state?.status===1&&state.imageUrl){imageUrl=state.imageUrl;break;}
+   if(state?.status===2)throw Error('Square xử lý ảnh thất bại');
+   if(i!==9)await sleep(3000);
+  }
+  if(!imageUrl||!String(imageUrl).startsWith('https://'))
+   throw Error('Square chưa xác nhận ảnh đã sẵn sàng');
+ }catch(error){
+  if(!textFallback)throw error;
+  // Images are optional for analytical posts. If media setup fails BEFORE
+  // content/add, use a text-only public post with the SAME disclaimer.
+  // Never fallback after a content/add call because publication may be ambiguous.
+  return requestJson(fetcher,API_V1+'/content/add',key,{
+   contentType:1,bodyTextOnly:caption
+  },20000);
  }
- if(!imageUrl||!String(imageUrl).startsWith('https://'))
-  throw Error('Square chưa xác nhận ảnh đã sẵn sàng');
+ // Exactly one attempt to publish after image preparation succeeded.
  return requestJson(fetcher,API_V1+'/content/add',key,{
   contentType:1,bodyTextOnly:caption,imageList:[imageUrl]
  },20000);
@@ -187,7 +199,7 @@ export class SquarePublisher{
   record.status='PUBLISHING';this.save();
   const caption=trade.isSignal?squareSignalCaption(trade):squareCaption(trade);
   const imageName=trade.isSignal?trade.symbol+'_signal.png':'BTCUSDT_trade.png';
-  const result=await publishImage(this.fetcher,key,png,caption,this.sleep,imageName);
+  const result=await publishImage(this.fetcher,key,png,caption,this.sleep,imageName,trade.isSignal===true);
   if(result?.unknown){record.status='REVIEW_REQUIRED';record.error='Binance Square HTTP 504; có thể đã đăng, hãy kiểm tra thủ công';}
   else{record.status='SENT';record.url=result.shareLink||
     (result.id?'https://www.binance.com/square/post/'+encodeURIComponent(String(result.id)):null);
