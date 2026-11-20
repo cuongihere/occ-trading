@@ -50,9 +50,10 @@ function text(p,s,x,y,k,c){let px=x;for(const ch of String(s).toUpperCase()){con
 function crc(data){let c=-1;for(const n of data){c^=n;for(let k=0;k<8;k++)c=(c>>>1)^(0xedb88320&-(c&1));}return (c^-1)>>>0;}
 function chunk(t,b){const name=Buffer.from(t),n=Buffer.alloc(4),sum=Buffer.alloc(4);n.writeUInt32BE(b.length);sum.writeUInt32BE(crc(Buffer.concat([name,b])));return Buffer.concat([n,name,b,sum]);}
 function png(p){const raw=Buffer.alloc((W*4+1)*H);for(let j=0;j<H;j++){const a=j*(W*4+1);raw[a]=0;p.copy(raw,a+1,j*W*4,(j+1)*W*4);}const ih=Buffer.alloc(13);ih.writeUInt32BE(W,0);ih.writeUInt32BE(H,4);ih[8]=8;ih[9]=6;return Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]),chunk('IHDR',ih),chunk('IDAT',deflateSync(raw)),chunk('IEND',Buffer.alloc(0))]);}
-const ok=x=>Number.isFinite(Number(x))&&Number(x)>0,price=x=>Number(x).toFixed(1);
-export function renderSquareTradeChart({klines,side,entry,sl,tps,filledAt=Date.now()}){
- if(!Array.isArray(klines)||klines.length<24||!['LONG','SHORT'].includes(side)||
+const ok=x=>Number.isFinite(Number(x))&&Number(x)>0;
+const price=x=>{const n=Number(x),digits=n>=100?1:n>=1?4:n>=0.01?6:9;return n.toFixed(digits);};
+export function renderSquareTradeChart({klines,side,entry,sl,tps,filledAt=Date.now(),symbol='BTCUSDT',signal=false}){
+ if(!Array.isArray(klines)||klines.length<24||!/^[A-Z0-9]{3,20}USDT$/.test(symbol)||!['LONG','SHORT'].includes(side)||
   !ok(entry)||!ok(sl)||!Array.isArray(tps)||tps.length!==3||!tps.every(ok))throw Error('Invalid verified Binance trade/chart');
  if(side==='LONG'&&!(sl<entry&&tps.every(x=>x>entry))||
     side==='SHORT'&&!(sl>entry&&tps.every(x=>x<entry)))throw Error('Invalid directional SL/TP');
@@ -61,18 +62,19 @@ export function renderSquareTradeChart({klines,side,entry,sl,tps,filledAt=Date.n
   [x.o,x.h,x.l,x.c].every(ok)&&x.l<=Math.min(x.o,x.c)&&x.h>=Math.max(x.o,x.c));
  if(rows.length<24)throw Error('Not enough verified Binance candles');
  const p=Buffer.alloc(W*H*4);rect(p,0,0,W,H,P.bg);rect(p,20,15,W-40,H-30,P.panel);
- text(p,'BTCUSDT PERPETUAL',40,33,4,P.white);
+ text(p,symbol+' PERPETUAL',40,33,symbol.length>12?2:3,P.white);
+  if(signal)text(p,'M15 SIGNAL - NOT FILLED',40,75,2,P.muted);
  text(p,side,920,33,4,side==='LONG'?P.green:P.red);
  const low=Math.min(...rows.map(x=>x.l),entry,sl,...tps),high=Math.max(...rows.map(x=>x.h),entry,sl,...tps);
  const pad=(high-low)*.1||100,lo=low-pad,hi=high+pad,L=46,R=1016,T=129,B=595;
  const y=v=>Math.round(B-(v-lo)/(hi-lo)*(B-T));
  rect(p,L,T,R-L,B-T,[8,23,37]);
- for(let k=0;k<=5;k++){const v=lo+(hi-lo)*k/5,cy=y(v);line(p,L,cy,R,cy,P.grid);text(p,price(v),1035,cy-8,2,P.muted);}
+ for(let k=0;k<=5;k++){const v=lo+(hi-lo)*k/5,cy=y(v);line(p,L,cy,R,cy,P.grid);const label=price(v);text(p,label,1035,cy-8,label.length>12?1:2,P.muted);}
  const x=i=>Math.round(L+8+i*(R-L-15)/(rows.length-1));
  for(let i=0;i<rows.length;i++){const r=rows[i],q=x(i),c=r.c>=r.o?P.green:P.red;
   line(p,q,y(r.h),q,y(r.l),c,1);rect(p,q-3,y(Math.max(r.o,r.c)),6,Math.max(2,y(Math.min(r.o,r.c))-y(Math.max(r.o,r.c))),c);}
  for(const [label,v,c] of [['ENTRY',entry,P.blue],['SL',sl,P.red],...tps.map((v,i)=>['TP'+(i+1),v,P.green])]){
-  const cy=y(Number(v));line(p,600,cy,R,cy,c,2);rect(p,1027,cy-12,157,25,P.panel);text(p,label+' '+price(v),1032,cy-7,2,c);}
+  const cy=y(Number(v)),str=label+' '+price(v);line(p,600,cy,R,cy,c,2);rect(p,1027,cy-12,157,25,P.panel);text(p,str,1032,cy-7,str.length>12?1:2,c);}
  const d=new Date(filledAt);if(!Number.isNaN(d.getTime())){const date=[d.getUTCFullYear(),String(d.getUTCMonth()+1).padStart(2,'0'),String(d.getUTCDate()).padStart(2,'0')].join('-');text(p,date,48,630,2,P.muted);}
  return png(p);
 }
