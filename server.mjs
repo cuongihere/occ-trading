@@ -10,6 +10,7 @@ import {readLiveReport} from './binance-live-stats.mjs';
 import {buildOCCChartComparison,readVerifiedChartHistory} from './futures-chart-compare.mjs';
 import {BrowserFutures} from './futures-browser-service.mjs';
 import {SquarePublisher} from './square-publisher.mjs';
+import {OccSquareScanner} from './occ-square-scanner.mjs';
 
 const args=new Set(process.argv.slice(2));
 if(args.has('--help')){console.log('node server.mjs | BTCUSDT Futures only | DATA_DIR and PORT optional');process.exit(0);}
@@ -21,8 +22,9 @@ catch{console.error('Another OCC Futures process owns this data directory.');pro
 const browserFutures=new BrowserFutures({dataDir:dir});
 const liveSignalEngine=new OCCSignalEngine();
 const btcMarketQuote=new BtcMarketQuote();
-const square=new SquarePublisher({dataDir:dir,fetchKlines:async({filledAt,limit=96})=>{
- const params=new URLSearchParams({symbol:'BTCUSDT',interval:'15m',
+const square=new SquarePublisher({dataDir:dir,fetchKlines:async({symbol='BTCUSDT',filledAt,limit=96})=>{
+ if(!/^[A-Z0-9]{3,20}USDT$/.test(symbol))throw Error('Invalid Square chart symbol');
+ const params=new URLSearchParams({symbol,interval:'15m',
   endTime:String(Math.floor(Number(filledAt)+60000)),limit:String(Math.min(150,limit))});
  const result=await fetch('https://fapi.binance.com/fapi/v1/klines?'+params,{
   signal:AbortSignal.timeout(12000),cache:'no-store'});
@@ -32,6 +34,7 @@ const square=new SquarePublisher({dataDir:dir,fetchKlines:async({filledAt,limit=
  return data;
 }});
 browserFutures.setSquarePublisher(square);
+const squareScanner=new OccSquareScanner({dataDir:dir,publisher:square});
 let closing=false,status={state:'starting',message:'Synchronizing Binance Futures'};
 function statusEvent(s){
  status=s;if(closing)return;
@@ -57,6 +60,7 @@ const feed=new BinanceFeed({
  onMark(m){btcMarketQuote.updateMark(m);}
 });
 const binancePreviewHtml=readFileSync(new URL('./BINANCE_UI_PREVIEW.html',import.meta.url),'utf8');
+const scannerHtml=readFileSync(new URL('./OCC_SCANNER.html',import.meta.url),'utf8');
 const comparisonHtml=readFileSync(new URL('./OCC_COMPARE.html',import.meta.url),'utf8');
 const tradingViewReferenceHtml=readFileSync(new URL('./OCC_TV_WIDGET.html',import.meta.url),'utf8');
 // Public Binance Futures candles; chart endpoints remain GET/read-only.
@@ -193,7 +197,12 @@ const server=createServer(async(req,res)=>{
    else if(req.url==='/control/live/forget'){browserFutures.forgetSavedCredentials();}
    else if(req.url==='/control/live/square/key'){square.connect(p.key);}
    else if(req.url==='/control/live/square/on'){square.toggle(p.enabled);}
-   else if(req.url==='/control/live/square/forget'){square.forget();}
+   else if(req.url==='/control/live/square/forget'){
+    square.forget();squareScanner.configure({autoPublish:false});
+   }
+   else if(req.url==='/control/scanner/config'){
+    return res.end(JSON.stringify(squareScanner.configure(p)));
+   }
    else throw Error('Unknown action');res.end(JSON.stringify({ok:true}));
   }catch(e){res.writeHead(400);res.end(JSON.stringify({error:e.message}));}return;
  }
@@ -202,6 +211,11 @@ const server=createServer(async(req,res)=>{
  res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');
  if(req.url==='/'){res.writeHead(302,{Location:'/binance'});return res.end();}
  if(req.url==='/binance'){res.setHeader('Content-Type','text/html;charset=utf-8');res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'");return res.end(binancePreviewHtml);}
+ if(req.url==='/occ-scanner'){
+  res.setHeader('Content-Type','text/html;charset=utf-8');
+  res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'");
+  return res.end(scannerHtml);
+ }
  if(req.url.startsWith('/occ-compare')){
   res.setHeader('Content-Type','text/html;charset=utf-8');
   res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; frame-src 'self'; frame-ancestors 'self'; object-src 'none'");
@@ -241,6 +255,10 @@ if(req.url==='/api/binance/live-status'){res.setHeader('Content-Type','applicati
   catch(e){res.writeHead(503);return res.end(JSON.stringify({status:'unavailable',message:e.message}));}
  }
  if(req.url==='/api/binance/live-report'){res.setHeader('Content-Type','application/json;charset=utf-8');return res.end(JSON.stringify(readLiveReport(resolve(dir,'binance-live-stats.sqlite'))));}
+ if(req.url==='/api/scanner/status'){
+  res.setHeader('Content-Type','application/json;charset=utf-8');
+  return res.end(JSON.stringify(squareScanner.status()));
+ }
  if(req.url==='/api/square/status'){
   res.setHeader('Content-Type','application/json;charset=utf-8');
   return res.end(JSON.stringify(square.status()));
@@ -259,6 +277,9 @@ const limitMonitor=setInterval(()=>browserFutures.pollLimit().catch(e=>console.e
 const accountRefresh=setInterval(()=>browserFutures.refreshAccountOverview().catch(e=>{
   console.error('Futures account refresh:',e.message);
 }),25000);accountRefresh.unref();
+const scannerTimer=setInterval(()=>squareScanner.tick().catch(e=>
+ console.error('Square Scanner:',e.message)),30000);
+scannerTimer.unref();
 const liveHistoryRefresh=setInterval(()=>browserFutures.refreshRealHistory()
  .catch(e=>console.error('Binance OCC history:',e.message)),60000);
 liveHistoryRefresh.unref();
@@ -266,10 +287,11 @@ server.listen(port,'127.0.0.1',()=>{
  console.log('BTCUSDT Futures http://127.0.0.1:'+port+'/binance; AUTO OFF by default');
  browserFutures.restoreSavedConnection().catch(e=>console.error('Saved Binance credentials:',e.message));
  feed.connect();
+ squareScanner.tick().catch(e=>console.error('Scanner initialization:',e.message));
 });
 function shutdown(code=0){
  if(closing)return;closing=true;
- clearInterval(futuresMonitor);clearInterval(limitMonitor);clearInterval(accountRefresh);clearInterval(liveHistoryRefresh);
+ clearInterval(futuresMonitor);clearInterval(limitMonitor);clearInterval(accountRefresh);clearInterval(liveHistoryRefresh);clearInterval(scannerTimer);
  try{browserFutures.close();}catch{}
  try{feed.disconnect();}catch{}
  try{lock.close();}catch{}
