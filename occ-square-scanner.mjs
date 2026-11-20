@@ -6,7 +6,7 @@ import {resolve} from 'node:path';
 import {OCCSignalEngine,M15} from './occ-signal-engine.mjs';
 
 const ROOT='https://fapi.binance.com';
-const validSymbol=s=>typeof s==='string'&&/^[A-Z0-9]{3,20}USDT$/.test(s);
+const validSymbol=s=>typeof s==='string'&&/^[A-Z0-9]{1,20}USDT$/.test(s);
 const maxAge=10*60*1000;
 const limitNumber=(x,min,max,name)=>{const n=Number(x);if(!Number.isFinite(n)||n<min||n>max)throw Error(name+' không hợp lệ');return n;};
 export const SCANNER_DISCLAIMER='Đây là Tín hiệu phân tích kỹ thuật, chưa phải giao dịch đã khớp.';
