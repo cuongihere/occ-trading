@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OCC Scanner · Binance Futures / Square</title>
+<style>
+:root{color-scheme:dark;--bg:#071220;--panel:#122338;--line:#29445d;--fg:#e1f1fc;--muted:#91abc1;--accent:#9ae4bd;--red:#ff8e98}
+*{box-sizing:border-box}body{background:var(--bg);color:var(--fg);font:13px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;margin:0}
+main{max-width:1500px;margin:auto;padding:17px 22px 35px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:15px}h1{font-size:20px;margin:0}h2{font-size:15px;margin:0 0 10px}p{margin:8px 0}
+a{color:#98c9fa;text-decoration:none}a:hover{text-decoration:underline}
+header nav{display:flex;gap:14px;align-items:center}small,.muted{color:var(--muted)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:17px}
+.grid{display:grid;grid-template-columns:390px minmax(0,1fr);gap:12px;align-items:start}
+.topnote{border-bottom:1px solid var(--line);padding:0 0 12px;margin-bottom:15px}
+.controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:12px 0}
+label{display:flex;align-items:center;gap:8px}input[type=checkbox]{accent-color:#80dfaa;width:17px;height:17px}
+.setting{display:flex;flex-direction:column;align-items:stretch;gap:3px;margin:8px 0}
+input[type=number]{color:var(--fg);background:#09192b;border:1px solid #42617b;border-radius:6px;font-size:13px;padding:9px;width:100%}
+button{font-size:12px;border:1px solid #47647d;border-radius:6px;background:#1c3550;color:var(--fg);padding:9px 12px;cursor:pointer}
+button.primary{background:#a2eac2;color:#0c2b22;font-weight:700;border-color:#a2eac2}button:disabled{opacity:.4;cursor:not-allowed}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin-bottom:13px}
+.kpi{background:#0a192b;border-radius:7px;padding:12px;border:1px solid #29445d}
+.kpi span{display:block;color:var(--muted);font-size:11px}.kpi strong{font-size:18px;display:block;margin-top:4px}
+.status{margin:12px 0;min-height:32px;color:var(--muted)}.good{color:var(--accent)}.bad{color:var(--red)}
+.tableWrap{overflow-x:auto;max-height:70vh;overflow-y:auto}
+table{width:100%;border-collapse:collapse;min-width:800px;font-size:12px}
+th,td{text-align:left;padding:9px 7px;border-bottom:1px solid var(--line)}th{color:var(--muted);position:sticky;top:0;background:var(--panel)}
+td.price{font-variant-numeric:tabular-nums;white-space:nowrap}.long{color:#76e1aa}.short{color:var(--red)}
+.fixedNotice{font-weight:600;margin:10px 0;color:#f0dfad}
+@media(max-width:950px){.grid{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,1fr)}main{padding:12px}}
+</style></head>
+<body><main>
+<header><div><h1>OCC Scanner · Binance Square</h1><small>USDⓈ-M Perpetual · SMMA8 H4 / M15 · Quét tín hiệu độc lập</small></div>
+<nav><a href="/binance">Giao dịch BTC</a><a href="/occ-compare">Biểu đồ BTC</a></nav></header>
+<div class="topnote">Chỉ đọc dữ liệu nến Futures để phát hiện giao cắt. <strong>KHÔNG đặt lệnh Futures cho các mã ngoài BTCUSDT.</strong>
+Tắt AUTO Trade BTC vẫn có thể chạy Scanner và Square. Mọi tín hiệu đăng công khai đều có câu cảnh báo bắt buộc.</div>
+<div class="grid">
+<section class="panel">
+<h2>Điều khiển Scanner</h2>
+<div class="controls"><label><input id="scannerEnabled" type="checkbox"> Bật quét toàn bộ USDⓈ-M Perpetual</label></div>
+<div class="controls"><label><input id="autoPublish" type="checkbox"> Tự đăng tín hiệu đã lọc lên Square</label></div>
+<div id="keyStatus" class="muted">Đang kiểm tra khóa Square…</div>
+<p class="muted">Khóa đăng bài Square dùng chung phần Cài đặt trên màn hình BTC. Không dùng khóa API Futures để đăng bài.</p>
+<label class="setting">Thanh khoản tối thiểu 24h (USDT) để đăng bài
+<input id="minQuoteVolumeUSDT" type="number" min="0" step="1000000"></label>
+<label class="setting">Giới hạn bài/ngày (bao gồm bài lệnh BTC thật)
+<input id="maxDailyPosts" type="number" min="1" max="20" step="1"></label>
+<label class="setting">Giới hạn bài mỗi đợt quét
+<input id="maxPerCycle" type="number" min="1" max="3" step="1"></label>
+<h2 style="margin-top:17px">SL/TP tham khảo · không phải lệnh trên sàn</h2>
+<label class="setting">SL (%)
+<input id="slPercent" type="number" min="0.01" max="30" step=".1"></label>
+<label class="setting">TP1 (%)
+<input id="tp1Percent" type="number" min="0.01" max="30" step=".1"></label>
+<label class="setting">TP2 (%)
+<input id="tp2Percent" type="number" min="0.01" max="30" step=".1"></label>
+<label class="setting">TP3 (%)
+<input id="tp3Percent" type="number" min="0.01" max="30" step=".1"></label>
+<div class="controls"><button id="save" class="primary">Lưu cấu hình</button><button id="refresh">Làm mới trạng thái</button></div>
+<p class="fixedNotice">Đây là Tín hiệu phân tích kỹ thuật, chưa phải giao dịch đã khớp.</p>
+<p class="muted">Tín hiệu chỉ xác nhận khi nến M15 đóng; không đăng lại lịch sử khi bật hoặc mở lại app. Nếu mất nến, Scanner tái đồng bộ và không đăng bù. Tự đăng mặc định OFF, cần bật có chủ đích.</p>
+<div id="message" class="status" role="status"></div>
+</section>
+<section class="panel">
+<h2>Phạm vi & tiến trình quét</h2>
+<div class="kpis">
+<div class="kpi"><span>Mã Perpetual</span><strong id="tracked">—</strong></div>
+<div class="kpi"><span>Đã khởi tạo</span><strong id="warmed">—</strong></div>
+<div class="kpi"><span>Đã kiểm tra / chu kỳ</span><strong id="scanned">—</strong></div>
+<div class="kpi"><span>Bài còn được đăng / ngày</span><strong id="dailyRemaining">—</strong></div>
+</div>
+<p id="scanStatus" class="status"></p>
+<h2>Tín hiệu M15 đã xác nhận gần đây</h2>
+<div class="tableWrap"><table>
+<thead><tr><th>Thời gian</th><th>Mã</th><th>Chiều</th><th>Giá tín hiệu</th><th>Ngưỡng kích hoạt</th><th>SL</th><th>TP1 / TP2 / TP3</th><th>24h USDT</th><th>Đăng Square</th></tr></thead>
+<tbody id="signals"><tr><td colspan="9" class="muted">Chưa có tín hiệu mới được xác nhận trong phiên quét.</td></tr></tbody>
+</table></div>
+</section>
+</div></main>
+<script>
+'use strict';
+const $=id=>document.getElementById(id),keys=['minQuoteVolumeUSDT','maxDailyPosts','maxPerCycle','slPercent','tp1Percent','tp2Percent','tp3Percent'];
+let first=true,saving=false;
+function fmt(x,d=5){return Number.isFinite(Number(x))?Number(x).toLocaleString('en-US',{maximumFractionDigits:d}):'—';}
+function date(x){return x!=null&&Number.isFinite(Number(x))?new Date(Number(x)).toLocaleString('vi-VN',{hour12:false}):'—';}
+async function api(body){
+ const response=await fetch('/control/scanner/config',{method:'POST',
+ headers:{'Content-Type':'application/json','X-OCC-Local':'1'},body:JSON.stringify(body)});
+ const result=await response.json();
+ if(!response.ok)throw Error(result.error||'Không cập nhật được Scanner');
+ return result;
+}
+async function refresh(){
+ try{
+  const r=await fetch('/api/scanner/status',{cache:'no-store'});
+  if(!r.ok)throw Error('HTTP '+r.status);
+  const s=await r.json();
+  if(first){
+   for(const k of keys)$(k).value=s.config[k];
+   $('scannerEnabled').checked=s.config.enabled;
+   $('autoPublish').checked=s.config.autoPublish;
+   first=false;
+  }else if(!saving){
+   $('scannerEnabled').checked=s.config.enabled;
+   $('autoPublish').checked=s.config.autoPublish;
+  }
+  $('autoPublish').disabled=!s.squareKeyStored;
+  $('keyStatus').textContent=s.squareKeyStored?'Square OpenAPI key: ĐÃ LƯU':'Chưa lưu Square OpenAPI key · mở Cài đặt ở trang BTC để kết nối';
+  for(const k of ['tracked','warmed','scanned','dailyRemaining'])$(k).textContent=fmt(s[k],0);
+  $('scanStatus').textContent=(s.running?'ĐANG QUÉT · ':'')+(s.config.enabled?'SCANNER ON':'SCANNER OFF')+
+    ' · Lần quét: '+date(s.lastScanAt)+
+    ' · Tín hiệu mới: '+s.detected+
+    ' · Đã dùng '+s.dailyUsed+' bài/ngày'+
+    (s.lastError?' · Lỗi: '+s.lastError:'')+
+    (Number(s.blockedUntil)>Date.now()?' · Tạm dừng giới hạn Binance đến '+date(s.blockedUntil):'');
+  $('scanStatus').className=s.lastError?'status bad':'status';
+  $('signals').replaceChildren();
+  const signals=s.recentSignals||[];
+  if(!signals.length){
+   const tr=document.createElement('tr'),td=document.createElement('td');
+   td.colSpan=9;td.textContent='Chưa có tín hiệu M15 mới sau khi Scanner được khởi tạo.';tr.append(td);$('signals').append(tr);
+  }
+  for(const x of signals){
+   const tr=document.createElement('tr');
+   const vals=[date(x.at),x.symbol,x.side,fmt(x.entry,9),fmt(x.triggerPrice,9),
+    fmt(x.sl,9),(x.tps||[]).map(v=>fmt(v,9)).join(' / '),
+    fmt(x.quoteVolumeUSDT,0),x.publishStatus||'CHƯA ĐĂNG'];
+   for(let i=0;i<vals.length;i++){
+    const td=document.createElement('td');td.textContent=String(vals[i]);
+    if(i===2)td.className=x.side==='LONG'?'long':'short';
+    if([3,4,5,6,7].includes(i))td.classList.add('price');
+    tr.append(td);
+   }
+   $('signals').append(tr);
+  }
+ }catch(e){$('message').textContent='Không đọc được trạng thái: '+e.message;}
+}
+async function change(partial){
+ saving=true;try{
+  await api(partial);$('message').textContent='Đã lưu thiết lập Scanner.';await refresh();
+ }catch(e){$('message').textContent='Chưa lưu: '+e.message;await refresh();}
+ finally{saving=false;}
+}
+$('scannerEnabled').addEventListener('change',async()=>{
+ const enabled=$('scannerEnabled').checked;await change({enabled});
+});
+$('autoPublish').addEventListener('change',async()=>{
+ const yes=$('autoPublish').checked;
+ if(yes&&!confirm('TỰ ĐỘNG ĐĂNG BÀI CÔNG KHAI cho tín hiệu OCC trên nhiều mã Futures? Không có lệnh thực tế được mở. Mỗi bài bắt buộc có cảnh báo giao dịch chưa khớp.')){$('autoPublish').checked=false;return;}
+ await change({autoPublish:yes});
+});
+$('save').onclick=async()=>{
+ const patch=Object.fromEntries(keys.map(k=>[k,Number($(k).value)]));
+ await change(patch);
+};
+$('refresh').onclick=refresh;
+refresh();setInterval(refresh,20000);
+</script>
+</body></html>

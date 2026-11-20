@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtempSync,readFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {SquarePublisher,squareCaption} from './square-publisher.mjs';
+import {SquarePublisher,squareCaption,squareSignalCaption,SQUARE_SIGNAL_DISCLAIMER} from './square-publisher.mjs';
 import {renderSquareTradeChart} from './square-chart-render.mjs';
 import {inflateSync} from 'node:zlib';
 
@@ -106,4 +106,60 @@ test('Square result rejected without a publishing-only API key and publishing st
  const {p}=fixture(t);
  assert.throws(()=>p.toggle(true),/Square OpenAPI key/);
  assert.equal(p.status().enabled,false);
+});
+
+test('Every Scanner post has exact warning, never claims a real fill, and is idempotent after restart',async t=>{
+ const h=fixture(t);
+ h.p.connect('Square-openapi-example-key-123456');
+ const signal={key:'ETHUSDT:M15:1763661600000:LONG',symbol:'ETHUSDT',side:'LONG',
+  barTime:1763661600000,at:1763662500000,entry:100,sl:99,tps:[101,102,103]};
+ const caption=squareSignalCaption(signal);
+ assert.ok(caption.includes(SQUARE_SIGNAL_DISCLAIMER));
+ assert.match(caption,/\$ETHUSDT PERPETUAL/);
+ assert.match(caption,/Giá tín hiệu tham khảo/);
+ assert.doesNotMatch(caption,/SMMA|OCC|đã khớp Entry/);
+ const result=await h.p.onSignal(signal);
+ assert.equal(result.status,'SENT');
+ const published=h.calls.find(x=>String(x.url).endsWith('/content/add'));
+ assert.ok(published);
+ const body=JSON.parse(published.body);
+ assert.ok(body.bodyTextOnly.includes(SQUARE_SIGNAL_DISCLAIMER));
+ assert.doesNotMatch(body.bodyTextOnly,/SMMA|OCC/);
+ assert.deepEqual(await h.p.onSignal(signal),{duplicate:true});
+ const restarted=new SquarePublisher({dataDir:h.dir,fetcher:h.p.fetcher,vault:h.p.vault,
+  fetchKlines:async()=>fakeKlines,sleep:async()=>{}});
+ assert.deepEqual(await restarted.onSignal(signal),{duplicate:true});
+ assert.equal(h.calls.filter(x=>String(x.url).endsWith('/content/add')).length,1);
+ const saved=JSON.parse(readFileSync(join(h.dir,'square-publisher.json'),'utf8'));
+ assert.equal(saved.posts[0].kind,'SIGNAL');
+ assert.equal(saved.posts[0].symbol,'ETHUSDT');
+ assert.deepEqual([...h.p.latestImage().subarray(0,4)],[137,80,78,71]);
+});
+test('Scanner post validates untrusted symbols and quote levels before reserving publication',async t=>{
+ const h=fixture(t);h.p.connect('Square-openapi-example-key-123456');
+ await assert.rejects(()=>h.p.onSignal({key:'INVALID',symbol:'INVALID',side:'LONG',entry:100,sl:99,tps:[101,102,103],at:1763662500000}),/không hợp lệ/);
+ assert.equal(h.calls.length,0);
+ assert.equal(h.p.posts.length,0);
+});
+
+test('Scanner can publish mandatory disclaimer as text when image upload is unsupported',async t=>{
+ const h=fixture(t,async(url,options)=>{
+  h.calls.push({url,method:options.method,body:options.body});
+  if(String(url).endsWith('/image/presignedUrl'))return {ok:false,status:403,
+   json:async()=>({code:'220010',message:'image not enabled'})};
+  if(String(url).endsWith('/content/add'))return {ok:true,status:200,
+   json:async()=>({code:'000000',data:{id:'1122'}})};
+  throw Error('No other request expected');
+ });
+ h.p.connect('Square-openapi-example-key-123456');
+ const signal={key:'WUSDT:M15:1763661600000:SHORT',symbol:'WUSDT',side:'SHORT',
+  barTime:1763661600000,at:1763662500000,entry:10,sl:11,tps:[9,8,7]};
+ const result=await h.p.onSignal(signal);
+ assert.equal(result.status,'SENT');
+ const posts=h.calls.filter(x=>String(x.url).endsWith('/content/add'));
+ assert.equal(posts.length,1);
+ const body=JSON.parse(posts[0].body);
+ assert.equal(body.imageList,undefined);
+ assert.ok(body.bodyTextOnly.includes(SQUARE_SIGNAL_DISCLAIMER));
+ assert.ok(!body.bodyTextOnly.includes('OCC'));
 });
