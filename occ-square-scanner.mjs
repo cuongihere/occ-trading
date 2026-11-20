@@ -64,6 +64,7 @@ export class OccSquareScanner{
   this.lastPostResult=null;
  }
  save(){
+  if(this.seen.size>1600)this.seen=new Set([...this.seen].slice(-1600));
   mkdirSync(resolve(this.path,'..'),{recursive:true,mode:0o700});
   const tmp=this.path+'.pending';
   writeFileSync(tmp,JSON.stringify({config:this.config,recentSignals:this.recentSignals.slice(-150),
@@ -195,7 +196,8 @@ export class OccSquareScanner{
     if(this.config.autoPublish&&this.publisher.keyExists()){
      let slots=Math.min(this.config.maxPerCycle,this.status().dailyRemaining);
      for(const s of qualified){
-      if(slots<=0||this.clock()-s.at>maxAge)break;
+      if(!this.config.enabled||!this.config.autoPublish||slots<=0)break;
+      if(this.clock()-s.at>maxAge)continue;
       const result=await this.publisher.onSignal(s);
       const row=this.recentSignals.find(x=>x.key===s.key);
       if(row)row.publishStatus=result.status||result.error||'SKIPPED';
