@@ -171,7 +171,7 @@ export class OccSquareScanner{
     let next=0,errors=0;
     const proposals=[];
     const worker=async()=>{
-     while(next<this.symbols.length&&this.clock()>=this.blockedUntil){
+     while(next<this.symbols.length&&this.config.enabled&&this.clock()>=this.blockedUntil){
       const item=this.symbols[next++];
       try{
        const found=await this.symbolPass(item,this.clock());
