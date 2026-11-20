@@ -140,7 +140,7 @@ export class SquarePublisher{
  }
  status(){const last=this.posts.at(-1);
   return {enabled:this.enabled,keyStored:this.keyExists(),last:last?{
-   orderId:last.orderId,status:last.status,at:last.at,postedAt:last.postedAt||null,
+   kind:last.kind||'TRADE',symbol:last.symbol||'BTCUSDT',orderId:last.orderId,status:last.status,at:last.at,postedAt:last.postedAt||null,
    url:last.url||null,error:last.error||null,chartReady:last.chartReady||false}:null,
    postCount:this.posts.filter(x=>x.status==='SENT').length};
  }
