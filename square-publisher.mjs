@@ -173,7 +173,8 @@ export class SquarePublisher{
  }
  async _run(record,trade){
   if(typeof this.fetchKlines!=='function')throw Error('Nguồn nến Binance chưa sẵn sàng');
-  const klines=await this.fetchKlines({symbol:trade.symbol||'BTCUSDT',filledAt:trade.at,limit:96});
+  const rawKlines=await this.fetchKlines({symbol:trade.symbol||'BTCUSDT',filledAt:trade.at,limit:96});
+  const klines=trade.isSignal?rawKlines.filter(k=>Number(Array.isArray(k)?k[6]:k.closeTime)<trade.at):rawKlines;
   const png=renderSquareTradeChart({klines,side:trade.side,entry:trade.entry,
    sl:trade.sl,tps:trade.tps,filledAt:trade.at,symbol:trade.symbol||'BTCUSDT',signal:trade.isSignal===true});
   mkdirSync(this.dir,{recursive:true,mode:0o700});
