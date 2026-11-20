@@ -201,7 +201,11 @@ const server=createServer(async(req,res)=>{
     square.forget();squareScanner.configure({autoPublish:false});
    }
    else if(req.url==='/control/scanner/config'){
-    return res.end(JSON.stringify(squareScanner.configure(p)));
+    const previous=squareScanner.config.enabled;
+    const updated=squareScanner.configure(p);
+    if(!previous&&updated.config.enabled)
+     squareScanner.tick({force:true}).catch(e=>console.error('Scanner startup:',e.message));
+    return res.end(JSON.stringify(updated));
    }
    else throw Error('Unknown action');res.end(JSON.stringify({ok:true}));
   }catch(e){res.writeHead(400);res.end(JSON.stringify({error:e.message}));}return;
