@@ -141,3 +141,25 @@ test('Scanner post validates untrusted symbols and quote levels before reserving
  assert.equal(h.calls.length,0);
  assert.equal(h.p.posts.length,0);
 });
+
+test('Scanner can publish mandatory disclaimer as text when image upload is unsupported',async t=>{
+ const h=fixture(t,async(url,options)=>{
+  h.calls.push({url,method:options.method,body:options.body});
+  if(String(url).endsWith('/image/presignedUrl'))return {ok:false,status:403,
+   json:async()=>({code:'220010',message:'image not enabled'})};
+  if(String(url).endsWith('/content/add'))return {ok:true,status:200,
+   json:async()=>({code:'000000',data:{id:'1122'}})};
+  throw Error('No other request expected');
+ });
+ h.p.connect('Square-openapi-example-key-123456');
+ const signal={key:'WUSDT:M15:1763661600000:SHORT',symbol:'WUSDT',side:'SHORT',
+  barTime:1763661600000,at:1763662500000,entry:10,sl:11,tps:[9,8,7]};
+ const result=await h.p.onSignal(signal);
+ assert.equal(result.status,'SENT');
+ const posts=h.calls.filter(x=>String(x.url).endsWith('/content/add'));
+ assert.equal(posts.length,1);
+ const body=JSON.parse(posts[0].body);
+ assert.equal(body.imageList,undefined);
+ assert.ok(body.bodyTextOnly.includes(SQUARE_SIGNAL_DISCLAIMER));
+ assert.ok(!body.bodyTextOnly.includes('OCC'));
+});
