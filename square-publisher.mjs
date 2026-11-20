@@ -33,7 +33,7 @@ function levels(p){
  return result;
 }
 export function squareSignalCaption(signal){
- if(!/^[A-Z0-9]{3,20}USDT$/.test(signal?.symbol||'')||
+ if(!/^[A-Z0-9]{1,20}USDT$/.test(signal?.symbol||'')||
     !['LONG','SHORT'].includes(signal?.side)||
     !(Number(signal?.entry)>0)||!(Number(signal?.sl)>0)||
     !Array.isArray(signal?.tps)||signal.tps.length!==3||
@@ -153,7 +153,7 @@ export class SquarePublisher{
  async onSignal(signal){
   if(!this.keyExists())return {skipped:true};
   const key=String(signal?.key||'');
-  if(!/^[A-Z0-9]{3,20}USDT:M15:[0-9]{8,15}:(LONG|SHORT)$/.test(key)||
+  if(!/^[A-Z0-9]{1,20}USDT:M15:[0-9]{8,15}:(LONG|SHORT)$/.test(key)||
      signal.symbol+':M15:'+signal.barTime+':'+signal.side!==key||
      !(Number(signal.at)>0)||!(Number(signal.entry)>0)||!(Number(signal.sl)>0)||
      !Array.isArray(signal.tps)||signal.tps.length!==3)
