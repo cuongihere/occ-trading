@@ -3,6 +3,9 @@
 Live Binance USDⓈ-M Futures trading, OCC crossover signals, LIMIT/MARKET entries,
 exchange-confirmed STOP and TP1/TP2/TP3, and optional Binance Square chart posts.
 
+**Windows PC only.** This repository ships the Windows trading application, scanner,
+and PC-focused regression tests. The Windows portable build is the only release target.
+
 **Paper Trading is not available in the application or Windows build.** Historical
 paper fixtures remain only as development/regression tests and are never executed.
 

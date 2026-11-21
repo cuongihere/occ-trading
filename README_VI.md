@@ -5,7 +5,7 @@
 - Khi đủ điều kiện, mở ngay MARKET chiều ngược, xác minh fill, đặt STOP close-all trước TP1/2/3. Bất kỳ POST/FILLED/STOP chưa chắc chắn đều khóa an toàn thay vì gửi trùng.
 - Ghi SQLite và báo cáo lịch sử bị lỗi không được phép chặn thao tác đảo chiều hay việc đặt STOP. Trạng thái đảo chiều gần nhất được lưu tại `data/futures-last-reversal.json`, đồng thời hiển thị trong khung Bot: **ĐANG ĐÓNG → ĐÃ ĐÓNG → ĐANG MỞ → ĐẢO XONG**, hoặc **ĐẢO THẤT BẠI**.
 - Đây là chuỗi nhiều API Binance, **không có lệnh đảo chiều nguyên tử**; không thể cam kết SHORT luôn khớp khi Binance từ chối lệnh, mạng lỗi, ký quỹ thiếu hay người dùng tắt AUTO giữa chừng. Khi xảy ra lỗi sau khi đã FLAT, bot khóa và báo rõ để kiểm tra; không tự đoán gửi lại.
-- Test tự động gồm: giá aggTrade hết hạn sau khi đóng, Binance chậm cập nhật balance, SQLite lỗi khi ghi REVERSE/ENTRY, vốn không đủ trước khi đóng và Binance từ chối MARKET mở chiều ngược. Không thay đổi Android.
+- Test tự động gồm: giá aggTrade hết hạn sau khi đóng, Binance chậm cập nhật balance, SQLite lỗi khi ghi REVERSE/ENTRY, vốn không đủ trước khi đóng và Binance từ chối MARKET mở chiều ngược.
 
 # OCC Trading — Binance Futures Windows
 
@@ -17,7 +17,7 @@
 - Khung chính hiện giá khớp, khối lượng BTC, thời gian, Order ID, P&L nhóm (chưa funding), phí, mức OCC và các bước Entry/Exit. Click bước lệnh hoặc nút Đến vị trí lệnh để xem tại nến giao dịch.
 - LONG dính SL rồi xuất hiện SHORT được ghi SAU SL → LỆNH MỚI. Đây chỉ là hai fill Binance theo thời gian, không mặc nhiên là đảo chiều tự động. REVERSE chỉ được gắn khi lệnh thoát thực tế có role REVERSE.
 - Lệnh cũ thiếu liên kết Order ID với tín hiệu vẫn báo chưa xác minh; SL/TP đang mở chỉ vẽ từ Binance Algo đã xác minh.
-- Không thay đổi logic thực thi lệnh, quản lý SL/TP hoặc Android. Giữ nguyên thư mục data khi cập nhật.
+- Không thay đổi logic thực thi lệnh và quản lý SL/TP. Giữ nguyên thư mục data khi cập nhật.
 
 
 **Chỉ giao dịch BTCUSDT Futures thực tế.** Đã bỏ Paper Trading khỏi ứng dụng,
