@@ -706,6 +706,28 @@ body:has(#credentialEditor[open])::before{content:'';position:fixed;inset:0;z-in
 .squareKeyControls button{min-height:30px;padding:4px 8px}
 .squareKeyControls a{border:1px solid #395b78;padding:7px 9px;border-radius:6px;text-decoration:none;font-size:11px}
 .squareSettings>.small{line-height:1.5}
+
+/* Multi-symbol Auto Trade lives in an overlay to preserve the single-screen PC chart. */
+.multiDialog{border:1px solid #446889;background:#0e2032;color:#e6f3ff;
+ border-radius:14px;width:min(900px,96vw);max-height:88vh;padding:18px 20px;
+ box-shadow:0 16px 75px #000a;overflow:auto}
+.multiDialog::backdrop{background:rgba(0,7,14,.8)}
+.multiHeader{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.multiHeader h2{font-size:19px;margin:0}
+.multiTools{display:flex;gap:9px;align-items:end;margin:14px 0;flex-wrap:wrap}
+.multiTools label{flex:1 1 260px}
+.multiRows{border:1px solid #34526d;border-radius:9px;background:#10283b;overflow:auto}
+.multiRow{display:grid;grid-template-columns:115px minmax(140px,230px) minmax(150px,1fr) 78px;
+ gap:10px;align-items:center;padding:8px 10px;border-bottom:1px solid #30465d}
+.multiRow:last-child{border-bottom:0}.multiRow .coin{font-weight:800;color:#a7dfec}
+.multiRow input{max-width:190px}.multiRow small{color:#a9bfd4}
+.multiActions{display:flex;gap:8px;margin:13px 0;flex-wrap:wrap}
+.multiResults{font-size:12px;line-height:1.6;margin-top:10px}
+.multiResults .item{padding:5px 9px;border-bottom:1px solid #33485e}
+.multiHelp{font-size:11px;color:#b3c6da;line-height:1.6;margin:7px 0 12px}
+#multiStatus{color:#bed6ef;font-size:12px;line-height:1.6}
+@media(max-width:640px){.multiRow{grid-template-columns:80px minmax(115px,1fr) auto}
+.multiRow small{grid-column:1/-1}.multiDialog{padding:12px}}
 </style>
 </head>
 <body>
@@ -715,7 +737,7 @@ body:has(#credentialEditor[open])::before{content:'';position:fixed;inset:0;z-in
  <div class="controls">
  <span id="connection" class="status">CHƯA KẾT NỐI</span>
  <label class="auto" id="autoWrap" style="flex-direction:row;color:#eff6ff;font-size:12px"><input id="enabled" type="checkbox" disabled><span id="autoLabel">AUTO OFF</span></label>
- <a class="link" href="/occ-scanner" id="scannerNav" style="text-decoration:none">OCC Scanner · Square</a><button class="link" type="button" id="openConfigBtn">Cài đặt</button><button class="link" type="button" id="openHistoryBtn">Lịch sử</button></div>
+ <a class="link" href="/occ-scanner" id="scannerNav" style="text-decoration:none">OCC Scanner · Square</a><button class="link" type="button" id="openMultiBtn">Auto đa mã</button><button class="link" type="button" id="openConfigBtn">Cài đặt</button><button class="link" type="button" id="openHistoryBtn">Lịch sử</button></div>
 </header>
 <section class="kpis">
  <div class="kpi"><div class="label">Ví</div><div id="wallet" class="value">—</div><div class="detail">USDT · Wallet</div></div>
@@ -903,6 +925,27 @@ body:has(#credentialEditor[open])::before{content:'';position:fixed;inset:0;z-in
 </details>
 <footer><span id="lastUpdate">Binance USDⓈ-M</span><span>Auto mặc định OFF khi mở app · P&L bot chưa gồm funding/phí ngoài USDT</span><span>Futures có rủi ro mất vốn</span></footer>
 </div>
+
+<dialog id="multiDialog" class="multiDialog" aria-labelledby="multiTitle">
+ <div class="multiHeader"><h2 id="multiTitle">Auto Trade · Nhiều mã USDT Futures</h2>
+ <button type="button" id="multiClose" class="minor">Đóng ×</button></div>
+ <p class="multiHelp">Nhập BTC, ETH, BNB… App tự tìm cặp USDT Perpetual đang giao dịch. Ký quỹ (USDT) nhập riêng từng mã, không có mức cố định. Khi có tín hiệu, nếu nhỏ hơn mức tối thiểu Binance cho phép (bao gồm đủ 3 TP), app tự nâng <strong>đúng mức tối thiểu hợp lệ</strong>; nếu đã đủ thì giữ nguyên. Mọi lệnh đều phụ thuộc số dư thực tế.</p>
+ <div class="multiTools">
+  <label>Nhập mã coin, cách nhau bằng dấu phẩy hoặc khoảng trắng
+   <input id="multiSymbolsInput" type="text" placeholder="btc, eth, bnb, sol" autocomplete="off"></label>
+  <button id="multiAdd" type="button" class="primary">Thêm mã</button>
+ </div>
+ <div class="multiRows" id="multiRows"><div class="multiHelp" style="padding:10px">Chưa có mã nào. Nhập coin và ký quỹ mong muốn cho từng mã.</div></div>
+ <div class="multiActions">
+  <button id="multiSave" type="button">Lưu cấu hình</button>
+  <button id="multiPreview" type="button" class="minor">Kiểm tra mức tối thiểu</button>
+  <button id="multiOn" type="button" class="primary">BẬT AUTO ĐA MÃ</button>
+  <button id="multiOff" type="button">TẮT AUTO</button>
+ </div>
+ <div id="multiStatus" role="status">AUTO đa mã mặc định OFF khi khởi động.</div>
+ <div id="multiPreviewRows" class="multiResults" aria-label="Ký quỹ yêu cầu theo Binance"></div>
+ <p class="multiHelp">Chế độ đa mã hiện dùng Entry MARKET sau khi nến M15 xác nhận OCC; mỗi mã một STOP close-all và TP1/TP2/TP3 riêng. Đảo chiều trên mã đang có vị thế chưa bật trong chế độ đa mã; vị thế giữ đến SL/TP. Không chạy đồng thời AUTO BTC cũ và AUTO đa mã. Mức tối thiểu chỉ là dự báo và được tính lại ngay trước khi đặt lệnh.</p>
+</dialog>
 <script>
 'use strict';
 const $=id=>document.getElementById(id);
@@ -1654,5 +1697,128 @@ $('squareEnabled').onchange=async e=>{
 };
 squareRefresh();
 setInterval(squareRefresh,30000);
+
+// Multi-symbol trade controls. Keep raw coin input separate from verified USDT symbols.
+let multiRowsState=[],multiFormDirty=false,multiLoaded=false,multiLocked=false;
+const coinPattern=/^[A-Z0-9]{2,20}$/;
+const multiMsg=t=>{$('multiStatus').textContent=t;};
+async function multiRequest(action,body={}){
+ const r=await fetch('/control/multi/'+action,{method:'POST',
+  headers:{'Content-Type':'application/json','X-OCC-Local':'1'},body:JSON.stringify(body)});
+ const j=await r.json();if(!r.ok)throw Error(j.error||'Lệnh Auto đa mã thất bại');
+ return j;
+}
+function readMultiRows(){
+ return multiRowsState.map(({base,input})=>({base,marginUSDT:
+  input&&input.value.trim()!==''?Number(input.value):NaN}));
+}
+function renderMultiRows(){
+ const area=$('multiRows');area.replaceChildren();
+ if(!multiRowsState.length){
+  const t=document.createElement('p');t.className='multiHelp';t.style.padding='10px';
+  t.textContent='Chưa chọn mã coin.';area.append(t);return;
+ }
+ for(const row of multiRowsState){
+  const div=document.createElement('div');div.className='multiRow';
+  const name=document.createElement('strong');name.className='coin';name.textContent=row.base+'USDT';
+  const label=document.createElement('label');label.textContent='Ký quỹ mong muốn (USDT)';
+  const input=document.createElement('input');input.type='number';input.min='0.00000001';
+  input.step='any';input.placeholder='Nhập USDT';input.value=row.marginUSDT??'';
+  input.addEventListener('input',()=>{multiFormDirty=true;});
+  row.input=input;label.append(input);
+  const desc=document.createElement('small');
+  desc.textContent='Chỉ tự nâng nếu chưa đủ min lot/notional và 3 TP.';
+  const remove=document.createElement('button');remove.type='button';remove.textContent='Xóa';
+  remove.className='minor';remove.onclick=()=>{
+   multiRowsState=multiRowsState.filter(x=>x!==row);multiFormDirty=true;renderMultiRows();
+  };
+  div.append(name,label,desc,remove);area.append(div);
+ }
+}
+$('multiAdd').onclick=()=>{
+ const raw=$('multiSymbolsInput').value.toUpperCase();
+ const names=raw.split(/[\s,;，]+/).map(x=>x.trim()).filter(Boolean);
+ const current=new Set(multiRowsState.map(x=>x.base));
+ const fresh=[];
+ for(let name of names){
+  name=name.replace(/USDT$/,'');
+  if(!coinPattern.test(name)||name==='USDT'){multiMsg('Mã không hợp lệ: '+name);return;}
+  if(current.has(name))continue;current.add(name);
+  fresh.push({base:name,marginUSDT:null,input:null});
+ }
+ if(multiRowsState.length+fresh.length>30){multiMsg('Chỉ hỗ trợ tối đa 30 mã/lần.');return;}
+ multiRowsState.push(...fresh);multiFormDirty=true;renderMultiRows();
+ $('multiSymbolsInput').value='';
+ multiMsg('Đã thêm '+fresh.length+' mã. Nhập USDT cho từng mã rồi Lưu cấu hình.');
+};
+$('multiSave').onclick=async()=>{
+ if(multiLocked)return;
+ const rows=readMultiRows();
+ if(!rows.length||rows.some(x=>!Number.isFinite(x.marginUSDT)||x.marginUSDT<=0)){
+  multiMsg('Nhập ký quỹ USDT dương cho tất cả các mã trước khi lưu.');return;
+ }
+ multiLocked=true;
+ try{
+  await multiRequest('config',{symbols:rows});multiFormDirty=false;
+  multiMsg('Đã lưu '+rows.length+' mã. Nhấn Kiểm tra mức tối thiểu để xem mức dự kiến.');
+ }catch(e){multiMsg(e.message);}finally{multiLocked=false;}
+};
+$('multiPreview').onclick=async()=>{
+ if(multiFormDirty){multiMsg('Có thay đổi chưa lưu; nhấn Lưu cấu hình trước khi kiểm tra.');return;}
+ const container=$('multiPreviewRows');container.replaceChildren();multiMsg('Đang đọc bộ lọc Binance Futures…');
+ try{
+  const r=await fetch('/api/multi/preview',{cache:'no-store'});
+  const out=await r.json();if(!r.ok)throw Error(out.error||'Không tính được min');
+  for(const row of out.rows||[]){
+   const line=document.createElement('div');line.className='item';
+   line.textContent=row.error?row.symbol+' · '+row.error:
+    row.symbol+' · nhập '+fmt(row.desired,6)+' USDT · tối thiểu '+fmt(row.minimum,2)+
+    ' USDT · sẽ dùng '+fmt(row.effective,6)+' USDT'+
+    (row.autoRaised?' (TỰ NÂNG)':' (GIỮ NGUYÊN)')+
+    (row.balanceEnough===false?' · ⚠️ KHÔNG ĐỦ USDT KHẢ DỤNG':'');
+   container.append(line);
+  }
+  multiMsg(out.warning||'Đã xác minh cấu hình hiện tại.');
+ }catch(e){multiMsg(e.message);}
+};
+$('multiOn').onclick=async()=>{
+ if(multiFormDirty){multiMsg('Lưu danh sách coin và ký quỹ trước khi bật AUTO.');return;}
+ if(!confirm('AUTO đa mã sẽ giao dịch FUTURES BẰNG TIỀN THẬT. Nếu ký quỹ mỗi coin thấp hơn mức Binance yêu cầu, ứng dụng sẽ TỰ ĐỘNG NÂNG lên mức tối thiểu, có thể lớn hơn nhiều số tiền bạn nhập. STOP/TP được đặt sau khi ENTRY khớp. Tiếp tục?'))return;
+ const confirmation=prompt('Nhập CHAP NHAN AUTO DA MA để bật Auto Futures tiền thật:');
+ if(confirmation!=='CHAP NHAN AUTO DA MA'){multiMsg('Chưa xác nhận Auto tiền thật.');return;}
+ try{await multiRequest('on',{confirmation});multiMsg('AUTO đa mã đã ON; đợi nến OCC M15 mới.');}
+ catch(e){multiMsg(e.message);}
+ await refreshMulti();
+};
+$('multiOff').onclick=async()=>{
+ try{await multiRequest('off');multiMsg('AUTO đa mã OFF · SL/TP đã đặt trên Binance vẫn giữ nguyên.');}
+ catch(e){multiMsg(e.message);}await refreshMulti();
+};
+async function refreshMulti(){
+ try{
+  const r=await fetch('/api/multi/status',{cache:'no-store'});
+  if(!r.ok)throw Error('HTTP '+r.status);
+  const state=await r.json();
+  if(!multiLoaded&&!multiFormDirty){
+   multiRowsState=(state.symbols||[]).map(x=>({base:x.base,marginUSDT:x.marginUSDT,input:null}));
+   renderMultiRows();multiLoaded=true;
+  }
+  $('openMultiBtn').textContent='Auto đa mã'+(state.armed?' · ON':state.halted?' · KHÓA':'');
+  $('multiOn').disabled=state.armed||state.busy||state.halted;
+  $('multiOff').disabled=!state.armed;
+  if(!multiFormDirty&&!multiLocked&&$('multiDialog').open){
+   const last=state.lastTrade;
+   const recent=state.events?.at(-1);
+   $('multiStatus').textContent=(state.armed?'AUTO ON':'AUTO OFF')+
+    (state.halted?' · KHÓA: '+state.error:'')+
+    (last?' · '+last.symbol+' '+last.side+' đã bảo vệ, Entry '+fmt(last.entryPrice,6):'')+
+    (recent?' · '+recent.symbol+': '+recent.message:'');
+  }
+ }catch(e){if($('multiDialog').open)multiMsg('Không đọc được AUTO đa mã: '+e.message);}
+}
+$('openMultiBtn').onclick=()=>{$('multiDialog').showModal();refreshMulti();};
+$('multiClose').onclick=()=>{$('multiDialog').close();};
+refreshMulti();setInterval(refreshMulti,6000);
+
 </script>
 </body></html>

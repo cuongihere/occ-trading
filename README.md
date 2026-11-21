@@ -3,6 +3,12 @@
 Live Binance USDⓈ-M Futures trading, OCC crossover signals, LIMIT/MARKET entries,
 exchange-confirmed STOP and TP1/TP2/TP3, and optional Binance Square chart posts.
 
+A separate Windows **multi-symbol USDT Perpetual Auto** mode accepts arbitrary per-coin
+requested margin (USDT), verifies Binance's symbol-specific exchange filters, and only
+raises an insufficient amount to the computed minimum required for all three TP legs.
+This mode currently uses MARKET entries and maintains independent per-symbol checkpoints.
+The existing chart and verified P&L report remain BTCUSDT-only.
+
 **Windows PC only.** This repository ships the Windows trading application, scanner,
 and PC-focused regression tests. The Windows portable build is the only release target.
 

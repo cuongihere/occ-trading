@@ -1,4 +1,4 @@
-// Production-only causal OCC BTCUSDT signal engine.
+// Production-only causal OCC signal engine for Binance USDT perpetuals.
 // No paper positions, balances, simulated fills, funding or strategy order execution.
 export const M15=900000,H4=14400000;
 const barOf=b=>Array.isArray(b)?{time:+b[0],open:+b[1],close:+b[4],closeTime:+b[6]}:
@@ -10,7 +10,9 @@ export function smma(values,length=8){
  return v;
 }
 export class OCCSignalEngine{
- constructor(){
+ constructor({symbol='BTCUSDT'}={}){
+  if(!/^[A-Z0-9]{2,20}USDT$/.test(symbol))throw Error('Invalid OCC USDT perpetual symbol');
+  this.symbol=symbol;
   this.ready=false;this.healthy=false;this.running=false;
   this.baseOpen=null;this.baseClose=null;this.currentH4=null;
   this.previous=null;this.lastCandleTime=null;this.history=[];
@@ -64,12 +66,12 @@ export class OCCSignalEngine{
   }
   if(!side||!live)return null;
   return Object.freeze({
-   id:this.sessionId+':BTCUSDT:M15:'+b.time+':'+side,
+   id:this.sessionId+':'+this.symbol+':M15:'+b.time+':'+side,
    time:b.closeTime+1,barTime:b.time,observedAt,side,
    candleClose:b.close,crossPrice:(openSeries+closeSeries)/2,
    triggerPrice,openSeries,closeSeries,
    eligible:this.running&&this.healthy,
-   source:'Binance USD-M BTCUSDT',mode:'delay0',
+   symbol:this.symbol,source:'Binance USD-M '+this.symbol,mode:'delay0',
    h4Provisional:b.closeTime!==ht+H4-1
   });
  }

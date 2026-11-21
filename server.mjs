@@ -11,6 +11,7 @@ import {buildOCCChartComparison,readVerifiedChartHistory} from './futures-chart-
 import {BrowserFutures} from './futures-browser-service.mjs';
 import {SquarePublisher} from './square-publisher.mjs';
 import {OccSquareScanner} from './occ-square-scanner.mjs';
+import {MultiAutoWorker} from './multi-auto-worker.mjs';
 
 const args=new Set(process.argv.slice(2));
 if(args.has('--help')){console.log('node server.mjs | BTCUSDT Futures only | DATA_DIR and PORT optional');process.exit(0);}
@@ -34,6 +35,7 @@ const square=new SquarePublisher({dataDir:dir,fetchKlines:async({symbol='BTCUSDT
  return data;
 }});
 browserFutures.setSquarePublisher(square);
+const multiAuto=new MultiAutoWorker({dataDir:dir,legacy:browserFutures});
 const squareScanner=new OccSquareScanner({dataDir:dir,publisher:square});
 let closing=false,status={state:'starting',message:'Synchronizing Binance Futures'};
 function statusEvent(s){
@@ -154,7 +156,17 @@ const server=createServer(async(req,res)=>{
   res.setHeader('Content-Type','application/json');
   if(req.headers.origin!==`http://${host}`||req.headers['x-occ-local']!=='1'){res.writeHead(403);return res.end(JSON.stringify({error:'Local origin required'}));}
   try{let body='';for await(const chunk of req){body+=chunk;if(body.length>4096)throw Error('Request too large');}const p=JSON.parse(body||'{}');
-   if(req.url==='/control/live/connect'){
+   if(req.url==='/control/multi/config'){
+    if(browserFutures.armed)throw Error('Tắt AUTO BTC trước khi đổi danh sách Auto đa mã');
+    return res.end(JSON.stringify(multiAuto.configure(p.symbols)));
+   }
+   else if(req.url==='/control/multi/on'){
+    return res.end(JSON.stringify(await multiAuto.arm(p.confirmation)));
+   }
+   else if(req.url==='/control/multi/off'){
+    return res.end(JSON.stringify(multiAuto.stop()));
+   }
+   else if(req.url==='/control/live/connect'){
     // Credentials are not logged, journaled, cached or stored in the browser.
     await browserFutures.connect({apiKey:p.apiKey,apiSecret:p.apiSecret,environment:'production',remember:p.remember!==false});
    }
@@ -163,14 +175,23 @@ const server=createServer(async(req,res)=>{
     return res.end(JSON.stringify(browserFutures.sizingPreview(p,quote.lastPrice)));
    }
    else if(req.url==='/control/live/config'){
+    if(multiAuto.armed||multiAuto.active.size)throw Error('Đang có Auto/vị thế đa mã; không sửa cấu hình chung');
     const quote=btcMarketQuote.snapshot({healthy:feed.healthy(),state:feed.state});
     const preview=browserFutures.sizingPreview(p,quote.lastPrice);
     if(preview.status==='invalid')throw Error(preview.message);
     browserFutures.saveConfig(p);
    }
-   else if(req.url==='/control/live/reverse-mode'){browserFutures.setReverseOnSignal(p.enabled);}
-   else if(req.url==='/control/live/leverage'){await browserFutures.applyExchangeLeverage(p);}
+   else if(req.url==='/control/live/reverse-mode'){
+    if(multiAuto.armed)throw Error('Tắt AUTO đa mã trước khi đổi chế độ đảo chiều');
+    browserFutures.setReverseOnSignal(p.enabled);
+   }
+   else if(req.url==='/control/live/leverage'){
+    if(multiAuto.armed||multiAuto.active.size)throw Error('Không đổi leverage BTC khi đang có vị thế đa mã');
+    await browserFutures.applyExchangeLeverage(p);
+   }
    else if(req.url==='/control/live/on'){
+    if(multiAuto.armed||multiAuto.active.size||multiAuto.halted)
+     throw Error('AUTO đa mã đang hoạt động hoặc cần đối soát; không bật AUTO BTC đồng thời');
     if(!feed.healthy()||!liveSignalEngine.ready||!liveSignalEngine.healthy)
      throw Error('Cần dữ liệu Binance liên tục và nến OCC đã đồng bộ trước khi bật Auto');
     const quote=btcMarketQuote.snapshot({healthy:feed.healthy(),state:feed.state});
@@ -193,8 +214,12 @@ const server=createServer(async(req,res)=>{
     return res.end(JSON.stringify(await browserFutures.repairMissingProtection(p)));
    }
    else if(req.url==='/control/live/history-refresh'){await browserFutures.refreshRealHistory({force:true});}
-   else if(req.url==='/control/live/disconnect'){browserFutures.close();}
-   else if(req.url==='/control/live/forget'){browserFutures.forgetSavedCredentials();}
+   else if(req.url==='/control/live/disconnect'){
+    multiAuto.detach();browserFutures.close();
+   }
+   else if(req.url==='/control/live/forget'){
+    multiAuto.detach();browserFutures.forgetSavedCredentials();
+   }
    else if(req.url==='/control/live/square/key'){square.connect(p.key);}
    else if(req.url==='/control/live/square/on'){square.toggle(p.enabled);}
    else if(req.url==='/control/live/square/forget'){
@@ -241,6 +266,15 @@ const server=createServer(async(req,res)=>{
    return res.end(JSON.stringify(await readChartComparison(chartDaysParam(range))));
   }catch(e){res.writeHead(503);return res.end(JSON.stringify({error:'Chart chỉ đọc: '+e.message}));}
  }
+ if(req.url==='/api/multi/status'){
+  res.setHeader('Content-Type','application/json;charset=utf-8');
+  return res.end(JSON.stringify(multiAuto.status()));
+ }
+ if(req.url==='/api/multi/preview'){
+  res.setHeader('Content-Type','application/json;charset=utf-8');
+  try{return res.end(JSON.stringify(await multiAuto.preview()));}
+  catch(e){res.writeHead(409);return res.end(JSON.stringify({error:e.message}));}
+ }
  if(req.url==='/api/binance/market'){res.setHeader('Content-Type','application/json;charset=utf-8');return res.end(JSON.stringify(btcMarketQuote.snapshot({healthy:feed.healthy(),state:feed.state})));}
 if(req.url==='/api/binance/live-status'){res.setHeader('Content-Type','application/json;charset=utf-8');return res.end(JSON.stringify({...browserFutures.snapshot(),marketHealthy:feed.healthy(),marketState:feed.state}));}
  if(req.url==='/api/binance/protection-repair-preview'){
@@ -281,6 +315,10 @@ const limitMonitor=setInterval(()=>browserFutures.pollLimit().catch(e=>console.e
 const accountRefresh=setInterval(()=>browserFutures.refreshAccountOverview().catch(e=>{
   console.error('Futures account refresh:',e.message);
 }),25000);accountRefresh.unref();
+const multiScanTimer=setInterval(()=>multiAuto.tick().catch(e=>
+ console.error('Multi OCC scan:',e.message)),30000);multiScanTimer.unref();
+const multiMonitorTimer=setInterval(()=>multiAuto.monitorAll().catch(e=>
+ console.error('Multi OCC monitor:',e.message)),15000);multiMonitorTimer.unref();
 const scannerTimer=setInterval(()=>squareScanner.tick().catch(e=>
  console.error('Square Scanner:',e.message)),30000);
 scannerTimer.unref();
@@ -295,7 +333,8 @@ server.listen(port,'127.0.0.1',()=>{
 });
 function shutdown(code=0){
  if(closing)return;closing=true;
- clearInterval(futuresMonitor);clearInterval(limitMonitor);clearInterval(accountRefresh);clearInterval(liveHistoryRefresh);clearInterval(scannerTimer);
+ clearInterval(futuresMonitor);clearInterval(limitMonitor);clearInterval(accountRefresh);clearInterval(liveHistoryRefresh);clearInterval(scannerTimer);clearInterval(multiScanTimer);clearInterval(multiMonitorTimer);
+ try{multiAuto.detach();}catch{}
  try{browserFutures.close();}catch{}
  try{feed.disconnect();}catch{}
  try{lock.close();}catch{}

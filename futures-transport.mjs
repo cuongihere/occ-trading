@@ -1,4 +1,4 @@
-// Binance USD-M BTCUSDT signed transport. No retries of mutations.
+// Binance USD-M symbol-allowlisted signed transport. No retries of mutations.
 import {createHmac} from 'node:crypto';
 const HOSTS=Object.freeze({demo:'https://demo-fapi.binance.com',production:'https://fapi.binance.com'});
 const GETS=new Set(['/fapi/v1/time','/fapi/v1/exchangeInfo','/fapi/v1/ticker/price','/fapi/v2/account',
@@ -8,21 +8,28 @@ const GETS=new Set(['/fapi/v1/time','/fapi/v1/exchangeInfo','/fapi/v1/ticker/pri
 const POSTS=new Set(['/fapi/v1/order','/fapi/v1/algoOrder','/fapi/v1/leverage']);
 const DELETES=new Set(['/fapi/v1/algoOrder','/fapi/v1/order']);
 export class FuturesTransport{
- constructor({apiKey,apiSecret,fetchFn=fetch,clock=Date.now,environment='demo',productionConsent=null}){
+ constructor({apiKey,apiSecret,fetchFn=fetch,clock=Date.now,environment='demo',productionConsent=null,allowedSymbols=['BTCUSDT']}){
   if(!apiKey||!apiSecret)throw Error('Missing API credentials');
   if(!Object.hasOwn(HOSTS,environment))throw Error('Unsupported Binance Futures environment');
   if(environment==='production'&&productionConsent!=='I_ACCEPT_LIVE_BTCUSDT')
    throw Error('Explicit real-money constructor consent required');
+  if(!Array.isArray(allowedSymbols)||!allowedSymbols.length||allowedSymbols.length>30||
+   allowedSymbols.some(s=>typeof s!=='string'||!/^[A-Z0-9]{2,20}USDT$/.test(s)))
+   throw Error('Invalid Futures symbol allowlist');
+  this.allowedSymbols=new Set(allowedSymbols);
   this.baseUrl=HOSTS[environment];this.environment=environment;
   this.key=apiKey;this.secret=apiSecret;this.fetchFn=fetchFn;this.clock=clock;this.offset=0;
   this.clockSyncTask=null;this.clockSyncVersion=0;this.clockSyncedAt=null;
  }
  async request(method,path,params={},timeRetried=false){
   if(!(method==='GET'?GETS:method==='POST'?POSTS:DELETES).has(path))throw Error('Endpoint not allowed');
-  if(params.symbol&&params.symbol!=='BTCUSDT')throw Error('Only BTCUSDT permitted');
+  if(params.symbol&&!this.allowedSymbols.has(params.symbol))throw Error(
+   this.allowedSymbols.size===1&&this.allowedSymbols.has('BTCUSDT')?
+    'Only BTCUSDT permitted':'Futures symbol not in approved allowlist');
+  if(method!=='GET'&&!this.allowedSymbols.has(params.symbol))throw Error('Mutations require allowed Futures symbol');
   if(method==='POST'&&path==='/fapi/v1/leverage'){
    const value=Number(params.leverage);
-   if(params.symbol!=='BTCUSDT'||!Number.isInteger(value)||value<1||value>20||
+   if(!this.allowedSymbols.has(params.symbol)||!Number.isInteger(value)||value<1||value>20||
       Object.keys(params).some(k=>!['symbol','leverage'].includes(k)))
     throw Error('BTCUSDT leverage must be an integer between 1x and 20x');
   }
@@ -31,7 +38,7 @@ export class FuturesTransport{
     const allowed=['symbol','side','positionSide','type','timeInForce','quantity','price',
      'goodTillDate','newClientOrderId','newOrderRespType'];
     const deadline=Number(params.goodTillDate),now=this.clock()+this.offset;
-    if(params.symbol!=='BTCUSDT'||!['BUY','SELL'].includes(params.side)||
+    if(!this.allowedSymbols.has(params.symbol)||!['BUY','SELL'].includes(params.side)||
        params.positionSide!=='BOTH'||params.timeInForce!=='GTD'||
        params.newOrderRespType!=='ACK'||!/^OCCBTC-[0-9a-f]{14}$/.test(params.newClientOrderId||'')||
        !(Number(params.quantity)>0)||!(Number(params.price)>0)||
@@ -41,7 +48,7 @@ export class FuturesTransport{
    }else if(params.type!=='MARKET')throw Error('Only MARKET or verified GTD LIMIT orders permitted');
   }
   if(method==='DELETE'&&path==='/fapi/v1/order'){
-   if(params.symbol!=='BTCUSDT'||!/^OCCBTC-[0-9a-f]{14}$/.test(params.origClientOrderId||'')||
+   if(!this.allowedSymbols.has(params.symbol)||!/^OCCBTC-[0-9a-f]{14}$/.test(params.origClientOrderId||'')||
      !/^[0-9]{1,24}$/.test(String(params.orderId||''))||
      Object.keys(params).some(k=>!['symbol','orderId','origClientOrderId'].includes(k)))
     throw Error('Only exact OCC BTCUSDT LIMIT cancellation permitted');

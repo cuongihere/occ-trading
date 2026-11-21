@@ -32,7 +32,7 @@ test('Server is Futures-only and Paper routes are gone',()=>{
 test('Windows workflow tests and bundles all required runtime files',()=>{
  const build=read('BUILD_PORTABLE.ps1'),workflow=read('.github/workflows/windows-portable.yml');
  for(const file of ['server.mjs','server-feed.mjs','occ-signal-engine.mjs',
-  'square-publisher.mjs','square-chart-render.mjs','START_WINDOWS.bat',
+  'square-publisher.mjs','square-chart-render.mjs','multi-auto-worker.mjs','multi-auto-sizing.mjs','START_WINDOWS.bat',
   'BOOTSTRAP_RUNTIME.ps1'])
   assert.ok(build.includes("'"+file+"'"),'missing build asset: '+file);
  assert.match(workflow,/node --test/);

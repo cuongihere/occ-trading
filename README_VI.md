@@ -1,3 +1,36 @@
+
+## PC Auto Trade · nhiều mã USDT Perpetual
+
+Mở **Auto đa mã** trên thanh đầu trang. Nhập danh sách ví dụ \`BTC, ETH, BNB\`,
+ấn **Thêm mã**, nhập **ký quỹ mong muốn (USDT) cho từng mã** và **Lưu cấu hình**.
+Mức ký quỹ không bị cố định ở 20 USDT: mọi giá trị dương hợp lệ đều được chấp nhận,
+giới hạn cuối cùng phụ thuộc tiền khả dụng và bộ lọc của Binance.
+
+- App chỉ chọn cặp **USDT Perpetual** đang TRADING bằng \`exchangeInfo\`
+  (không tự chuyển sang Spot hoặc hợp đồng COIN-M).
+- Khi OCC H4/M15 có giao cắt mới sau nến M15 đóng, app lấy giá mới và kiểm tra
+  \`LOT_SIZE\`, \`MARKET_LOT_SIZE\`, \`MIN_NOTIONAL\`, \`PRICE_FILTER\`, đủ khối lượng
+  cho TP1/TP2/TP3 và cấu hình One-way, ISOLATED, leverage.
+- Nếu ký quỹ mong muốn **đủ**: không tăng. Nếu **thiếu**: tự nâng lên mức USDT
+  tối thiểu theo bộ lọc hiện tại (làm tròn lên 0,01 USDT khi tăng).
+  Ví dụ BTC yêu cầu 70 USDT mà đặt 20 USDT thì dùng 70 USDT, nếu ETH chỉ cần
+  8 USDT và đặt 20 USDT thì vẫn dùng 20 USDT. Đây là **ví dụ**, không phải
+  mức tối thiểu thực tế cố định; phải bấm **Kiểm tra mức tối thiểu** để xem giá hiện tại.
+- Nếu không đủ số dư khả dụng **cộng dự phòng phí** thì **bỏ qua lệnh**;
+  không vay, không tăng leverage, không gửi lệnh nhỏ hơn mức tối thiểu.
+- Entry đa mã hiện chỉ dùng **MARKET**, không sử dụng chế độ LIMIT Pullback.
+  Sau khi Binance xác nhận Entry FILLED, app tạo STOP close-all **trước**
+  TP1/TP2/TP3 reduceOnly. Một vị thế trên mỗi mã; có thể giữ nhiều mã khác nhau.
+  Tín hiệu ngược trên mã đang có vị thế được bỏ qua (không đảo chiều đa mã trong bản này).
+- Chỉ cho phép chạy một chế độ AUTO (BTC cũ hoặc đa mã). Đòn bẩy đặt trước
+  bằng tay trên Binance cho **từng** cặp và phải khớp cấu hình Windows.
+- Auto luôn OFF khi restart. Mỗi cặp có intent/checkpoint riêng trong \`data/\`.
+  Khi mất mạng hoặc ACK đặt lệnh không rõ, khóa an toàn; **không tự gửi lại**.
+  Kiểm tra trực tiếp các vị thế và STOP/TP trên Binance khi có cảnh báo.
+- Biểu đồ và báo cáo OCC hiện hữu vẫn chỉ hiển thị **BTCUSDT**, chưa cộng vị thế
+  ETH/BNB/altcoin vào PnL BTC. Trạng thái Entry đa mã gần nhất hiện trong cửa
+  sổ Auto đa mã. Không chạy song song nhiều bản PC dùng cùng tài khoản.
+
 ## Windows — gia cố đảo chiều OCC sau khi đã đóng vị thế (16/11/2026)
 
 - Trước khi gửi MARKET reduceOnly đóng LONG/SHORT, AUTO phải có giá Binance trực tiếp còn hiệu lực, bộ ba TP BTC chia được, cấu hình One-way/ISOLATED/đòn bẩy đúng và tài sản dự kiến đủ ký quỹ chiều ngược. Nếu không đủ, **không đóng vị thế cũ**; STOP cũ vẫn hoạt động.

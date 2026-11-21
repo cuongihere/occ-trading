@@ -1,12 +1,13 @@
-// POST-FILL exchange-side protection coordinator, for a future dedicated live worker.
-// Neither the paper app nor the current Binance preview imports or starts this class.
+// POST-FILL exchange-side protection coordinator. Writes durable checkpoints before mutations.
 import {protectionRequests} from './futures-protection-plan.mjs';
 const active=new Set(['NEW','ACCEPTED','PENDING_NEW']);
 function equalId(a,b){return String(a)===String(b);}
 export class ProtectionCoordinator {
- constructor({api,checkpoint,settings,notify=()=>{}}){
+ constructor({api,checkpoint,settings,symbol='BTCUSDT',notify=()=>{}}){
   if(!api||typeof api.get!=='function'||typeof api.post!=='function'||
      !checkpoint||typeof checkpoint.save!=='function')throw Error('Exchange and durable checkpoint required');
+  if(!/^[A-Z0-9]{2,20}USDT$/.test(symbol))throw Error('Invalid protected symbol');
+  this.symbol=symbol;
   this.api=api;this.checkpoint=checkpoint;this.settings=settings;this.notify=notify;
   const persisted=checkpoint.load?.();
   this.state=persisted?{...persisted,phase:persisted.phase==='IDLE'?'IDLE':'HALTED',
@@ -14,7 +15,7 @@ export class ProtectionCoordinator {
     {phase:'IDLE',entry:null,stop:null,tps:[],inFlight:null,halted:false};
   // Never auto-resubmit an entry or SL/TP after process restart.
   if(persisted&&persisted.phase!=='IDLE')this.notify({level:'CRITICAL',
-    reason:'Existing BTCUSDT protection checkpoint requires exchange reconciliation',entry:this.state.entry});
+    reason:'Existing '+this.symbol+' protection checkpoint requires exchange reconciliation',entry:this.state.entry});
 
  }
  persist(patch){
@@ -28,9 +29,9 @@ export class ProtectionCoordinator {
    message:'Do not retry orders automatically. Verify BTC position and protective orders on Binance.'});
  }
  async verifiedPosition(side,qty){
-  const rows=await this.api.get('/fapi/v3/positionRisk',{symbol:'BTCUSDT'});
-  const p=Array.isArray(rows)?rows.find(x=>x.symbol==='BTCUSDT'&&x.positionSide==='BOTH'):null;
-  if(!p)throw Error('BTCUSDT One-way position not found');
+  const rows=await this.api.get('/fapi/v3/positionRisk',{symbol:this.symbol});
+  const p=Array.isArray(rows)?rows.find(x=>x.symbol===this.symbol&&x.positionSide==='BOTH'):null;
+  if(!p)throw Error(this.symbol+' One-way position not found');
   const amount=Number(p.positionAmt);
   if(!Number.isFinite(amount)||Math.sign(amount)!==(side==='LONG'?1:-1))
    throw Error('Exchange position has wrong side or is flat');
@@ -39,9 +40,9 @@ export class ProtectionCoordinator {
   return p;
  }
  async openAlgo(clientId){
-  const rows=await this.api.get('/fapi/v1/openAlgoOrders',{symbol:'BTCUSDT'});
+  const rows=await this.api.get('/fapi/v1/openAlgoOrders',{symbol:this.symbol});
   if(!Array.isArray(rows))throw Error('Invalid Binance openAlgoOrders response');
-  return rows.find(o=>o.symbol==='BTCUSDT'&&o.clientAlgoId===clientId&&
+  return rows.find(o=>o.symbol===this.symbol&&o.clientAlgoId===clientId&&
     active.has(o.algoStatus))||null;
  }
  async submitAndVerify(role,params){
@@ -75,20 +76,20 @@ export class ProtectionCoordinator {
  async protectConfirmedEntry({entryOrderId,side,stepSize,tickSize,clientPrefix,algoPrefix=clientPrefix}){
   if(this.state.phase!=='IDLE'||this.state.halted||this.state.inFlight)
    throw Error('Cannot protect a second trade or resume uncertain state automatically');
-  if(!['LONG','SHORT'].includes(side)||!/^OCCBTC-[A-Za-z0-9_-]{1,25}$/.test(clientPrefix||''))
+  if(!['LONG','SHORT'].includes(side)||!/^OCC(?:BTC|M)-[A-Za-z0-9_-]{1,25}$/.test(clientPrefix||''))
    throw Error('Invalid BTCUSDT position request');
   try{
-   const o=await this.api.get('/fapi/v1/order',{symbol:'BTCUSDT',orderId:entryOrderId});
-   if(o.symbol!=='BTCUSDT'||o.status!=='FILLED'||
+   const o=await this.api.get('/fapi/v1/order',{symbol:this.symbol,orderId:entryOrderId});
+   if(o.symbol!==this.symbol||o.status!=='FILLED'||
       o.side!==(side==='LONG'?'BUY':'SELL')||o.positionSide!=='BOTH'||
       !Number.isFinite(Number(o.executedQty))||Number(o.executedQty)<=0||
       !Number.isFinite(Number(o.avgPrice))||Number(o.avgPrice)<=0)
     throw Error('Entry order has not been fully filled and verified');
    const qty=Number(o.executedQty),entryPrice=Number(o.avgPrice);
    await this.verifiedPosition(side,qty);
-   const request=protectionRequests({side,entryPrice,filledQty:qty,
+   const request=protectionRequests({symbol:this.symbol,side,entryPrice,filledQty:qty,
      stepSize,tickSize,clientPrefix:algoPrefix},this.settings);
-   this.persist({phase:'ENTRY_VERIFIED',entry:{orderId:String(entryOrderId),side,
+   this.persist({phase:'ENTRY_VERIFIED',entry:{symbol:this.symbol,orderId:String(entryOrderId),side,
      qty,entryPrice,clientPrefix,
      ...(algoPrefix!==clientPrefix?{algoPrefix}:{})},tps:[],stop:null});
    await this.submitAndVerify('SL',request.stop);
