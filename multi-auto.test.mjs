@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,rmSync} from 'node:fs';
+import {mkdtempSync,rmSync,existsSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {OCCSignalEngine,M15,H4} from './occ-signal-engine.mjs';
@@ -224,5 +224,36 @@ test('End-to-end multi BTC M15 signal submits one MARKET, confirms STOP before t
   assert.ok(worker.status().symbols[0].managed);
   await worker.tick();assert.equal(posts.length,5,'Same closed bar must not trigger duplicate');
   worker.stop();assert.equal(worker.status().armed,false);
+  await worker.monitorAll();
+  assert.equal(worker.status().halted,false,'Existing STOP/TP remains verified when AUTO is OFF');
+  assert.equal(posts.length,5);
+ }finally{rmSync(temp,{recursive:true,force:true});}
+});
+
+
+test('AUTO OFF arriving during quote/preflight cannot place a MARKET order or leave an unknown intent',async()=>{
+ const temp=mkdtempSync(join(tmpdir(),'occ-multi-cancel-test-'));
+ let posted=0,worker;
+ const legacy={api:{key:'stub-key',secret:'stub-secret'},
+  config:{...settings,leverage:5},account:{availableUSDT:100},armed:false,halted:false};
+ try{
+  worker=new MultiAutoWorker({dataDir:temp,legacy,
+   publicGet:async(path)=>{
+    if(path==='/fapi/v1/exchangeInfo')return {symbols:[mBTC]};
+    if(path==='/fapi/v1/ticker/price'){
+     worker.stop();return {symbol:'BTCUSDT',price:'70000'};
+    }
+    throw Error('Unexpected market path');
+   }});
+  worker.configure([{base:'BTC',marginUSDT:20}]);
+  worker.armed=true;
+  worker.inspect=async()=>({symbol:'BTCUSDT',positionBTC:0,
+   availableUSDT:100,marginType:'ISOLATED',leverage:5,orders:[],algos:[]});
+  worker.api={post(){posted++;throw Error('Should not place order');}};
+  await worker.handleSignal({base:'BTC',marginUSDT:20},mBTC,
+   {side:'LONG',barTime:100*M15,time:101*M15});
+  assert.equal(posted,0);
+  assert.equal(worker.status().armed,false);
+  assert.equal(existsSync(worker.intentFile('BTCUSDT')),false);
  }finally{rmSync(temp,{recursive:true,force:true});}
 });

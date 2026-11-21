@@ -188,9 +188,24 @@ export class MultiAutoWorker{
    return !old||x.clientAlgoId!==old.clientId||!goodAlgo.has(x.algoStatus);
   }))throw Error(symbol+' có Algo không trùng checkpoint');
   const sl=live.find(o=>same(o.algoId,checkpoint.stop.id));
+  const exitSide=entry.side==='LONG'?'SELL':'BUY';
   if(!sl||sl.orderType!=='STOP_MARKET'||sl.closePosition!==true||
-   sl.side!==(entry.side==='LONG'?'SELL':'BUY'))
-   throw Error(symbol+' chưa xác minh STOP close-all trên Binance');
+   sl.positionSide!=='BOTH'||sl.side!==exitSide||
+   (sl.workingType&&sl.workingType!=='CONTRACT_PRICE')||
+   !near(sl.triggerPrice,checkpoint.stop.triggerPrice))
+   throw Error(symbol+' chưa xác minh STOP close-all và giá kích hoạt trên Binance');
+  let remainingTpQty=0;
+  for(const tp of live.filter(x=>x!==sl)){
+   const record=known.get(String(tp.algoId));
+   if(!record||!record.role?.startsWith('TP')||tp.orderType!=='TAKE_PROFIT_MARKET'||
+      tp.positionSide!=='BOTH'||tp.side!==exitSide||tp.reduceOnly!==true||
+      (tp.workingType&&tp.workingType!=='CONTRACT_PRICE')||
+      !near(tp.triggerPrice,record.triggerPrice)||!near(tp.quantity,record.qty))
+    throw Error(symbol+' TP không đúng loại, reduceOnly, lượng hoặc giá đã xác nhận');
+   remainingTpQty+=Number(tp.quantity);
+  }
+  if(!near(remainingTpQty,Math.abs(st.positionBTC)))
+   throw Error(symbol+' TP hiện tại không phủ đúng số lượng vị thế còn lại');
   return st;
  }
  async arm(confirmation){
@@ -397,6 +412,13 @@ export class MultiAutoWorker{
          x.clientAlgoId!==known.get(String(x.algoId)).clientId||!goodAlgo.has(x.algoStatus)))
        throw Error('Algo khác checkpoint; không hủy');
       for(const o of again.algos){
+       // Confirm FLAT immediately before every Binance DELETE, including the
+       // second/third TP; a newly opened position must never lose its STOP.
+       const beforeDelete=await this.inspect(symbol);
+       if(beforeDelete.positionBTC!==0||beforeDelete.orders.length||
+          beforeDelete.algos.some(x=>!known.has(String(x.algoId))||
+           x.clientAlgoId!==known.get(String(x.algoId)).clientId))
+        throw Error(symbol+' thay đổi trước khi dọn Algo, giữ nguyên STOP');
        this.intent(symbol,{phase:'ALGO_CLEANUP_SENDING',removingAlgoId:String(o.algoId)});
        await this.api.del('/fapi/v1/algoOrder',{symbol,algoId:o.algoId});
       }
