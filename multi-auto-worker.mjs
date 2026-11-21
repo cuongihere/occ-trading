@@ -25,7 +25,7 @@ export class MultiAutoWorker{
   this.config=safeRead(this.file)?.symbols||[];
   this.config=this.config.length?validateMultiConfig(this.config):[];
   this.markets=new Map();this.engines=new Map();this.active=new Map();
-  this.api=null;this.apiSource=null;this.armed=false;this.busy=false;this.halted=false;this.error=null;
+  this.api=null;this.apiSource=null;this.armed=false;this.busy=false;this.halted=false;this.error=null;this.stopRequested=false;
   this.lastScanAt=null;this.lastTrade=null;this.lastCalculated=null;this.events=[];
   this.marketCache=null;this.marketFetchedAt=0;this.running=null;this.monitoring=null;
   // A restart NEVER automatically arms trading. Stored positions are retained.
@@ -203,7 +203,7 @@ export class MultiAutoWorker{
   if(this.legacy?.armed||this.legacy?.pendingLimit||this.legacy?.activeProtection||
      this.legacy?.previousProtection||this.legacy?.halted)
    throw Error('AUTO BTC cũ hoặc vị thế/checkpoint BTC chưa đối soát; không chạy hai bot');
-  this.busy=true;
+  this.stopRequested=false;this.busy=true;
   try{
    const mapped=await this.marketAndTransport();
    for(const row of mapped){
@@ -218,13 +218,14 @@ export class MultiAutoWorker{
    this.engines.clear();
    // Warmup is historical ONLY. No past cross will ever be traded.
    for(const row of mapped)await this.warmup(row.symbol);
+   if(this.stopRequested)throw Error('AUTO đa mã đã được tắt trong lúc khởi tạo');
    this.armed=true;this.error=null;
    this.log('ALL','AUTO_ON','Đã bật AUTO '+mapped.map(x=>x.symbol).join(', '));
    return this.status();
   }finally{this.busy=false;}
  }
  stop(){
-  this.armed=false;this.engines.clear();
+  this.stopRequested=true;this.armed=false;this.engines.clear();
   this.log('ALL','AUTO_OFF','Dừng vào lệnh mới, giữ STOP/TP trên Binance');
   return this.status();
  }
@@ -304,6 +305,9 @@ export class MultiAutoWorker{
     minimum:plan.minimumMarginUSDT,effective:plan.effectiveMarginUSDT,autoRaised:plan.autoRaised,
     price:plan.price,quantity:plan.quantity,at:this.clock()};
    if(plan.autoRaised)this.log(symbol,'MARGIN_RAISED','Tự nâng ký quỹ '+row.marginUSDT+' → '+plan.effectiveMarginUSDT+' USDT (tối thiểu Binance)');
+   // OFF during preflight must never result in a new exchange order.
+   if(!this.armed||this.stopRequested||this.halted)
+    throw Error('AUTO đã tắt trước khi gửi Entry');
    // Persist client intent BEFORE the first order POST.
    clientId='OCCM-'+randomBytes(7).toString('hex');
    this.intent(symbol,{phase:'ENTRY_SENDING',clientId,side:signal.side,

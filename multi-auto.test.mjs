@@ -73,7 +73,8 @@ test('A low configured margin with insufficient wallet funds skips order rather 
 test('Binance minimum notional on each TP leg also affects the dynamically calculated floor',()=>{
  const m=market('ETHUSDT',2000,'.001','.001','30');
  const min=calculateMinimumMargin({market:m,price:2000,leverage:5,settings});
- assert.ok(min.minimumMarginUSDT>=20);
+ const baseline=calculateMinimumMargin({market:mETH,price:2000,leverage:5,settings});
+ assert.ok(min.minimumMarginUSDT>baseline.minimumMarginUSDT);
  const p=planMultiMargin({market:m,side:'LONG',price:2000,
   desiredMarginUSDT:1,availableUSDT:100,leverage:5,settings});
  assert.ok(p.legs.every((qty,i)=>qty*p.tps[i]>=30));
@@ -135,5 +136,93 @@ test('Multisymbol configuration preview is read-only and uses independent checkp
   assert.equal((await worker.tick()).armed,false);
   await assert.rejects(worker.arm('wrong'),/Chưa xác nhận/);
   assert.ok(marketCalls>=3);
+ }finally{rmSync(temp,{recursive:true,force:true});}
+});
+
+
+test('End-to-end multi BTC M15 signal submits one MARKET, confirms STOP before three TP, and auto-raises margin',async()=>{
+ const temp=mkdtempSync(join(tmpdir(),'occ-multi-live-test-'));
+ const kline=(t,length,o=100,c=100)=>[t,String(o),String(Math.max(o,c)),String(Math.min(o,c)),
+  String(c),'0',t+length-1];
+ const h4=Array.from({length:30},(_,i)=>kline((290+i)*H4,H4));
+ const last=320*H4,first=last-47*M15;
+ const m15=Array.from({length:48},(_,i)=>kline(first+i*M15,M15));
+ let now=last+M15+1000,position=0;
+ let entryOrder=null;
+ const algos=[],posts=[];
+ const api={
+  allowedSymbols:new Set(['BTCUSDT']),
+  key:'stub',secret:'stub',
+  async syncClock(){return 0;},
+  async get(path,params={}){
+   switch(path){
+    case '/fapi/v2/account':return {canTrade:true,assets:[{asset:'USDT',availableBalance:'100',walletBalance:'100'}]};
+    case '/fapi/v1/positionSide/dual':return {dualSidePosition:false};
+    case '/fapi/v1/symbolConfig':return [{symbol:'BTCUSDT',marginType:'ISOLATED',leverage:5}];
+    case '/fapi/v3/positionRisk':return position===0?[]:
+     [{symbol:'BTCUSDT',positionSide:'BOTH',positionAmt:String(position),entryPrice:'70000'}];
+    case '/fapi/v1/openOrders':return [];
+    case '/fapi/v1/openAlgoOrders':return algos;
+    case '/fapi/v1/order':return entryOrder;
+    default:throw Error('Unexpected signed GET '+path);
+   }
+  },
+  async post(path,p){
+   posts.push({path,params:p});
+   if(path==='/fapi/v1/order'){
+    if(entryOrder)throw Error('Unexpected duplicate ENTRY');
+    position=p.side==='BUY'?Number(p.quantity):-Number(p.quantity);
+    entryOrder={symbol:'BTCUSDT',orderId:'501',clientOrderId:p.newClientOrderId,
+     status:'FILLED',type:'MARKET',side:p.side,positionSide:'BOTH',
+     executedQty:p.quantity,avgPrice:'70000'};
+    return {orderId:'501',status:'FILLED'};
+   }
+   if(path==='/fapi/v1/algoOrder'){
+    const id=String(900+algos.length);
+    algos.push({symbol:'BTCUSDT',algoId:id,clientAlgoId:p.clientAlgoId,
+     algoStatus:'NEW',orderType:p.type,side:p.side,positionSide:'BOTH',
+     triggerPrice:p.triggerPrice,quantity:p.quantity||'',
+     closePosition:p.closePosition==='true',reduceOnly:p.reduceOnly==='true'});
+    return {algoId:id,clientAlgoId:p.clientAlgoId};
+   }
+   throw Error('Unexpected exchange POST '+path);
+  },
+  async del(){throw Error('No cleanup in entry test');},
+  close(){}
+ };
+ const legacy={api:{key:'mock-key',secret:'mock-secret'},
+  config:{...settings,leverage:5},account:{availableUSDT:100},armed:false,
+  halted:false,activeProtection:null,previousProtection:null,pendingLimit:null};
+ const fetchMarket=async(path,p)=>{
+  if(path==='/fapi/v1/exchangeInfo')return {symbols:[mBTC]};
+  if(path==='/fapi/v1/ticker/price')return {symbol:'BTCUSDT',price:'70000'};
+  if(path==='/fapi/v1/klines')return p.interval==='4h'?h4.slice(-p.limit):m15.slice(-p.limit);
+  throw Error('Unexpected public '+path);
+ };
+ try{
+  const worker=new MultiAutoWorker({dataDir:temp,legacy,publicGet:fetchMarket,
+   transportFactory:()=>api,clock:()=>now});
+  worker.configure([{base:'BTC',marginUSDT:20}]);
+  assert.equal((await worker.arm('CHAP NHAN AUTO DA MA')).armed,true);
+  await worker.tick();
+  assert.equal(posts.length,0,'Warmup/history must never become a live order');
+  now+=M15;m15.push(kline(last+M15,M15,100,90));
+  await worker.tick();
+  assert.equal(posts.length,5,'Entry + STOP + TP1 + TP2 + TP3');
+  assert.equal(posts[0].path,'/fapi/v1/order');
+  assert.equal(posts[0].params.symbol,'BTCUSDT');
+  assert.equal(posts[0].params.type,'MARKET');
+  assert.equal(posts[0].params.side,'SELL');
+  assert.equal(Number(posts[0].params.quantity),.004);
+  assert.equal(posts[1].params.type,'STOP_MARKET');
+  assert.equal(posts[1].params.closePosition,'true');
+  assert.deepEqual(posts.slice(2).map(x=>x.params.type),[
+   'TAKE_PROFIT_MARKET','TAKE_PROFIT_MARKET','TAKE_PROFIT_MARKET']);
+  assert.ok(posts.slice(2).every(x=>x.params.reduceOnly==='true'));
+  assert.equal(worker.lastTrade.effectiveMarginUSDT,56);
+  assert.equal(worker.status().armed,true);
+  assert.ok(worker.status().symbols[0].managed);
+  await worker.tick();assert.equal(posts.length,5,'Same closed bar must not trigger duplicate');
+  worker.stop();assert.equal(worker.status().armed,false);
  }finally{rmSync(temp,{recursive:true,force:true});}
 });
