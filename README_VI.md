@@ -1,35 +1,4 @@
-
-## PC Auto Trade · nhiều mã USDT Perpetual
-
-Mở **Auto đa mã** trên thanh đầu trang. Nhập danh sách ví dụ \`BTC, ETH, BNB\`,
-ấn **Thêm mã**, nhập **ký quỹ mong muốn (USDT) cho từng mã** và **Lưu cấu hình**.
-Mức ký quỹ không bị cố định ở 20 USDT: mọi giá trị dương hợp lệ đều được chấp nhận,
-giới hạn cuối cùng phụ thuộc tiền khả dụng và bộ lọc của Binance.
-
-- App chỉ chọn cặp **USDT Perpetual** đang TRADING bằng \`exchangeInfo\`
-  (không tự chuyển sang Spot hoặc hợp đồng COIN-M).
-- Khi OCC H4/M15 có giao cắt mới sau nến M15 đóng, app lấy giá mới và kiểm tra
-  \`LOT_SIZE\`, \`MARKET_LOT_SIZE\`, \`MIN_NOTIONAL\`, \`PRICE_FILTER\`, đủ khối lượng
-  cho TP1/TP2/TP3 và cấu hình One-way, ISOLATED, leverage.
-- Nếu ký quỹ mong muốn **đủ**: không tăng. Nếu **thiếu**: tự nâng lên mức USDT
-  tối thiểu theo bộ lọc hiện tại (làm tròn lên 0,01 USDT khi tăng).
-  Ví dụ BTC yêu cầu 70 USDT mà đặt 20 USDT thì dùng 70 USDT, nếu ETH chỉ cần
-  8 USDT và đặt 20 USDT thì vẫn dùng 20 USDT. Đây là **ví dụ**, không phải
-  mức tối thiểu thực tế cố định; phải bấm **Kiểm tra mức tối thiểu** để xem giá hiện tại.
-- Nếu không đủ số dư khả dụng **cộng dự phòng phí** thì **bỏ qua lệnh**;
-  không vay, không tăng leverage, không gửi lệnh nhỏ hơn mức tối thiểu.
-- Entry đa mã hiện chỉ dùng **MARKET**, không sử dụng chế độ LIMIT Pullback.
-  Sau khi Binance xác nhận Entry FILLED, app tạo STOP close-all **trước**
-  TP1/TP2/TP3 reduceOnly. Một vị thế trên mỗi mã; có thể giữ nhiều mã khác nhau.
-  Tín hiệu ngược trên mã đang có vị thế được bỏ qua (không đảo chiều đa mã trong bản này).
-- Chỉ cho phép chạy một chế độ AUTO (BTC cũ hoặc đa mã). Đòn bẩy đặt trước
-  bằng tay trên Binance cho **từng** cặp và phải khớp cấu hình Windows.
-- Auto luôn OFF khi restart. Mỗi cặp có intent/checkpoint riêng trong \`data/\`.
-  Khi mất mạng hoặc ACK đặt lệnh không rõ, khóa an toàn; **không tự gửi lại**.
-  Kiểm tra trực tiếp các vị thế và STOP/TP trên Binance khi có cảnh báo.
-- Biểu đồ và báo cáo OCC hiện hữu vẫn chỉ hiển thị **BTCUSDT**, chưa cộng vị thế
-  ETH/BNB/altcoin vào PnL BTC. Trạng thái Entry đa mã gần nhất hiện trong cửa
-  sổ Auto đa mã. Không chạy song song nhiều bản PC dùng cùng tài khoản.
+# OCC Trading — BTCUSDT Futures Windows
 
 ## Windows — gia cố đảo chiều OCC sau khi đã đóng vị thế (16/11/2026)
 
@@ -39,8 +8,6 @@ giới hạn cuối cùng phụ thuộc tiền khả dụng và bộ lọc của
 - Ghi SQLite và báo cáo lịch sử bị lỗi không được phép chặn thao tác đảo chiều hay việc đặt STOP. Trạng thái đảo chiều gần nhất được lưu tại `data/futures-last-reversal.json`, đồng thời hiển thị trong khung Bot: **ĐANG ĐÓNG → ĐÃ ĐÓNG → ĐANG MỞ → ĐẢO XONG**, hoặc **ĐẢO THẤT BẠI**.
 - Đây là chuỗi nhiều API Binance, **không có lệnh đảo chiều nguyên tử**; không thể cam kết SHORT luôn khớp khi Binance từ chối lệnh, mạng lỗi, ký quỹ thiếu hay người dùng tắt AUTO giữa chừng. Khi xảy ra lỗi sau khi đã FLAT, bot khóa và báo rõ để kiểm tra; không tự đoán gửi lại.
 - Test tự động gồm: giá aggTrade hết hạn sau khi đóng, Binance chậm cập nhật balance, SQLite lỗi khi ghi REVERSE/ENTRY, vốn không đủ trước khi đóng và Binance từ chối MARKET mở chiều ngược.
-
-# OCC Trading — Binance Futures Windows
 
 ## Chart Windows: chuỗi lệnh thật và khung thông số (16/11/2026)
 
@@ -57,6 +24,13 @@ giới hạn cuối cùng phụ thuộc tiền khả dụng và bộ lọc của
 trang web và gói Portable. Phần kiểm thử mã mô phỏng cũ chỉ tồn tại trong
 mã nguồn để kiểm tra chiến lược; hoàn toàn không chạy trong ứng dụng.
 
+## Lưu ý khi chuyển từ phiên bản AUTO đa mã
+
+- Phiên bản BTC-only **không tiếp tục theo dõi, hủy, đóng hoặc sửa** vị thế/SL/TP của các coin khác.
+- **Trước khi cập nhật:** mở Binance Futures kiểm tra trực tiếp toàn bộ vị thế ETH/BNB/altcoin đang mở và các lệnh STOP/TP, tự xử lý trên Binance. Gỡ tính năng khỏi app **không tự hủy lệnh trên sàn**.
+- Giữ nguyên thư mục `data/` khi cập nhật. Các checkpoint và lịch sử AUTO đa mã cũ vẫn nằm trên ổ đĩa, nhưng bản BTC-only không sử dụng chúng để đặt lệnh.
+- AUTO BTC luôn OFF sau khởi động; nếu tài khoản còn vị thế coin khác, phần kiểm tra trước giao dịch BTC sẽ chặn bật AUTO.
+
 ## Chạy app
 
 1. Tải artifact Windows x64 từ [GitHub Actions](https://github.com/cuongihere/occ-trading/actions/workflows/windows-portable.yml) sau khi build PASS.
@@ -64,22 +38,6 @@ mã nguồn để kiểm tra chiến lược; hoàn toàn không chạy trong �
 3. Chạy `START_WINDOWS.bat`, mở `http://127.0.0.1:8080/binance`.
 4. Kết nối API Binance Futures; AUTO mặc định OFF. Chỉ bật khi nắm rõ
    cấu hình giao dịch, SL/TP và rủi ro.
-
-## OCC Scanner → Binance Square · Toàn bộ USDⓈ-M Perpetual (PC, 20/11/2026)
-
-- Mở tab **OCC Scanner · Square** tại `http://127.0.0.1:8080/occ-scanner`. Chức năng **tách độc lập khỏi AUTO Trading BTCUSDT**; bật Scanner hoặc tắt AUTO Trade không làm thay đổi lệnh Binance Futures. Code chỉ truy vấn các endpoint công khai `exchangeInfo`, `ticker/24hr`, `klines`; **không có API đặt lệnh cho các mã khác**.
-- Scanner lấy **toàn bộ hợp đồng USD-M Perpetual đang TRADING có quote asset USDT** trên Binance, khởi tạo SMMA8 H4/M15 từ dữ liệu quá khứ. Khi vừa bật hoặc mở lại app chỉ khởi tạo, **không phát lại tín hiệu cũ**; tín hiệu mới xuất hiện khi nến M15 đóng sau khi scanner đã sẵn sàng. Bỏ qua giao cắt bị trễ trên 10 phút và backfill có khoảng trống; tự tái khởi tạo từng mã khi mất nến.
-- **Tự đăng Square mặc định OFF riêng**, phải tích chọn và xác nhận. Dùng Square OpenAPI key đã lưu mã hóa Windows DPAPI ở phần Cài đặt BTC (không phải Futures API). Scanner vẫn quét và hiển thị LONG/SHORT ngay cả khi AUTO Trade BTC hoặc chế độ đăng Square sau Entry thật đang OFF.
-- **Lọc bài đăng**, không lọc phạm vi quét: thanh khoản 24h mặc định từ **10 triệu USDT**, tối đa **3 bài/chu kỳ**, **15 bài/ngày** (tính cả bài Trade BTC), chỉnh được trong Scanner với trần 20 bài/ngày. Ưu tiên mã có quote volume cao; không tuyên bố kết quả hay xác suất thắng.
-- **Tín hiệu chưa khớp** chỉ ghi giá đóng nến M15, SL và TP1/TP2/TP3 tham khảo từ các phần trăm Scanner, mặc định 0,8% / 1,5% / 3% / 5%. Đây không phải lệnh limit/market, không đặt SL/TP lên sàn. Hình chart từ nến Binance M15, tiêu đề đúng ký hiệu Futures, không hiện tên chỉ báo OCC/SMMA.
-- **Câu bắt buộc trong MỌI bài tín hiệu Scanner (nguyên văn):**
-
-  **Đây là Tín hiệu phân tích kỹ thuật, chưa phải giao dịch đã khớp.**
-
-- Bài Square **sau khi khớp Entry BTC thật** vẫn ở chế độ riêng, ghi Entry đã khớp thực sự và không được mô tả sai thành tín hiệu chưa khớp. Câu cảnh báo trên chỉ dành cho các bài phân tích chưa thực thi.
-- Mọi bài tín hiệu có khóa chống trùng `SYMBOL:M15:barTime:side`, lưu bền trong `data/square-publisher.json`. Nếu Square trả ACK không rõ / HTTP 504, ghi `REVIEW_REQUIRED` và **không retry** nhằm tránh đăng lặp. Cấu hình, dấu lịch sử tín hiệu lưu trong `data/occ-square-scanner.json`; cần giữ `data/` khi cập nhật Portable.
-- Lượng request lớn khi quét toàn bộ Futures; scanner giới hạn chạy đồng thời, làm mới universe sau 3 giờ và dừng tạm thời nếu Binance trả 429/418. Cần có mạng và app PC đang chạy; không chạy nền khi app tắt.
-- Cảnh báo đăng bài giúp phân biệt tín hiệu và lệnh đã khớp nhưng **không tự động miễn trừ nghĩa vụ pháp lý**; người vận hành vẫn phải tuân thủ quy định nền tảng và pháp luật.
 
 ## Tự đăng Binance Square sau khi có giao dịch thực
 
@@ -105,10 +63,10 @@ Về API: Binance Square OpenAPI dùng `/image/presignedUrl`,
 
 ## Quy tắc an toàn
 
-- **Hai nhánh Square độc lập:** bài BTC Futures đã khớp từ lệnh OCC và bài tín hiệu phân tích Scanner chưa khớp; không dùng tín hiệu Scanner làm lệnh giao dịch thật.\n
+- Square **chỉ đăng BTCUSDT đã khớp Entry thực** sau khi xác minh STOP close-all và TP1–TP3; không còn Scanner hay bài tín hiệu altcoin.
 - API Futures và API Square được lưu **riêng biệt**. Không chia sẻ API key.
 - Binance Square có giới hạn bài/ảnh, chính sách nội dung và giới hạn theo khu vực.
-- Nhánh bài **TRADE BTC** chỉ đẩy khi Entry đã khớp và SL/TP xác minh. Nhánh **SIGNAL Scanner** được phép đăng giao cắt M15 mới nhưng bắt buộc ghi rõ *chưa phải giao dịch đã khớp* và không được gửi lệnh.
+- Futures Transport chỉ cho phép gửi lệnh **BTCUSDT**, không có endpoint AUTO đa mã.
 - Không phát lại tín hiệu trong thời gian mất kết nối. AUTO OFF khi khởi động lại.
 - Đảo chiều thực tế: kiểm tra trạng thái Binance, đóng reduceOnly MARKET,
   xác nhận FLAT, mở chiều ngược MARKET và đặt STOP trước các TP.
