@@ -3,14 +3,7 @@
 Live Binance USDⓈ-M Futures trading, OCC crossover signals, LIMIT/MARKET entries,
 exchange-confirmed STOP and TP1/TP2/TP3, and optional Binance Square chart posts.
 
-A separate Windows **multi-symbol USDT Perpetual Auto** mode accepts arbitrary per-coin
-requested margin (USDT), verifies Binance's symbol-specific exchange filters, and only
-raises an insufficient amount to the computed minimum required for all three TP legs.
-This mode currently uses MARKET entries and maintains independent per-symbol checkpoints.
-The existing chart and verified P&L report remain BTCUSDT-only.
-
-**Windows PC only.** This repository ships the Windows trading application, scanner,
-and PC-focused regression tests. The Windows portable build is the only release target.
+**Windows PC only.** This repository ships the BTCUSDT-only Windows trading application and PC-focused regression tests. The Windows portable build is the only release target.
 
 **Paper Trading is not available in the application or Windows build.** Historical
 paper fixtures remain only as development/regression tests and are never executed.
@@ -29,7 +22,7 @@ Binance Square provides a separate posting-only OpenAPI key. Create it in
 Open **Cài đặt → Binance Square**, save that key (Windows DPAPI), then explicitly
 enable **Tự đăng Square**. This does not use the Binance Futures API key.
 
-A Square post is created only after **a new live Binance Entry has FILLED and all
+A **BTCUSDT-only** Square post is created only after **a new live Binance Entry has FILLED and all
 exchange STOP/TP orders have been verified**. It includes a fresh PNG candlestick
 chart and public Entry / SL / TP1 / TP2 / TP3 levels and LONG/SHORT direction.
 No strategy name, indicator formula, position size, margin, order ID, account
@@ -43,6 +36,16 @@ manually attempting to resend any failed post.
 Square media support/API permissions depend on your Creator account and region.
 We cannot validate an actual Square post without your posting-only key.
 Posts are public and cryptocurrency futures trading is high risk.
+
+## Upgrading from multi-coin versions
+
+Multi-coin Futures Auto and the market-wide Square Scanner have been removed.
+The app does not place, cancel or monitor any non-BTC positions/orders.
+**Before upgrading**, check Binance directly for existing ETH/altcoin positions
+and their STOP/TP orders; manage them on Binance yourself. Removing app features
+does not close positions or cancel exchange orders. Keep the `data/` directory
+intact; existing local audit records remain on disk but are not monitored by
+this BTC-only release. BTC Auto remains OFF after restarting.
 
 ## Development
 
