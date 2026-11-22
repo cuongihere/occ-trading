@@ -13,9 +13,10 @@ export class FuturesTransport{
   if(!Object.hasOwn(HOSTS,environment))throw Error('Unsupported Binance Futures environment');
   if(environment==='production'&&productionConsent!=='I_ACCEPT_LIVE_BTCUSDT')
    throw Error('Explicit real-money constructor consent required');
-  if(!Array.isArray(allowedSymbols)||!allowedSymbols.length||allowedSymbols.length>30||
-   allowedSymbols.some(s=>typeof s!=='string'||!/^[A-Z0-9]{2,20}USDT$/.test(s)))
-   throw Error('Invalid Futures symbol allowlist');
+  // BTCUSDT is the only permitted signed-trading symbol in this application.
+  // Reject any dynamic allowlist rather than relying only on UI/API routing.
+  if(!Array.isArray(allowedSymbols)||allowedSymbols.length!==1||allowedSymbols[0]!=='BTCUSDT')
+   throw Error('Only BTCUSDT permitted for Futures trading');
   this.allowedSymbols=new Set(allowedSymbols);
   this.baseUrl=HOSTS[environment];this.environment=environment;
   this.key=apiKey;this.secret=apiSecret;this.fetchFn=fetchFn;this.clock=clock;this.offset=0;
