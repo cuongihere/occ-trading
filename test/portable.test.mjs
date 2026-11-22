@@ -32,12 +32,26 @@ test('Server is Futures-only and Paper routes are gone',()=>{
 test('Windows workflow tests and bundles all required runtime files',()=>{
  const build=read('BUILD_PORTABLE.ps1'),workflow=read('.github/workflows/windows-portable.yml');
  for(const file of ['server.mjs','server-feed.mjs','occ-signal-engine.mjs',
-  'square-publisher.mjs','square-chart-render.mjs','multi-auto-worker.mjs','multi-auto-sizing.mjs','START_WINDOWS.bat',
+  'square-publisher.mjs','square-chart-render.mjs','START_WINDOWS.bat',
   'BOOTSTRAP_RUNTIME.ps1'])
   assert.ok(build.includes("'"+file+"'"),'missing build asset: '+file);
  assert.match(workflow,/node --test/);
  assert.match(workflow,/BUILD_PORTABLE\.ps1/);
  assert.match(workflow,/actions\/upload-artifact@v4/);
+});
+
+test('BTC-only Windows bundle has no multi-symbol executor, Scanner, or posting endpoints',()=>{
+ const server=read('server.mjs'),ui=read('BINANCE_UI_PREVIEW.html');
+ const build=read('BUILD_PORTABLE.ps1'),transport=read('futures-transport.mjs');
+ for(const removed of ['multi-auto-worker.mjs','multi-auto-sizing.mjs','occ-square-scanner.mjs','OCC_SCANNER.html'])
+  assert.ok(!build.includes("'"+removed+"'"),'removed component still in portable: '+removed);
+ assert.doesNotMatch(server,/MultiAutoWorker|OccSquareScanner|\/control\/multi\/|\/api\/multi\/|\/control\/scanner\/|\/api\/scanner\/|\/occ-scanner/);
+ assert.doesNotMatch(ui,/openMultiBtn|multiDialog|\/occ-scanner|\/control\/multi\/|\/api\/multi\//);
+ assert.match(transport,/Only BTCUSDT permitted for Futures trading/);
+ assert.match(server,/Only BTCUSDT Square posts permitted/);
+ const square=read('square-publisher.mjs');
+ assert.doesNotMatch(square,/async onSignal\(|squareSignalCaption/);
+ assert.match(square,/entry\.symbol!=='BTCUSDT'/);
 });
 
 test('Windows portable must not package Paper Trading code',()=>{
