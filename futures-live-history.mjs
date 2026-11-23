@@ -1,22 +1,22 @@
 // Verified Binance OCC live history discovery; no order mutations or fabricated fills.
 // Every trade is identified through a Binance orderId and verified OCCBTC client prefix.
 import {syncKnownOrderFills} from './binance-live-stats.mjs';
-const ROOT=/^OCCBTC-[0-9a-f]{14}$/;
-const ALGO=/^(OCCBTC-[0-9a-f]{14})-(SL|TP[123])$/;
+const ROOT=/^OCC(?:BTC|M)-[0-9a-f]{14}$/;
+const ALGO=/^(OCC(?:BTC|M)-[0-9a-f]{14})-(SL|TP[123])$/;
 const numericOrder=v=>/^[1-9][0-9]{0,23}$/.test(String(v??''))?String(v):null;
 const sideFor=side=>side==='LONG'?'BUY':side==='SHORT'?'SELL':null;
 // Binance allOrders/allAlgoOrders default to RECENT 7 DAYS even with limit 1000.
 // Backfill 30 days using strictly <7-day requests; split saturated pages so
 // old STOP fills cannot silently disappear from historical OCC statistics.
 export const HISTORY_DAYS=30;
-export async function fetchWindowedOrderHistory(api,endpoint,{now=Date.now(),days=HISTORY_DAYS,maxCalls=64}={}){
+export async function fetchWindowedOrderHistory(api,endpoint,{now=Date.now(),days=HISTORY_DAYS,maxCalls=64,symbol='BTCUSDT'}={}){
  if(!['/fapi/v1/allOrders','/fapi/v1/allAlgoOrders'].includes(endpoint))
   throw Error('Unsupported history endpoint');
  const earliest=now-days*86400000,unique=new Map();
  let calls=0;
  async function scan(start,end){
   if(++calls>maxCalls)throw Error(endpoint+' exceeded bounded history request budget');
-  const rows=await api.get(endpoint,{symbol:'BTCUSDT',
+  const rows=await api.get(endpoint,{symbol,
    startTime:start,endTime:end,limit:1000});
   if(!Array.isArray(rows))throw Error('Invalid Binance order history');
   if(rows.length>=1000){
@@ -42,12 +42,12 @@ export async function fetchWindowedOrderHistory(api,endpoint,{now=Date.now(),day
  }
  return {rows:[...unique.values()],calls,startAt:earliest,checkedAt:now};
 }
-export async function discoverOCCOrderIds(api,ledger,{checkpoint=null,intent=null}={}){
+export async function discoverOCCOrderIds(api,ledger,{checkpoint=null,intent=null,symbol=ledger.symbol||'BTCUSDT'}={}){
  const warnings=[];let discovered=0;
  const add=record=>{if(ledger.register(record))discovered++;};
  let ordinary=[];
  try{
-  ordinary=(await fetchWindowedOrderHistory(api,'/fapi/v1/allOrders')).rows;
+  ordinary=(await fetchWindowedOrderHistory(api,'/fapi/v1/allOrders',{symbol})).rows;
  }catch(e){warnings.push('Không đồng bộ đủ Entry '+HISTORY_DAYS+' ngày: '+e.message);}
 
  for(const order of ordinary){
@@ -56,7 +56,7 @@ export async function discoverOCCOrderIds(api,ledger,{checkpoint=null,intent=nul
   const hasRealFill=Number.isFinite(amount)&&amount>0&&
    (order?.status==='FILLED'||(order?.type==='LIMIT'&&
     ['CANCELED','EXPIRED','EXPIRED_IN_MATCH'].includes(order.status)));
-  if(!id||!ROOT.test(client)||order.symbol!=='BTCUSDT'||
+  if(!id||!ROOT.test(client)||order.symbol!==symbol||
      !['MARKET','LIMIT'].includes(order.type)||order.positionSide!=='BOTH'||!hasRealFill||
      (order.reduceOnly===true||order.reduceOnly==='true')||!['BUY','SELL'].includes(order.side))continue;
   add({orderId:id,groupId:client,clientId:client,role:'ENTRY',side:order.side});
@@ -66,7 +66,7 @@ export async function discoverOCCOrderIds(api,ledger,{checkpoint=null,intent=nul
   const id=numericOrder(entry.orderId);
   if(ROOT.test(prefix)&&id){
    try{
-    const o=await api.get('/fapi/v1/order',{symbol:'BTCUSDT',orderId:id});
+    const o=await api.get('/fapi/v1/order',{symbol,orderId:id});
     if(o?.symbol==='BTCUSDT'&&String(o.orderId)===id&&o.clientOrderId===prefix&&
       ['MARKET','LIMIT'].includes(o.type)&&o.status==='FILLED'&&o.positionSide==='BOTH'&&
       o.side===sideFor(entry.side)&&Number(o.executedQty)>0)
@@ -77,7 +77,7 @@ export async function discoverOCCOrderIds(api,ledger,{checkpoint=null,intent=nul
  }
  const allAlgos=[];
  try{
-  const found=await fetchWindowedOrderHistory(api,'/fapi/v1/allAlgoOrders');
+  const found=await fetchWindowedOrderHistory(api,'/fapi/v1/allAlgoOrders',{symbol});
   allAlgos.push(...found.rows);
  }catch(e){warnings.push('Không đồng bộ đủ Algo SL/TP '+HISTORY_DAYS+' ngày: '+e.message);}
  // Checkpoint supplies exact Algo IDs even if allAlgoOrders did not include them.
@@ -85,22 +85,22 @@ export async function discoverOCCOrderIds(api,ledger,{checkpoint=null,intent=nul
  for(const saved of tracked){
   if(allAlgos.some(x=>String(x.algoId)===String(saved.id)))continue;
   try{
-   const algo=await api.get('/fapi/v1/algoOrder',{symbol:'BTCUSDT',algoId:String(saved.id)});
+   const algo=await api.get('/fapi/v1/algoOrder',{symbol,algoId:String(saved.id)});
    if(algo)allAlgos.push(algo);
   }catch(e){warnings.push('Không xác minh được SL/TP #'+saved.id+': '+e.message);}
  }
  for(const a of allAlgos){
   const match=ALGO.exec(String(a?.clientAlgoId||''));
   const actual=numericOrder(a?.actualOrderId);
-  if(!match||!actual||a.symbol!=='BTCUSDT'||a.positionSide!=='BOTH'||
+  if(!match||!actual||a.symbol!==symbol||a.positionSide!=='BOTH'||
     !['BUY','SELL'].includes(a.side))continue;
   const [client,group,role]=match;
    const canonicalGroup=checkpoint?.entry?.algoPrefix===group?
     checkpoint.entry.clientPrefix:group;
   // Verify an actual executed child order exists before attributing P&L.
   try{
-   const child=await api.get('/fapi/v1/order',{symbol:'BTCUSDT',orderId:actual});
-   if(child?.symbol!=='BTCUSDT'||String(child.orderId)!==actual||
+   const child=await api.get('/fapi/v1/order',{symbol,orderId:actual});
+   if(child?.symbol!==symbol||String(child.orderId)!==actual||
       child.side!==a.side||(child.positionSide&&child.positionSide!=='BOTH')||
       !['FILLED','PARTIALLY_FILLED'].includes(child.status)||
       !(Number(child.executedQty)>0))continue;
@@ -110,7 +110,7 @@ export async function discoverOCCOrderIds(api,ledger,{checkpoint=null,intent=nul
  // Recovery of a reverse reduceOnly close if the final ACK was never persisted.
  if(ROOT.test(String(intent?.oldClientId||''))&&ROOT.test(String(intent?.closeId||''))){
   try{
-   const o=await api.get('/fapi/v1/order',{symbol:'BTCUSDT',origClientOrderId:intent.closeId});
+   const o=await api.get('/fapi/v1/order',{symbol,origClientOrderId:intent.closeId});
    if(o?.symbol==='BTCUSDT'&&o.clientOrderId===intent.closeId&&
      o.status==='FILLED'&&o.type==='MARKET'&&(o.reduceOnly===true||o.reduceOnly==='true')&&
      numericOrder(o.orderId)){
@@ -125,7 +125,7 @@ export async function discoverOCCOrderIds(api,ledger,{checkpoint=null,intent=nul
 // Query all recent BTCUSDT fills, including orders OCC can no longer identify.
 // Binance caps each response at 1000 and prohibits fromId with time bounds.
 // Recursively partition the 7-day interval instead of silently losing fills.
-export async function fetchExchangeTrades7Days(api,{now=Date.now(),startTime=null,maxCalls=32}={}){
+export async function fetchExchangeTrades7Days(api,{now=Date.now(),startTime=null,maxCalls=32,symbol='BTCUSDT'}={}){
  const first=Math.max(0,startTime==null?now-7*86400000:Number(startTime)),full=[];
  if(!Number.isSafeInteger(first)||!Number.isSafeInteger(now)||now<first||
     now-first>7*86400000)throw Error('Binance userTrades date window must be <=7 days');
@@ -133,7 +133,7 @@ export async function fetchExchangeTrades7Days(api,{now=Date.now(),startTime=nul
  async function scan(start,end){
   if(++calls>maxCalls)throw Error('Binance userTrades exceeds bounded audit capacity; partial scan discarded');
   const rows=await api.get('/fapi/v1/userTrades',{
-   symbol:'BTCUSDT',startTime:start,endTime:end,limit:1000});
+   symbol,startTime:start,endTime:end,limit:1000});
   if(!Array.isArray(rows))throw Error('Invalid Binance userTrades response');
   if(rows.length>=1000){
    if(start>=end)throw Error('At least 1000 fills at one timestamp; cannot claim a complete scan');
@@ -143,7 +143,7 @@ export async function fetchExchangeTrades7Days(api,{now=Date.now(),startTime=nul
    return;
   }
   for(const x of rows){
-   if(x?.symbol!=='BTCUSDT'||!Number.isSafeInteger(Number(x.time))||
+   if(x?.symbol!==symbol||!Number.isSafeInteger(Number(x.time))||
       Number(x.time)<start||Number(x.time)>end)
     throw Error('Inconsistent Binance account trade timestamps/symbol');
    full.push(x);
@@ -160,13 +160,13 @@ export async function fetchExchangeTrades7Days(api,{now=Date.now(),startTime=nul
 }
 // Multi-window 30-day scan preserves actual historic BTC fills beyond the
 // single 7-day Binance API default. All pages must succeed before committing.
-export async function fetchExchangeTrades30Days(api,{now=Date.now(),maxCalls=96}={}){
+export async function fetchExchangeTrades30Days(api,{now=Date.now(),maxCalls=96,symbol='BTCUSDT'}={}){
  const earliest=now-HISTORY_DAYS*86400000,all=[],seen=new Set();
  let requests=0;
  let end=now;
  while(end>=earliest){
   const start=Math.max(earliest,end-(6*86400000-1));
-  const result=await fetchExchangeTrades7Days(api,{now:end,startTime:start,maxCalls:maxCalls-requests});
+  const result=await fetchExchangeTrades7Days(api,{now:end,startTime:start,maxCalls:maxCalls-requests,symbol});
   requests+=result.requests;
   for(const row of result.rows){
    if(seen.has(String(row.id)))throw Error('Binance duplicated trade IDs across history windows');
@@ -179,12 +179,12 @@ export async function fetchExchangeTrades30Days(api,{now=Date.now(),maxCalls=96}
 // Income is account-wide; only source of funding-inclusive Binance P&L.
 // The original one-page, seven-day call missed old transactions. Binance
 // allows seven days MAX per request, so scan 30 days in closed partitions.
-export async function fetchIncome30Days(api,{now=Date.now(),maxCalls=64}={}){
+export async function fetchIncome30Days(api,{now=Date.now(),maxCalls=64,symbol='BTCUSDT'}={}){
  const earliest=now-HISTORY_DAYS*86400000,all=[],seen=new Map();
  let requests=0;
  async function scan(start,end){
   if(++requests>maxCalls)throw Error('Income history exceeds request budget');
-  const rows=await api.get('/fapi/v1/income',{symbol:'BTCUSDT',
+  const rows=await api.get('/fapi/v1/income',{symbol,
    startTime:start,endTime:end,limit:1000});
   if(!Array.isArray(rows))throw Error('Invalid Binance Income response');
   if(rows.length>=1000){
@@ -193,7 +193,7 @@ export async function fetchIncome30Days(api,{now=Date.now(),maxCalls=64}={}){
    await scan(start,mid);await scan(mid+1,end);return;
   }
   for(const o of rows){
-   if(o.symbol!=='BTCUSDT')continue;
+   if(o.symbol!==symbol)continue;
    const id=String(o.incomeType)+':'+String(o.tranId);
    const prior=seen.get(id);
    if(prior&&JSON.stringify(prior)!==JSON.stringify(o))
@@ -208,18 +208,19 @@ export async function fetchIncome30Days(api,{now=Date.now(),maxCalls=64}={}){
  }
  return {rows:all,startAt:earliest,checkedAt:now,requests};
 }
-export async function syncBinanceIncome(api,ledger,{now=Date.now()}={}){
- const scan=await fetchIncome30Days(api,{now});
+export async function syncBinanceIncome(api,ledger,{now=Date.now(),symbol=ledger.symbol||'BTCUSDT'}={}){
+ const scan=await fetchIncome30Days(api,{now,symbol});
  const newIncome=ledger.ingestIncome(scan.rows);
  ledger.markIncomeScan(scan.checkedAt,scan.startAt);
  return {newIncome,incomeCheckedAt:scan.checkedAt,incomeStartAt:scan.startAt};
 }
 export async function syncOCCLiveHistory(api,ledger,inputs={}){
- const found=await discoverOCCOrderIds(api,ledger,inputs);
+ const symbol=ledger.symbol||'BTCUSDT';
+ const found=await discoverOCCOrderIds(api,ledger,{...inputs,symbol});
  let exchangeTradesUpdated=false,newExchangeFills=0,accountRequests=0,newFillsFull=0;
  if(inputs.syncExchangeTrades===true){
   try{
-   const audit=await fetchExchangeTrades30Days(api);
+   const audit=await fetchExchangeTrades30Days(api,{symbol});
    // Ingestion is atomic; don't record a "full scan" if pagination fails.
    newExchangeFills=ledger.ingestExchange(audit.rows,audit.checkedAt,audit.startAt);
    // Once discovered, all known OCC orderId fills can be matched directly.
@@ -230,7 +231,7 @@ export async function syncOCCLiveHistory(api,ledger,inputs={}){
  let incomeUpdated=false;
  if(inputs.syncIncome===true){
   try{
-   const audit=await syncBinanceIncome(api,ledger);
+   const audit=await syncBinanceIncome(api,ledger,{symbol});
    incomeUpdated=true;found.newIncome=audit.newIncome;
   }catch(e){found.warnings.push('Binance Income chưa đối soát: '+e.message);}
  }
