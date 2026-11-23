@@ -234,7 +234,7 @@ html.embed.realonly .inspectTitle{font-size:16px}
 <p id="status" class="status">Đang tải dữ liệu nến và fill đã xác minh…</p>
 <div class="grid">
 <section class="panel refPanel"><h2>1. OCC tham chiếu · không phải Strategy Tester Pine</h2>
-<div class="subtitle">Giá nến xác nhận tín hiệu · mốc MA giao cắt · giá BTC kích hoạt OCC</div>
+<div class="subtitle">Giá nến xác nhận tín hiệu · mốc MA giao cắt · giá kích hoạt OCC</div>
 <canvas id="reference"></canvas>
 <div class="legend"><span class="good">● Giao cắt LONG</span><span class="bad">● Giao cắt SHORT</span><span style="color:#f8bd4b">━ MA Open SMMA8</span><span style="color:#40d4ea">━ MA Close SMMA8</span></div>
 <div id="refHover" class="foot">Trỏ chuột lên nến để xem giá và thời điểm.</div>
@@ -243,7 +243,7 @@ html.embed.realonly .inspectTitle{font-size:16px}
 <div class="subtitle">SMMA8 H4 (cam/xanh) · Giao cắt L/S · Binance FILLED · SL/TP còn hiệu lực</div>
 <canvas id="execution"></canvas>
 <div class="legend"><span style="color:#f2b749">━ OCC Open</span><span style="color:#30c7e5">━ OCC Close</span><span class="good">● L / ▲ BUY</span><span class="bad">● S / ▼ SELL</span><span style="color:#8deca9">━ TP thật</span><span style="color:#ff7280">━ SL thật</span></div>
-<div id="execHover" class="foot">Rê chuột: nến, OCC cross, giá BTC kích hoạt và fill Binance (Order ID).</div>
+<div id="execHover" class="foot">Rê chuột: nến, OCC cross, giá kích hoạt và fill Binance (Order ID).</div>
 </section>
 <aside id="tradeInspector" class="tradeInspector" aria-label="Thông số lệnh đã khớp Binance">
  <div class="inspectorHead">
@@ -289,6 +289,15 @@ html.embed.realonly .inspectTitle{font-size:16px}
 <script>
 'use strict';
 const $=id=>document.getElementById(id);
+const chartSymbol=(new URLSearchParams(location.search).get('symbol')||'BTCUSDT').toUpperCase();
+if(!/^[A-Z0-9]{2,20}USDT$/.test(chartSymbol))throw Error('Invalid Futures symbol');
+if(chartSymbol!=='BTCUSDT'){
+ document.title='OCC · '+chartSymbol+' Futures';
+ document.querySelector('header h1').textContent='OCC / '+chartSymbol+' Futures · Giao cắt và lệnh thật';
+ document.querySelector('.execPanel h2').textContent=chartSymbol+' M15 · OCC & lệnh thật';
+ const tvLink=document.querySelector('header a[href*="tradingview.com"]');
+ if(tvLink)tvLink.href='https://www.tradingview.com/chart/?symbol=BINANCE%3A'+encodeURIComponent(chartSymbol)+'.P&interval=15';
+}
 const M15=900000,format=(x,n=1)=>x==null||!Number.isFinite(Number(x))?'—':Number(x).toLocaleString('en-US',{maximumFractionDigits:n});
 const vn=t=>new Date(t).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',hour12:false});
 let state=null,selectedGroupId=null,selectedEventId=null,focusAt=null,loadingDays=0,markerHits=[];
@@ -737,7 +746,7 @@ function renderHistory(){
   }
   const td=document.createElement('td'),btn=document.createElement('button');
   btn.type='button';btn.textContent=group.groupId===selectedGroupId?'Đang xem':'Xem';
-  btn.title='Đến vị trí Entry/Exit BTCUSDT của nhóm '+group.groupId;
+  btn.title='Đến vị trí Entry/Exit Futures của nhóm '+group.groupId;
   btn.onclick=()=>focusGroup(group.groupId);
   td.append(btn);tr.append(td);
   tr.onclick=e=>{if(e.target!==btn)focusGroup(group.groupId);};
@@ -776,7 +785,7 @@ async function refresh(days=null){
  $('reload').disabled=true;
  $('status').textContent='Đang đọc Binance Futures M15/H4 và fill đã xác minh…';
  try{
-  const response=await fetch('/api/binance/occ-chart-compare?days='+requestDays,
+  const response=await fetch('/api/binance/occ-chart-compare?days='+requestDays+'&symbol='+encodeURIComponent(chartSymbol),
    {cache:'no-store'});
   const data=await response.json();
   if(!response.ok)throw Error(data.error||'HTTP '+response.status);

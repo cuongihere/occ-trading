@@ -3,7 +3,7 @@ import {sizeBTC,validateLiveConfig,liveTargets,roundTick} from './futures-sizing
 const num=(v,k)=>{const x=Number(v);if(!Number.isFinite(x))throw Error('Invalid '+k);return x;};
 export function validateExchangeState(state,settings){
  const c=validateLiveConfig(settings);
- if(state?.symbol!=='BTCUSDT'||state?.contractType!=='PERPETUAL')throw Error('BTCUSDT perpetual required');
+ if(!/^[A-Z0-9]{2,20}USDT$/.test(state?.symbol||'')||state?.contractType!=='PERPETUAL')throw Error('Active USDT perpetual required');
  if(state?.dualSidePosition!==false)throw Error('One-way mode required');
  if(String(state?.marginType).toUpperCase()!=='ISOLATED')throw Error('ISOLATED margin required');
  if(num(state.leverage,'leverage')!==c.leverage)throw Error('Leverage mismatch: configure manually on Binance first');
@@ -19,13 +19,18 @@ export function draftProtectedOrder({side,account,filters,quotePrice},settings){
  const price=num(quotePrice,'quotePrice');
  const s=sizeBTC({entry:price,availableUSDT:num(account.availableUSDT,'availableUSDT'),
   step:num(filters.stepSize,'stepSize'),minQty:num(filters.minQty,'minQty'),
+  maxQty:Number(filters.maxQty)>0?Number(filters.maxQty):Infinity,
   minNotional:num(filters.minNotional,'minNotional')},c);
  const levels=liveTargets(price,side,c),tick=num(filters.tickSize,'tickSize');
  const stop=roundTick(levels.stop,tick,side==='LONG'?'down':'up');
  const targets=[levels.tp1,levels.tp2,levels.tp3].map(v=>roundTick(v,tick,side==='LONG'?'up':'down'));
+ // Binance can require each TP leg to satisfy its own minimum notional.
+ // Reject the entry BEFORE sending any real order if a TP would be too small.
+ if(s.legs.some((q,i)=>q*targets[i]+1e-8<num(filters.minNotional,'minNotional')))
+  throw Error('Each TP leg must satisfy exchange minimum notional');
  if(side==='LONG'&&!(stop<price&&targets.every(x=>x>price)))throw Error('Invalid LONG stops/targets');
  if(side==='SHORT'&&!(stop>price&&targets.every(x=>x<price)))throw Error('Invalid SHORT stops/targets');
- return Object.freeze({symbol:'BTCUSDT',side,marginUSDT:c.marginUSDT,leverage:c.leverage,
+ return Object.freeze({symbol:account.symbol,side,marginUSDT:c.marginUSDT,leverage:c.leverage,
   notionalUSDT:s.notional,qtyBTC:s.qty,legsBTC:s.legs,referencePrice:price,
   stopPrice:stop,tpPrices:targets,requiresExchangeAck:true,
   warnings:['Not a live order','Quote price is indicative; actual fills may differ']});

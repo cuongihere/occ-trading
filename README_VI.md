@@ -1,4 +1,4 @@
-# OCC Trading — BTCUSDT Futures Windows
+# OCC Trading — Một màn hình quản lý BTC và nhiều coin Futures (Windows)
 
 ## Windows — gia cố đảo chiều OCC sau khi đã đóng vị thế (16/11/2026)
 
@@ -11,7 +11,7 @@
 
 ## Chart Windows: chuỗi lệnh thật và khung thông số (16/11/2026)
 
-- Một chart nến BTCUSDT: OCC Open/Close + giao cắt LONG/SHORT + fill Binance thực tế.
+- Một chart OCC đang chọn: BTCUSDT hoặc coin USDT Perpetual bất kỳ đã thêm, có OCC Open/Close + giao cắt LONG/SHORT + fill Binance thực tế.
 - Gom lệnh theo Group ID và Binance Order ID, vẽ nối ENTRY → SL/TP/CLOSE/REVERSE bằng giá và thời gian khớp thực.
 - Nhãn ngay trên chart: LONG ENTRY, SL HIT, SHORT ENTRY, TP1/TP2/TP3, REVERSE CLOSE. Rê chuột hoặc click marker/nhãn để mở thông số tại khung CHI TIẾT LỆNH bên phải chart.
 - Khung chính hiện giá khớp, khối lượng BTC, thời gian, Order ID, P&L nhóm (chưa funding), phí, mức OCC và các bước Entry/Exit. Click bước lệnh hoặc nút Đến vị trí lệnh để xem tại nến giao dịch.
@@ -20,16 +20,20 @@
 - Không thay đổi logic thực thi lệnh và quản lý SL/TP. Giữ nguyên thư mục data khi cập nhật.
 
 
-**Chỉ giao dịch BTCUSDT Futures thực tế.** Đã bỏ Paper Trading khỏi ứng dụng,
-trang web và gói Portable. Phần kiểm thử mã mô phỏng cũ chỉ tồn tại trong
-mã nguồn để kiểm tra chiến lược; hoàn toàn không chạy trong ứng dụng.
+**Giao dịch Futures nhiều mã theo chung một OCC H4/M15**, không có Paper Trading trên bản phát hành. Mỗi coin có ký quỹ, leverage, LIMIT/MARKET, SL, TP1/2/3 và đảo chiều riêng. Biểu đồ và bảng vị thế ở một màn hình; đổi tab coin không ảnh hưởng các coin khác.
 
-## Lưu ý khi chuyển từ phiên bản AUTO đa mã
+## Nâng cấp quản lý đa coin trên một màn hình (23/11/2026)
 
-- Phiên bản BTC-only **không tiếp tục theo dõi, hủy, đóng hoặc sửa** vị thế/SL/TP của các coin khác.
-- **Trước khi cập nhật:** mở Binance Futures kiểm tra trực tiếp toàn bộ vị thế ETH/BNB/altcoin đang mở và các lệnh STOP/TP, tự xử lý trên Binance. Gỡ tính năng khỏi app **không tự hủy lệnh trên sàn**.
-- Giữ nguyên thư mục `data/` khi cập nhật. Các checkpoint và lịch sử AUTO đa mã cũ vẫn nằm trên ổ đĩa, nhưng bản BTC-only không sử dụng chúng để đặt lệnh.
-- AUTO BTC luôn OFF sau khởi động; nếu tài khoản còn vị thế coin khác, phần kiểm tra trước giao dịch BTC sẽ chặn bật AUTO.
+- Thanh chọn coin nằm ngay trên chart hiện tại: **BTCUSDT, ETHUSDT, SOLUSDT…**, nhấn **+ Coin** để thêm. Chỉ nhận hợp đồng Binance USD-M USDT Perpetual đang TRADING; tối đa 12 mã bổ sung nhằm kiểm soát rate limit.
+- Mỗi lần chọn coin chỉ đổi biểu đồ OCC, lệnh Binance, lịch sử và các nút quản lý của coin đang chọn. Bảng vị thế ở dưới vẫn tổng hợp tất cả mã, không có tab AUTO đa mã riêng.
+- Trong popup **Cài đặt mã**, chỉnh ký quỹ USDT, leverage 1–20x, LONG/SHORT, MARKET/LIMIT Pullback, SL%, TP1/2/3, tỷ lệ chốt, đảo chiều OCC. Có nút sao chép thông số BTC; nguồn tín hiệu SMMA8 H4/M15 hoàn toàn giống BTC cũ.
+- **AUTO coin** chạy độc lập. **Chọn AUTO tổng** chỉ đưa coin vào danh sách được phép bật bằng một nút; không tự đặt lệnh. **BẬT AUTO TỔNG** yêu cầu xác nhận tiền thật, **TẮT TẤT CẢ** giữ các STOP/TP đang trên Binance.
+- Mỗi coin có checkpoint và nhật ký lệnh riêng. Khi Binance gửi ACK không rõ, lỗi mạng, thiếu STOP, sai leverage, không đủ lot/notional của TP hoặc có vị thế chưa xác minh: bot khóa, **không gửi lệnh trùng hoặc tự nhận quyền quản lý**. Chỉ tính PnL từng coin từ fill Binance đã xác minh; không trộn ETH với BTC.
+- Một luồng xử lý Entry tuần tự kiểm tra lại ký quỹ Binance trước từng coin. Một coin chỉ có tối đa một vị thế bot; không tự mở chồng lệnh. Đảo chiều vẫn đóng reduceOnly → xác nhận FLAT → dọn SL/TP cũ → MARKET chiều ngược → STOP rồi TP.
+- Sau khi khởi động lại, **tất cả AUTO đều OFF**; có thể bật lại để xác minh/tiếp quản vị thế bot cũ. Nếu còn lệnh không rõ, kiểm tra trực tiếp Binance.
+- Dữ liệu BTC cũ vẫn giữ tại `data/futures-*` và `binance-live-stats.sqlite`. Các coin mới ghi `futures-SYMBOL-*`, `binance-SYMBOL-live-stats.sqlite` và `unified-symbols.json`; **không xóa thư mục `data/`** khi cập nhật.
+- Binance Square **chỉ đăng BTCUSDT** sau khi Entry thật FILLED có STOP/TP xác minh; ETH/SOL/altcoin không đăng Square. Scanner toàn thị trường không quay lại.
+- Khi nâng cấp từ bản đa mã cũ, các checkpoint `multi-*` không tự chuyển sang bộ máy mới. Trước khi sử dụng AUTO, tự kiểm tra tất cả vị thế và SL/TP cũ trực tiếp trên Binance; không dùng hai bản app cùng tài khoản.
 
 ## Chạy app
 
@@ -66,7 +70,7 @@ Về API: Binance Square OpenAPI dùng `/image/presignedUrl`,
 - Square **chỉ đăng BTCUSDT đã khớp Entry thực** sau khi xác minh STOP close-all và TP1–TP3; không còn Scanner hay bài tín hiệu altcoin.
 - API Futures và API Square được lưu **riêng biệt**. Không chia sẻ API key.
 - Binance Square có giới hạn bài/ảnh, chính sách nội dung và giới hạn theo khu vực.
-- Futures Transport chỉ cho phép gửi lệnh **BTCUSDT**, không có endpoint AUTO đa mã.
+- Futures Transport yêu cầu **một symbol được phê duyệt trên mỗi phiên thực thi**, không có endpoint Scanner toàn thị trường; mỗi coin được kiểm tra trên Binance trước khi thêm.
 - Không phát lại tín hiệu trong thời gian mất kết nối. AUTO OFF khi khởi động lại.
 - Đảo chiều thực tế: kiểm tra trạng thái Binance, đóng reduceOnly MARKET,
   xác nhận FLAT, mở chiều ngược MARKET và đặt STOP trước các TP.

@@ -108,7 +108,7 @@ test('One-chart UI includes OCC/cross/real fills filters, 30-day history and foc
  assert.match(html,/exactLinkedSignal\(group\)/);
  assert.match(html,/ctx\.arc\(xx,yy,4/);
  assert.match(html,/selectedGroupId/);
- assert.match(server,/getComparisonCandles\(days=7\)/);
+ assert.match(server,/getComparisonCandles\(days=7,symbol=/);
  assert.match(server,/readVerifiedChartHistory/);
  assert.match(server,/chartDaysParam\(range\)/);
  const js=[...html.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g)];

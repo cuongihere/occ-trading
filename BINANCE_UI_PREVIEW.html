@@ -707,15 +707,46 @@ body:has(#credentialEditor[open])::before{content:'';position:fixed;inset:0;z-in
 .squareKeyControls a{border:1px solid #395b78;padding:7px 9px;border-radius:6px;text-decoration:none;font-size:11px}
 .squareSettings>.small{line-height:1.5}
 
+/* Unified one-screen workbench */
+.symbolStrip{display:flex;align-items:center;gap:5px;padding:5px 8px;margin:5px 0;border:1px solid #294a65;border-radius:7px;background:#0d2033;flex-wrap:wrap}
+.symbolTabs{display:flex;gap:5px;flex:1 1 auto;overflow:auto;align-items:center;min-width:150px}
+.symbolTabs button{white-space:nowrap;padding:5px 8px;border:1px solid #365572;border-radius:6px;background:#16304b;color:#c9ddeb;font-size:11px}
+.symbolTabs button.active{background:#25657a;color:white;border-color:#5fc0d4}
+.symbolTabs button.armed::after{content:' ●';color:#79e2a2}
+.symbolActions{display:flex;flex-wrap:wrap;align-items:center;gap:5px}
+.symbolActions input[type=text]{width:125px;height:27px;padding:4px 7px;border:1px solid #355674;background:#102439;color:#fff;border-radius:5px}
+.symbolActions .small{font-size:10px}
+.altOnly{display:none!important}body.coinAlt .altOnly{display:block!important}
+body.coinAlt #autoWrap,body.coinAlt #btcMarketTicker,body.coinAlt #btcPositionSection,body.coinAlt #historyDrawer{display:none!important}
+body:not(.coinAlt) #altPositionSection{display:none!important}
+#altMarketQuote{padding:7px;color:#f9ce69}#altMarketQuote strong{font-size:20px;display:block}#altMarketQuote small{font-size:10px;color:#96c0de}
+.altRisk{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.altRisk>div{padding:7px;border:1px solid #294965;border-radius:6px;background:#0d2136;overflow:hidden}
+.altRisk small{display:block;font-size:10px;color:#9ab6cd}.altRisk strong{font-size:12px;color:#eefaff}
+.altActions,.altAlgos{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:7px;font-size:11px}
+.altAlgos span{border:1px solid #365570;border-radius:5px;padding:4px 9px}
+#altActionStatus{color:#f8c993;min-height:16px;font-size:11px}
+.portfolioTable{margin-top:6px;border:1px solid #294965;border-radius:7px;background:#0d2033;padding:4px 9px}
+.portfolioTable strong{font-size:11px}.portfolioTable .scroll{max-height:115px;overflow:auto}
+.portfolioTable table{width:100%;border-collapse:collapse;font-size:10px}
+.portfolioTable th,.portfolioTable td{padding:4px 8px;text-align:left;border-top:1px solid #28445c}
+.portfolioTable tr:hover{background:#19384c}
+.coinDialog{background:#11273c;color:#e8f4ff;border:1px solid #466b89;border-radius:11px;padding:16px;width:min(680px,95vw);max-height:89vh;overflow:auto}
+.coinDialog::backdrop{background:#000b}.coinDialog h2{font-size:17px;margin:0 0 9px}
+.coinForm{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.coinForm label{display:flex;flex-direction:column;gap:4px;font-size:11px;color:#bfd8e8}
+.coinForm input,.coinForm select{width:100%;min-width:0;padding:5px;border-radius:5px;background:#0b1d2e;color:#ecf8ff;border:1px solid #41627c}
+.coinButtons{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px}
+@media(max-width:900px){.altRisk{grid-template-columns:repeat(3,minmax(0,1fr))}.coinForm{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 </head>
 <body>
 <div class="app">
 <header class="topbar">
- <div><div class="brand">OCC / BTCUSDT</div><div class="small">Futures · Binance</div></div>
+ <div><div class="brand" id="currentSymbolLabel">OCC / BTCUSDT</div><div class="small">Futures · Binance</div></div>
  <div class="controls">
  <span id="connection" class="status">CHƯA KẾT NỐI</span>
- <label class="auto" id="autoWrap" style="flex-direction:row;color:#eff6ff;font-size:12px"><input id="enabled" type="checkbox" disabled><span id="autoLabel">AUTO OFF</span></label>
+ <label class="auto" id="autoWrap" style="flex-direction:row;color:#eff6ff;font-size:12px"><input id="enabled" type="checkbox" disabled><span id="autoLabel">AUTO BTC OFF</span></label><label class="auto altOnly" id="altAutoControl"><input id="altAutoToggle" type="checkbox"> AUTO MÃ</label>
  <button class="link" type="button" id="openConfigBtn">Cài đặt</button><button class="link" type="button" id="openHistoryBtn">Lịch sử</button></div>
 </header>
 <section class="kpis">
@@ -723,7 +754,7 @@ body:has(#credentialEditor[open])::before{content:'';position:fixed;inset:0;z-in
  <div class="kpi"><div class="label">Khả dụng</div><div id="available" class="value">—</div><div class="detail">USDT · Available</div></div>
  <div class="kpi"><div class="label">Equity</div><div id="equity" class="value">—</div><div class="detail">USDT · Margin balance</div></div>
  <div class="kpi"><div class="label">PnL mở</div><div id="unrealized" class="value">—</div><div class="detail">USDT · Futures</div></div>
- <div class="kpi"><div class="label">BTC</div><div id="btcPosition" class="value">—</div><div class="detail">BTCUSDT · +Long / −Short</div></div>
+ <div class="kpi"><div class="label">Vị thế mở</div><div id="unifiedPositionCount" class="value">0</div><span id="btcPosition" hidden>—</span><div class="detail">Các mã đang quản lý</div></div>
  <div class="kpi" title="Binance Income BTCUSDT toàn tài khoản · Realized P&L + phí + funding, không gồm lãi/lỗ chưa chốt. Chỉ hiển thị tổng 30 ngày sau khi quét đủ dữ liệu."><div class="label" id="binanceIncomeTitle">P&L Binance BTC · 30 ngày</div><div id="binanceIncomeTotal" class="value">—</div><div id="incomeKpiDetail" class="detail">Đang đối soát Binance Income 30 ngày</div></div>
 </section>
 <section class="topgrid">
@@ -749,6 +780,7 @@ body:has(#credentialEditor[open])::before{content:'';position:fixed;inset:0;z-in
   <div class="quoteMeta"><span id="btcLastState" class="quoteState">ĐANG KẾT NỐI</span> · Mark <span id="btcMarketMark">—</span></div>
   <div class="quoteMeta" id="btcPriceTime">Chưa nhận được giao dịch trực tiếp</div>
  </div>
+ <div id="altMarketQuote" class="altOnly"><small>USDT PERPETUAL · LAST</small><strong id="altLastPrice">—</strong><small id="altPriceStatus">Đang đồng bộ Binance</small></div>
  </div>
  <div class="panel configPanel">
   <details id="autoConfigDetails" class="autoConfigDetails">
@@ -805,18 +837,30 @@ body:has(#credentialEditor[open])::before{content:'';position:fixed;inset:0;z-in
   </details>
  </div>
 </section>
+<section class="symbolStrip" aria-label="Chọn coin giao dịch và AUTO tổng">
+ <div id="symbolTabs" class="symbolTabs"><button type="button" class="active">BTCUSDT</button></div>
+ <div class="symbolActions">
+  <input id="addSymbolInput" type="text" placeholder="ETHUSDT, SOLUSDT" aria-label="Thêm mã coin">
+  <button id="addSymbolBtn" type="button" class="minor">+ Coin</button>
+  <label style="font-size:10px;color:#bfdbeb"><input id="includeInAll" type="checkbox"> AUTO tổng</label>
+  <button id="openCoinSettings" type="button" class="minor altOnly">Cài đặt mã</button>
+  <button id="autoAllOn" type="button" class="minor">BẬT AUTO TỔNG</button>
+  <button id="autoAllOff" type="button" class="minor">TẮT TẤT CẢ</button>
+  <span class="small" id="unifiedStatus">AUTO mặc định OFF</span>
+ </div>
+</section>
 <section class="chartWorkbench panel" id="chartWorkbench" aria-label="Biểu đồ BTCUSDT và lệnh OCC thực tế trên Binance">
  <div class="chartWorkbenchTop">
-  <div class="chartWorkbenchTitle"><strong>BTCUSDT · Lệnh OCC</strong></div>
+  <div class="chartWorkbenchTitle"><strong id="selectedChartTitle">BTCUSDT · Lệnh OCC</strong></div>
   <div class="chartWorkbenchActions">
    <span class="chartReadonly">LIVE · CHỈ ĐỌC</span>
-   <a href="/occ-compare?view=real" class="chartExpand" target="_blank" rel="noopener noreferrer">Mở rộng</a>
+   <a id="selectedChartExpand" href="/occ-compare?view=real" class="chartExpand" target="_blank" rel="noopener noreferrer">Mở rộng</a>
   </div>
  </div>
  <iframe id="tradeCompareFrame" title="Biểu đồ nến thật BTCUSDT và lệnh OCC thực tế trên Binance"
   src="/occ-compare?embed=1&view=real" loading="eager" referrerpolicy="no-referrer"></iframe>
 </section>
-<section class="positionSection" aria-label="Vị thế BTCUSDT và quản lý chốt lời">
+<section id="btcPositionSection" class="positionSection" aria-label="Vị thế BTCUSDT và quản lý chốt lời">
  <div class="panel accountPanel">
   <h2>Vị thế · Bot</h2>
   <div class="riskHeadline" id="riskHeadline">Đang đọc vị thế từ Binance…</div>
@@ -858,6 +902,69 @@ body:has(#credentialEditor[open])::before{content:'';position:fixed;inset:0;z-in
   <div class="positionEmpty" id="emptyOrders">Không có SL/TP đang mở</div><div class="riskAlerts" id="riskAlerts" role="status"></div>
  </div>
 </section>
+<section id="altPositionSection" class="positionSection" hidden><div class="panel">
+ <div class="row" style="justify-content:space-between"><h2 id="altPositionTitle">Vị thế OCC · Coin đang chọn</h2><span class="small" id="altBotStatus">AUTO OFF</span></div>
+ <div class="altRisk">
+  <div><small>Chiều / KL</small><strong id="altQty">—</strong></div>
+  <div><small>Entry</small><strong id="altEntry">—</strong></div>
+  <div><small>Mark</small><strong id="altMark">—</strong></div>
+  <div><small>Liq</small><strong id="altLiq">—</strong></div>
+  <div><small>PnL mở</small><strong id="altPnl">—</strong></div>
+  <div><small>Leverage</small><strong id="altLeverage">—</strong></div>
+  <div><small>SL/TP xác minh</small><strong id="altProtection">—</strong></div>
+ </div>
+ <div class="altAlgos" id="altOrderLevels"><span>Đang xác minh lệnh Binance</span></div>
+ <div class="altActions">
+  <button id="altManualTP1" class="minor" disabled>Chốt TP1 MARKET</button>
+  <button id="altManualTP2" class="minor" disabled>Chốt TP2 MARKET</button>
+  <button id="altManualTP3" class="minor" disabled>Chốt TP3 MARKET</button>
+  <button id="altManualClose" class="minor" disabled>Đóng toàn bộ</button>
+  <button id="altReconcile" class="minor">Đối soát</button>
+  <button id="altHistoryRefresh" class="minor">Làm mới PnL</button>
+  <button id="altRemoveSymbol" class="minor">Xóa mã</button>
+ </div>
+ <div id="altActionStatus" role="status" style="color:#ffc99d;font-size:11px;min-height:16px"></div>
+ <details id="altHistory"><summary style="font-size:11px">Lịch sử thực tế · Coin đang chọn</summary>
+  <div id="altHistorySummary" class="small">Chưa đồng bộ</div>
+  <div class="tableScroll"><table style="font-size:10px;width:100%">
+  <thead><tr><th>Thời gian</th><th>Chiều</th><th>Entry</th><th>Exit</th><th>Net USDT</th><th>Trạng thái</th></tr></thead>
+  <tbody id="altHistoryRows"><tr><td colspan="6">Chưa có giao dịch đối soát</td></tr></tbody></table></div>
+ </details>
+</div></section>
+<section id="unifiedPositions" class="portfolioTable">
+ <strong>Vị thế & AUTO · Tất cả mã</strong><span id="unifiedPortfolioSummary" class="small" style="float:right">Đang đồng bộ Binance…</span>
+ <div class="scroll"><table><thead><tr><th>Coin</th><th>AUTO</th><th>Chiều</th>
+ <th>Khối lượng</th><th>Entry</th><th>PnL mở</th><th>SL/TP</th><th>Xem</th></tr></thead>
+ <tbody id="unifiedPositionsRows"><tr><td colspan="8">Chưa có dữ liệu</td></tr></tbody></table></div>
+</section>
+<dialog id="coinSettingsDialog" class="coinDialog">
+ <h2 id="coinSettingsTitle">Cài đặt coin</h2>
+ <div class="coinForm">
+  <label>Ký quỹ USDT<input id="coinMargin" type="number" min=".01" step="any"></label>
+  <label>Đòn bẩy 1–20x<input id="coinLeverage" type="number" min="1" max="20" step="1"></label>
+  <label>Chiều<select id="coinSide"><option value="BOTH">LONG & SHORT</option><option value="LONG">LONG</option><option value="SHORT">SHORT</option></select></label>
+  <label>Entry<select id="coinEntryMode"><option value="MARKET">MARKET</option><option value="LIMIT_PULLBACK">LIMIT Pullback</option></select></label>
+  <label>SL (%)<input id="coinSl" type="number" step="any" min=".1"></label>
+  <label>TP mode<select id="coinTpMode"><option value="Percent">Percent (%)</option><option value="Points">Points</option></select></label>
+  <label>TP1<input id="coinTp1" type="number" step="any"></label>
+  <label>TP2<input id="coinTp2" type="number" step="any"></label>
+  <label>TP3<input id="coinTp3" type="number" step="any"></label>
+  <label>Chốt TP1 (%)<input id="coinQty1" type="number" step="any"></label>
+  <label>Chốt TP2 (%)<input id="coinQty2" type="number" step="any"></label>
+  <label>Đảo chiều OCC<select id="coinReverse"><option value="false">OFF</option><option value="true">ON</option></select></label>
+  <label>Mốc LIMIT<select id="coinLimitBasis"><option value="OCC_CROSS">Giá giao cắt</option><option value="M15_CLOSE">Giá đóng nến</option><option value="OCC_TRIGGER">Giá kích hoạt</option></select></label>
+  <label>Lệch LIMIT (%)<input id="coinLimitOffset" type="number" step="any"></label>
+  <label>Chờ LIMIT (s)<input id="coinLimitWait" type="number" step="1"></label>
+ </div>
+ <p class="small">Cùng logic OCC BTC; mỗi mã có ký quỹ, leverage, SL/TP và checkpoint riêng. Không sửa khi vị thế/lệnh chưa đối soát.</p>
+ <div id="coinSettingsMsg" class="small" style="color:#fac99a"></div>
+ <div class="coinButtons">
+  <button id="coinCopyBTC" class="minor">Sao chép từ BTC</button>
+  <button id="coinSave" class="primary">Lưu cấu hình</button>
+  <button id="coinApplyLeverage" class="minor">Đồng bộ leverage Binance</button>
+  <button id="coinSettingsClose" class="minor">Đóng</button>
+ </div>
+</dialog>
 <details class="historyDrawer" id="historyDrawer">
  <summary class="historyDrawerSummary"><strong>Hiệu suất · Lịch sử</strong><button type="button" id="closeHistoryBtn" class="historyModalClose" aria-label="Đóng lịch sử">×</button>
   <span id="historyDrawerBrief">Đang đối soát lệnh và P&L…</span>
@@ -1657,5 +1764,258 @@ $('squareEnabled').onchange=async e=>{
 squareRefresh();
 setInterval(squareRefresh,30000);
 
+
+// Unified coin selector: the existing BTC controls are preserved, while
+// every additional symbol uses the SAME protected OCC executor and chart.
+const unifiedUI=(()=>{
+ const el=id=>document.getElementById(id);
+ let selected='BTCUSDT',model=null,analysis=null,loading=false,lastRead=0;
+ const current=()=>model?.rows?.find(row=>row.symbol===selected)||null;
+ const msg=text=>{el('altActionStatus').textContent=String(text||'');};
+ async function control(action,data={}){
+  const r=await fetch('/control/unified/'+action,{method:'POST',
+   headers:{'Content-Type':'application/json','X-OCC-Local':'1'},
+   body:JSON.stringify(data)});
+  const result=await r.json();if(!r.ok)throw Error(result.error||'Thao tác Binance không thành công');
+  return result;
+ }
+ async function get(path){
+  const r=await fetch(path,{cache:'no-store'}),body=await r.json();
+  if(!r.ok)throw Error(body.error||'Không đọc được trạng thái Binance');
+  return body;
+ }
+ function choose(symbol){
+  if(!model?.rows?.some(x=>x.symbol===symbol))return;
+  if(selected===symbol)return;
+  selected=symbol;analysis=null;lastRead=0;
+  const alt=symbol!=='BTCUSDT';
+  document.body.classList.toggle('coinAlt',alt);
+  el('altPositionSection').hidden=!alt;
+  el('currentSymbolLabel').textContent='OCC / '+symbol;
+  el('selectedChartTitle').textContent=symbol+' · Lệnh OCC';
+  el('selectedChartExpand').href='/occ-compare?view=real&symbol='+encodeURIComponent(symbol);
+  el('tradeCompareFrame').src='/occ-compare?embed=1&view=real&symbol='+encodeURIComponent(symbol);
+  if(alt)el('historyDrawer').open=false;
+  render();
+  if(alt)readSelected().catch(e=>msg(e.message));
+ }
+ function render(){
+  if(!model)return;
+  const list=el('symbolTabs');list.replaceChildren();
+  for(const row of model.rows){
+   const btn=document.createElement('button');btn.type='button';btn.textContent=row.symbol;
+   btn.className=(selected===row.symbol?'active ':'')+(row.armed?'armed':'');
+   btn.title=row.error||'Chọn biểu đồ và vị thế '+row.symbol;
+   btn.onclick=()=>choose(row.symbol);list.append(btn);
+  }
+  const row=current();if(!row)return;
+  el('includeInAll').checked=row.selected===true;
+  el('unifiedPositionCount').textContent=String(model.openPositions??0);
+  el('unifiedStatus').textContent=(model.armedCount||0)+' AUTO ON · '+(model.openPositions||0)+' vị thế';
+  el('altAutoToggle').checked=!!row.armed;
+  el('altBotStatus').textContent=row.halted?'KHÓA AN TOÀN':row.armed?'AUTO ON':'AUTO OFF';
+  el('altAutoToggle').disabled=!!row.busy||!model.connected||row.halted;
+  el('altPositionTitle').textContent='Vị thế OCC · '+selected;
+  const table=el('unifiedPositionsRows');table.replaceChildren();
+  for(const v of model.rows){
+   const tr=document.createElement('tr'),a=v.account,p=Number(a?.positionQty||0);
+   const vals=[v.symbol,v.halted?'KHÓA':v.armed?'ON':'OFF',
+    !a?'CHƯA KẾT NỐI':p>0?'LONG':p<0?'SHORT':'FLAT',
+    a?fmt(Math.abs(p),8):'—',a?fmt(a.entryPrice,6):'—',
+    a?fmt(a.unrealizedUSDT,3):'—',
+    v.protectedPosition?.stop?'Đã ghi checkpoint':a?.openAlgos?'Cần đối soát':'—'];
+   for(const val of vals){const td=document.createElement('td');td.textContent=val;tr.append(td);}
+   const td=document.createElement('td'),btn=document.createElement('button');btn.type='button';
+   btn.className='minor';btn.textContent='Xem';btn.onclick=()=>choose(v.symbol);
+   td.append(btn);tr.append(td);table.append(tr);
+  }
+  el('unifiedPortfolioSummary').textContent='SL/TP chỉ xác nhận sau khi kiểm tra Binance · dữ liệu từ sàn';
+ }
+ async function refresh(){
+  if(loading)return;loading=true;
+  try{
+   model=await get('/api/unified/status');
+   if(!model.rows.some(x=>x.symbol===selected))selected='BTCUSDT';
+   render();
+   if(selected!=='BTCUSDT'&&Date.now()-lastRead>15000)await readSelected();
+  }catch(e){el('unifiedStatus').textContent='Chưa đồng bộ: '+e.message;}
+  finally{loading=false;}
+ }
+ async function readSelected(){
+  if(selected==='BTCUSDT')return;
+  const symbol=selected, row=current();lastRead=Date.now();
+  el('altQty').textContent='Đang đọc…';
+  try{
+   const [pos,quote]=await Promise.all([
+    get('/api/unified/position?symbol='+encodeURIComponent(symbol)),
+    get('/api/unified/quote?symbol='+encodeURIComponent(symbol))
+   ]);
+   if(symbol!==selected)return;
+   analysis=pos;
+   const p=pos.position;
+   el('altQty').textContent=p?p.side+' · '+fmt(p.quantityBTC,8):'FLAT';
+   el('altEntry').textContent=p?fmt(p.entryPrice,8):'—';
+   el('altMark').textContent=p?fmt(p.markPrice,8):'—';
+   el('altLiq').textContent=p?fmt(p.liquidationPrice,8):'—';
+   el('altPnl').textContent=p?fmt(p.unrealizedUSDT,4)+' USDT':'0 USDT';
+   el('altLeverage').textContent=(row?.account?.leverage||'—')+'x';
+   el('altLastPrice').textContent=fmt(quote.price,8);
+   el('altPriceStatus').textContent=symbol+' · cập nhật '+vn(quote.at);
+   const verified=(pos.levels||[]).filter(o=>o.confirmed&&o.origin!=='CHƯA_XÁC_MINH');
+   el('altProtection').textContent=pos.ownershipVerified?
+    verified.length+' Algo xác minh':p?'CHƯA XÁC MINH':'—';
+   const levels=el('altOrderLevels');levels.replaceChildren();
+   for(const o of verified){
+    const e=document.createElement('span');
+    e.textContent=(o.clientId?.match(/-(SL|TP[123])$/)?.[1]||o.role)+
+     ' '+fmt(o.price,8)+' · '+(o.active?'LIVE':'KHÔNG HOẠT ĐỘNG');
+    levels.append(e);
+   }
+   if(!verified.length){const e=document.createElement('span');
+    e.textContent=p?'Không xác minh được SL/TP đang hoạt động. Kiểm tra trực tiếp Binance.':'Không có SL/TP đang mở';levels.append(e);}
+   const actions={TP1:'altManualTP1',TP2:'altManualTP2',TP3:'altManualTP3',ALL:'altManualClose'};
+   for(const [role,id] of Object.entries(actions))
+    el(id).disabled=!pos.manual?.allowed||!pos.manual?.[role];
+   msg((pos.warnings||[]).slice(0,2).join(' · '));
+  }catch(e){msg('Không xác minh được vị thế '+symbol+': '+e.message);
+   for(const id of ['altManualTP1','altManualTP2','altManualTP3','altManualClose'])el(id).disabled=true;}
+ }
+ function fillCoinConfig(cfg){
+  const map={coinMargin:'marginUSDT',coinLeverage:'leverage',coinSide:'side',
+   coinEntryMode:'entryMode',coinSl:'slPercent',coinTpMode:'tpMode',
+   coinTp1:'tp1Val',coinTp2:'tp2Val',coinTp3:'tp3Val',
+   coinQty1:'tp1Qty',coinQty2:'tp2Qty',coinReverse:'reverseOnSignal',
+   coinLimitBasis:'limitBasis',coinLimitOffset:'limitOffsetPct',coinLimitWait:'limitWaitSeconds'};
+  for(const [id,key] of Object.entries(map))el(id).value=String(cfg[key]);
+ }
+ function readCoinConfig(){
+  return {marginUSDT:Number(el('coinMargin').value),
+   leverage:Number(el('coinLeverage').value),side:el('coinSide').value,
+   entryMode:el('coinEntryMode').value,slPercent:Number(el('coinSl').value),
+   tpMode:el('coinTpMode').value,tp1Val:Number(el('coinTp1').value),
+   tp2Val:Number(el('coinTp2').value),tp3Val:Number(el('coinTp3').value),
+   tp1Qty:Number(el('coinQty1').value),tp2Qty:Number(el('coinQty2').value),
+   reverseOnSignal:el('coinReverse').value==='true',
+   limitBasis:el('coinLimitBasis').value,
+   limitOffsetPct:Number(el('coinLimitOffset').value),
+   limitWaitSeconds:Number(el('coinLimitWait').value)};
+ }
+ el('openCoinSettings').onclick=()=>{
+  const row=current();if(!row||selected==='BTCUSDT')return;
+  el('coinSettingsTitle').textContent='Cài đặt riêng · '+selected;
+  fillCoinConfig(row.config);
+  el('coinSettingsMsg').textContent='';
+  el('coinSettingsDialog').showModal();
+ };
+ el('coinSettingsClose').onclick=()=>el('coinSettingsDialog').close();
+ el('coinCopyBTC').onclick=()=>{
+  const btc=model?.rows?.find(x=>x.symbol==='BTCUSDT');
+  if(btc){fillCoinConfig(btc.config);el('coinSettingsMsg').textContent='Đã sao chép cấu hình BTC vào form; chưa lưu.';}
+ };
+ el('coinSave').onclick=async()=>{
+  const symbol=selected;
+  try{await control('config',{symbol,config:readCoinConfig()});
+   el('coinSettingsMsg').textContent='Đã lưu thông số '+symbol+'; AUTO không tự bật.';
+   await refresh();
+  }catch(e){el('coinSettingsMsg').textContent=e.message;}
+ };
+ el('coinApplyLeverage').onclick=async()=>{
+  const symbol=selected,leverage=Number(el('coinLeverage').value);
+  if(!confirm('ÁP DỤNG '+leverage+'x LÊN BINANCE '+symbol+' THẬT? Chỉ thực hiện khi không có vị thế/lệnh mở.'))return;
+  try{await control('config',{symbol,config:readCoinConfig()});
+   await control('leverage',{symbol,requestedLeverage:leverage});
+   el('coinSettingsMsg').textContent='Binance xác minh leverage '+symbol+' '+leverage+'x';
+   await refresh();
+  }catch(e){el('coinSettingsMsg').textContent=e.message;}
+ };
+ el('addSymbolBtn').onclick=async()=>{
+  const input=el('addSymbolInput');let symbol=input.value.trim().toUpperCase();
+  if(!symbol)return;
+  if(!symbol.endsWith('USDT'))symbol+='USDT';
+  try{await control('add',{symbol});input.value='';await refresh();choose(symbol);}
+  catch(e){el('unifiedStatus').textContent=e.message;}
+ };
+ el('addSymbolInput').addEventListener('keydown',e=>{
+  if(e.key==='Enter'){e.preventDefault();el('addSymbolBtn').click();}
+ });
+ el('includeInAll').onchange=async()=>{
+  try{await control('select',{symbol:selected,enabled:el('includeInAll').checked});await refresh();}
+  catch(e){el('unifiedStatus').textContent=e.message;await refresh();}
+ };
+ el('altAutoToggle').onchange=async()=>{
+  const symbol=selected,on=el('altAutoToggle').checked;
+  try{
+   if(on){
+    if(!confirm('BẬT AUTO '+symbol+' FUTURES TIỀN THẬT theo OCC, có thể mất vốn?')){el('altAutoToggle').checked=false;return;}
+    const confirmation=prompt('Nhập CHAP NHAN '+symbol+' FUTURES:');
+    if(confirmation!=='CHAP NHAN '+symbol+' FUTURES')throw Error('Chưa xác nhận');
+    await control('on',{symbol,confirmation});
+   }else await control('off',{symbol});
+   await refresh();
+  }catch(e){msg(e.message);await refresh();}
+ };
+ el('autoAllOn').onclick=async()=>{
+  if(!confirm('BẬT AUTO TẤT CẢ coin đã chọn bằng tiền thật? Mỗi coin có vị thế, ký quỹ và SL/TP riêng.'))return;
+  const confirmation=prompt('Nhập CHAP NHAN AUTO TAT CA:');
+  if(confirmation!=='CHAP NHAN AUTO TAT CA')return;
+  try{await control('on-all',{confirmation});await refresh();}
+  catch(e){el('unifiedStatus').textContent=e.message;}
+ };
+ el('autoAllOff').onclick=async()=>{
+  if(!confirm('TẮT AUTO tất cả coin? Lệnh SL/TP trên Binance vẫn giữ nguyên.'))return;
+  try{await control('off-all');await refresh();}
+  catch(e){el('unifiedStatus').textContent=e.message;}
+ };
+ async function manual(role){
+  const symbol=selected,p=analysis?.position;
+  if(!p||!analysis?.manual?.allowed||!current()?.protectedPosition?.entry)return;
+  if(!confirm('CHỐT '+role+' '+symbol+' BẰNG MARKET reduceOnly TIỀN THẬT?'))return;
+  const confirmation=prompt('Nhập XAC NHAN '+role+' '+symbol+':');
+  if(confirmation!=='XAC NHAN '+role+' '+symbol)return;
+  try{
+   await control('manual-exit',{symbol,role,confirmation,
+    expectedEntryOrderId:analysis.manual.entryOrderId,
+    expectedRemainingBTC:analysis.manual.remainingBTC});
+   await refresh();await readSelected();
+  }catch(e){msg(e.message);}
+ }
+ for(const [role,id] of Object.entries({TP1:'altManualTP1',TP2:'altManualTP2',TP3:'altManualTP3',ALL:'altManualClose'}))
+  el(id).onclick=()=>manual(role);
+ el('altReconcile').onclick=async()=>{
+  const symbol=selected;if(!confirm('Đối soát '+symbol+' với Binance? AUTO phải OFF.'))return;
+  try{await control('reconcile',{symbol});await refresh();await readSelected();}
+  catch(e){msg(e.message);}
+ };
+ el('altRemoveSymbol').onclick=async()=>{
+  const symbol=selected;
+  if(!confirm('Xóa '+symbol+' khỏi danh sách? Chỉ khi Binance FLAT và không còn lệnh/checkpoint.'))return;
+  try{await control('remove',{symbol});await refresh();choose('BTCUSDT');}
+  catch(e){msg(e.message);}
+ };
+ async function readHistory(){
+  const symbol=selected;if(symbol==='BTCUSDT')return;
+  try{
+   const result=await get('/api/unified/report?symbol='+encodeURIComponent(symbol));
+   if(symbol!==selected)return;
+   const sum=result.summary||{},rows=el('altHistoryRows');rows.replaceChildren();
+   el('altHistorySummary').textContent='Đã đóng '+(sum.closed||0)+' · Net sau phí (chưa funding) '+
+    fmt(sum.netExFundingUSDT,3)+' USDT'+(result.warnings?.length?' · Cần kiểm tra nguồn dữ liệu':'');
+   for(const t of (result.positions||[]).slice(0,25)){
+    const tr=document.createElement('tr'),vals=[
+     t.entryAt?vn(t.entryAt):'—',t.side||'—',fmt(t.entryPrice,8),
+     fmt(t.exitPrice,8),fmt(t.netExFundingUSDT,3),t.status||'—'];
+    for(const value of vals){const td=document.createElement('td');td.textContent=value;tr.append(td);}
+    rows.append(tr);
+   }
+  }catch(e){el('altHistorySummary').textContent='Chưa xác minh PnL: '+e.message;}
+ }
+ el('altHistoryRefresh').onclick=async()=>{
+  try{await control('history-refresh',{symbol:selected});await readHistory();}
+  catch(e){msg(e.message);}
+ };
+ el('altHistory').addEventListener('toggle',()=>{if(el('altHistory').open)readHistory();});
+ refresh();setInterval(refresh,6500);
+ return {refresh,choose,readSelected};
+})();
 </script>
 </body></html>

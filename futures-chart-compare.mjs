@@ -42,7 +42,7 @@ export function readVerifiedChartHistory(path,since=Date.now()-30*86400000){
 export function readVerifiedChartFills(path,since=Date.now()-14*86400000){
  return readVerifiedChartHistory(path,since).fills;
 }
-export function buildOCCChartComparison({h4,m15,fills=[],signalLinks=[],settings={},now=Date.now()}){
+export function buildOCCChartComparison({h4,m15,fills=[],signalLinks=[],settings={},now=Date.now(),symbol='BTCUSDT'}){
  if(!Array.isArray(h4)||!Array.isArray(m15)||!Array.isArray(fills)||
     !Array.isArray(signalLinks))throw Error('Binance candles/fills unavailable');
  const candles=m15.map(clean).filter(b=>b&&Number.isSafeInteger(b.time)&&b.time>0&&
@@ -58,7 +58,7 @@ export function buildOCCChartComparison({h4,m15,fills=[],signalLinks=[],settings
  // Warm up only with the first completed M15: the signal engine intentionally
  // caps its internal history at 1200. Capture EACH next sample before eviction
  // to support 30 full days without a truncated OCC overlay.
- const engine=new OCCSignalEngine(),first=candles[0];
+ const engine=new OCCSignalEngine({symbol}),first=candles[0];
  engine.warmup(h4,[first],first.closeTime+1);
  const samples=[engine.history.at(-1)],signals=[],series=[];
  let previous=samples[0].closeSeries-samples[0].openSeries;
@@ -176,8 +176,8 @@ export function buildOCCChartComparison({h4,m15,fills=[],signalLinks=[],settings
  }
  historyGroups.sort((a,b)=>b.entryTime-a.entryTime);
  comparisons.sort((a,b)=>b.fillTime-a.fillTime);
- return {symbol:'BTCUSDT',interval:'15m',asOf:now,
-  note:'OCC computed causally from completed BTCUSDT Binance candles. Not actual TradingView Pine Strategy Tester fills. Only exchange-verified fills are plotted. Historical signal/order associations are unverified unless a durable matching Entry Order ID record exists.',
+ return {symbol,interval:'15m',asOf:now,
+  note:'OCC computed causally from completed Binance USDT perpetual candles. Not actual TradingView Pine Strategy Tester fills. Only exchange-verified fills are plotted. Historical signal/order associations are unverified unless a durable matching Entry Order ID record exists.',
   candles:candles.slice(-3500),series:series.slice(-3500),signals:signals.slice(-3500),
   fills:validFills.slice(-5800),historyGroups:historyGroups.slice(0,500),
   tradeSequences:buildVerifiedTradeSequences(historyGroups,validFills),

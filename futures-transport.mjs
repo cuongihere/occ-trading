@@ -8,15 +8,17 @@ const GETS=new Set(['/fapi/v1/time','/fapi/v1/exchangeInfo','/fapi/v1/ticker/pri
 const POSTS=new Set(['/fapi/v1/order','/fapi/v1/algoOrder','/fapi/v1/leverage']);
 const DELETES=new Set(['/fapi/v1/algoOrder','/fapi/v1/order']);
 export class FuturesTransport{
- constructor({apiKey,apiSecret,fetchFn=fetch,clock=Date.now,environment='demo',productionConsent=null,allowedSymbols=['BTCUSDT']}){
+ constructor({apiKey,apiSecret,fetchFn=fetch,clock=Date.now,environment='demo',productionConsent=null,allowedSymbols=['BTCUSDT'],unifiedConsent=null}){
   if(!apiKey||!apiSecret)throw Error('Missing API credentials');
   if(!Object.hasOwn(HOSTS,environment))throw Error('Unsupported Binance Futures environment');
   if(environment==='production'&&productionConsent!=='I_ACCEPT_LIVE_BTCUSDT')
    throw Error('Explicit real-money constructor consent required');
-  // BTCUSDT is the only permitted signed-trading symbol in this application.
-  // Reject any dynamic allowlist rather than relying only on UI/API routing.
-  if(!Array.isArray(allowedSymbols)||allowedSymbols.length!==1||allowedSymbols[0]!=='BTCUSDT')
-   throw Error('Only BTCUSDT permitted for Futures trading');
+  // One explicit symbol per signed transport. BTC remains the default and
+  // additional symbols require a trusted opt-in from the unified workbench.
+  if(!Array.isArray(allowedSymbols)||allowedSymbols.length!==1||
+     !/^[A-Z0-9]{2,20}USDT$/.test(allowedSymbols[0])||
+     (allowedSymbols[0]!=='BTCUSDT'&&unifiedConsent!=='OCC_UNIFIED_SYMBOL_EXECUTOR'))
+   throw Error('Only explicitly approved USDT perpetual symbols permitted for Futures trading');
   this.allowedSymbols=new Set(allowedSymbols);
   this.baseUrl=HOSTS[environment];this.environment=environment;
   this.key=apiKey;this.secret=apiSecret;this.fetchFn=fetchFn;this.clock=clock;this.offset=0;
@@ -41,7 +43,7 @@ export class FuturesTransport{
     const deadline=Number(params.goodTillDate),now=this.clock()+this.offset;
     if(!this.allowedSymbols.has(params.symbol)||!['BUY','SELL'].includes(params.side)||
        params.positionSide!=='BOTH'||params.timeInForce!=='GTD'||
-       params.newOrderRespType!=='ACK'||!/^OCCBTC-[0-9a-f]{14}$/.test(params.newClientOrderId||'')||
+       params.newOrderRespType!=='ACK'||!/^OCC(?:BTC|M)-[0-9a-f]{14}$/.test(params.newClientOrderId||'')||
        !(Number(params.quantity)>0)||!(Number(params.price)>0)||
        !Number.isFinite(deadline)||deadline<=now+600000||deadline>=now+1800000||
        Object.keys(params).some(k=>!allowed.includes(k)))
@@ -49,7 +51,7 @@ export class FuturesTransport{
    }else if(params.type!=='MARKET')throw Error('Only MARKET or verified GTD LIMIT orders permitted');
   }
   if(method==='DELETE'&&path==='/fapi/v1/order'){
-   if(!this.allowedSymbols.has(params.symbol)||!/^OCCBTC-[0-9a-f]{14}$/.test(params.origClientOrderId||'')||
+   if(!this.allowedSymbols.has(params.symbol)||!/^OCC(?:BTC|M)-[0-9a-f]{14}$/.test(params.origClientOrderId||'')||
      !/^[0-9]{1,24}$/.test(String(params.orderId||''))||
      Object.keys(params).some(k=>!['symbol','orderId','origClientOrderId'].includes(k)))
     throw Error('Only exact OCC BTCUSDT LIMIT cancellation permitted');
