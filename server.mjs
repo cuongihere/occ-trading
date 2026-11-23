@@ -168,9 +168,20 @@ const server=createServer(async(req,res)=>{
     else if(action==='remove')result=await portfolio.remove(symbol);
     else if(action==='select')result=portfolio.select(symbol,p.enabled);
     else if(action==='config')result=portfolio.configure(symbol,p.config);
-    else if(action==='on')result=await portfolio.enable(symbol,p.confirmation);
+    else if(action==='on'){
+     if(symbol==='BTCUSDT'&&(!feed.healthy()||!liveSignalEngine.ready||!liveSignalEngine.healthy))
+      throw Error('BTC feed M15 chưa đồng bộ, không bật AUTO');
+     const price=symbol==='BTCUSDT'?
+      btcMarketQuote.snapshot({healthy:feed.healthy(),state:feed.state}).lastPrice:null;
+     result=await portfolio.enable(symbol,p.confirmation,price);
+    }
     else if(action==='off')result=await portfolio.disable(symbol);
-    else if(action==='on-all')result=await portfolio.enableSelected(p.confirmation);
+    else if(action==='on-all'){
+     if(portfolio.btcSelected&&(!feed.healthy()||!liveSignalEngine.ready||!liveSignalEngine.healthy))
+      throw Error('BTC feed M15 chưa đồng bộ, không bật AUTO tổng có BTC');
+     const btcPrice=btcMarketQuote.snapshot({healthy:feed.healthy(),state:feed.state}).lastPrice;
+     result=await portfolio.enableSelected(p.confirmation,btcPrice);
+    }
     else if(action==='off-all')result=await portfolio.disableAll();
     else if(action==='leverage')result=await portfolio.get(symbol).applyExchangeLeverage({
      requestedLeverage:p.requestedLeverage,confirmation:'SYNC_'+symbol+'_LEVERAGE'
