@@ -19,6 +19,7 @@ export function draftProtectedOrder({side,account,filters,quotePrice},settings){
  const price=num(quotePrice,'quotePrice');
  const s=sizeBTC({entry:price,availableUSDT:num(account.availableUSDT,'availableUSDT'),
   step:num(filters.stepSize,'stepSize'),minQty:num(filters.minQty,'minQty'),
+  maxQty:Number(filters.maxQty)>0?Number(filters.maxQty):Infinity,
   minNotional:num(filters.minNotional,'minNotional')},c);
  const levels=liveTargets(price,side,c),tick=num(filters.tickSize,'tickSize');
  const stop=roundTick(levels.stop,tick,side==='LONG'?'down':'up');
