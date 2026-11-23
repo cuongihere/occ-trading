@@ -8,7 +8,7 @@ import {ProtectionCoordinator} from './futures-protection-orchestrator.mjs';
 import {protectionRequests} from './futures-protection-plan.mjs';
 import {readVerifiedLimit} from './futures-limit-entry.mjs';
 
-const ROOT=/^OCCBTC-[0-9a-f]{14}$/;
+const ROOT=/^OCC(?:BTC|M)-[0-9a-f]{14}$/;
 const near=(a,b,tol=1e-8)=>Number.isFinite(Number(a))&&
  Number.isFinite(Number(b))&&Math.abs(Number(a)-Number(b))<=tol;
 const qtyToSide=amount=>amount>0?'LONG':amount<0?'SHORT':null;
@@ -54,12 +54,12 @@ export function installProtectionRepair(BrowserFutures){
   if(checkpoint?.inFlight||['SL_SENDING','TP_SENDING'].includes(checkpoint?.phase))
    throw Error('Checkpoint có SL/TP đã gửi nhưng ACK chưa rõ; không thử gửi trùng');
 
-  const orders=await this.api.get('/fapi/v1/allOrders',{symbol:'BTCUSDT',limit:500});
+  const orders=await this.api.get('/fapi/v1/allOrders',{symbol:this.symbol,limit:500});
   if(!Array.isArray(orders)||orders.length>=500)
    throw Error('Không kiểm chứng được đầy đủ danh sách Order ID gần nhất của Binance');
   const matches=orders.filter(o=>{
    const price=Number(o.avgPrice),filled=Number(o.executedQty);
-   return o.symbol==='BTCUSDT'&&ROOT.test(String(o.clientOrderId||''))&&
+   return o.symbol===this.symbol&&ROOT.test(String(o.clientOrderId||''))&&
     o.positionSide==='BOTH'&&o.status==='FILLED'&&
     ['MARKET','LIMIT'].includes(o.type)&&
     o.side===sideToBinance(side)&&near(filled,qty)&&
@@ -72,8 +72,8 @@ export function installProtectionRepair(BrowserFutures){
   if(completedLimit&&(String(chosen.orderId)!==String(completedLimit.orderId)||
     clientId!==completedLimit.clientOrderId))
    throw Error('LIMIT đã khớp không trùng Order ID Entry OCC; cần kiểm tra thủ công');
-  const order=await this.api.get('/fapi/v1/order',{symbol:'BTCUSDT',orderId:chosen.orderId});
-  if(order.symbol!=='BTCUSDT'||String(order.orderId)!==String(chosen.orderId)||
+  const order=await this.api.get('/fapi/v1/order',{symbol:this.symbol,orderId:chosen.orderId});
+  if(order.symbol!==this.symbol||String(order.orderId)!==String(chosen.orderId)||
     order.clientOrderId!==clientId||order.status!=='FILLED'||
     order.side!==sideToBinance(side)||order.positionSide!=='BOTH'||
     !near(order.executedQty,qty)||!near(order.avgPrice,chosen.avgPrice,this.filters.tickSize))
@@ -87,7 +87,7 @@ export function installProtectionRepair(BrowserFutures){
   if(intent?.clientId&&ROOT.test(String(intent.clientId))&&intent.clientId!==clientId&&
      !['CLEARED','PROTECTED'].includes(intent.phase))
    throw Error('Intent cũ thuộc Entry OCC khác chưa đối soát; không khôi phục lệnh mới');
-  const history=await this.api.get('/fapi/v1/allAlgoOrders',{symbol:'BTCUSDT',limit:500});
+  const history=await this.api.get('/fapi/v1/allAlgoOrders',{symbol:this.symbol,limit:500});
   if(!Array.isArray(history)||history.length>=500)
    throw Error('Không kiểm tra được lịch sử Algo Binance đầy đủ');
   const priorAlgos=history.filter(x=>String(x.clientAlgoId||'').startsWith(clientId+'-'));
@@ -95,7 +95,7 @@ export function installProtectionRepair(BrowserFutures){
   // fresh unique Algo prefix. FINISHED/active/unrecognized history blocks.
   const inert=new Set(['CANCELED','CANCELLED','REJECTED','EXPIRED']);
   if(priorAlgos.some(x=>!inert.has(String(x.algoStatus||'').toUpperCase())||
-    !/^OCCBTC-[0-9a-f]{14}-(SL|TP[123])$/.test(String(x.clientAlgoId||''))))
+    !/^OCC(?:BTC|M)-[0-9a-f]{14}-(SL|TP[123])$/.test(String(x.clientAlgoId||''))))
    throw Error('SL/TP cũ có thể đã kích hoạt hoặc trạng thái chưa rõ; không đặt trùng');
   const recorded=[checkpoint?.stop,...(checkpoint?.tps||[])].filter(Boolean);
   for(const old of recorded){
@@ -114,7 +114,7 @@ export function installProtectionRepair(BrowserFutures){
     latest.openOrders||latest.openAlgos)
    throw Error('Binance vị thế hoặc SL/TP thay đổi khi kiểm tra; không gửi lệnh');
 
-  return {symbol:'BTCUSDT',side,orderId:String(order.orderId),
+  return {symbol:this.symbol,side,orderId:String(order.orderId),
    clientId,qty,entryPrice:a.entryPrice,leverage:a.leverage,
    useFreshAlgoPrefix,pendingLimitRecovered:Boolean(completedLimit),
    stopPrice:Number(requests.stop.triggerPrice),tps:requests.tps.map((x,i)=>({
@@ -124,7 +124,7 @@ export function installProtectionRepair(BrowserFutures){
  BrowserFutures.prototype.repairMissingProtection=async function({
   confirmation,expectedOrderId,expectedQty,expectedEntryPrice,expectedSide
  }={}){
-  if(confirmation!=='KHOI PHUC SL TP BTCUSDT')
+  if(confirmation!=='KHOI PHUC SL TP '+this.symbol)
    throw Error('Chưa xác nhận đặt SL/TP bằng tiền thật');
   if(this.busy)throw Error('OCC đang gửi/đối soát một lệnh khác');
   this.busy=true;
@@ -142,7 +142,7 @@ export function installProtectionRepair(BrowserFutures){
 
    // Durable intent precedes the first potential exchange mutation.
    const algoPrefix=preview.useFreshAlgoPrefix?
-    'OCCBTC-'+randomBytes(7).toString('hex'):preview.clientId;
+    (this.symbol==='BTCUSDT'?'OCCBTC-':'OCCM-')+randomBytes(7).toString('hex'):preview.clientId;
    this.saveIntent({phase:'PROTECTION_REPAIR_START',clientId:preview.clientId,
     algoPrefix,orderId:preview.orderId,side:preview.side,qty:preview.qty,
     entryPrice:preview.entryPrice,at:Date.now()});
@@ -153,7 +153,7 @@ export function installProtectionRepair(BrowserFutures){
    // The previous HALTED checkpoint was read and audited above. The coordinator
    // starts a fresh, one-shot recovery, never resending previously attempted Algo IDs.
    const isolated={load:()=>null,save:state=>disk.save(state)};
-   const coordinator=new ProtectionCoordinator({api:this.api,checkpoint:isolated,
+   const coordinator=new ProtectionCoordinator({symbol:this.symbol,api:this.api,checkpoint:isolated,
     settings:this.config,notify:event=>this.log('CRITICAL',event.reason)});
    const result=await coordinator.protectConfirmedEntry({
     entryOrderId:preview.orderId,side:preview.side,
