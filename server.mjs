@@ -1,4 +1,4 @@
-// BTCUSDT Futures only. Paper Trading and all paper order endpoints removed.
+// Unified multi-symbol Futures workbench. Paper Trading and all paper endpoints removed.
 import {createServer} from 'node:http';
 import {mkdirSync,readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
@@ -10,6 +10,7 @@ import {readLiveReport} from './binance-live-stats.mjs';
 import {buildOCCChartComparison,readVerifiedChartHistory} from './futures-chart-compare.mjs';
 import {BrowserFutures} from './futures-browser-service.mjs';
 import {SquarePublisher} from './square-publisher.mjs';
+import {UnifiedPortfolio,validSymbol} from './unified-portfolio.mjs';
 
 const args=new Set(process.argv.slice(2));
 if(args.has('--help')){console.log('node server.mjs | BTCUSDT Futures only | DATA_DIR and PORT optional');process.exit(0);}
@@ -19,6 +20,7 @@ const lock=new DatabaseSync(resolve(dir,'runner-lock.sqlite'));
 try{lock.exec('PRAGMA busy_timeout=0; BEGIN EXCLUSIVE; CREATE TABLE IF NOT EXISTS lock_owner(id INTEGER);');}
 catch{console.error('Another OCC Futures process owns this data directory.');process.exit(1);}
 const browserFutures=new BrowserFutures({dataDir:dir});
+const portfolio=new UnifiedPortfolio({dataDir:dir,btc:browserFutures});
 const liveSignalEngine=new OCCSignalEngine();
 const btcMarketQuote=new BtcMarketQuote();
 const square=new SquarePublisher({dataDir:dir,fetchKlines:async({symbol='BTCUSDT',filledAt,limit=96})=>{
@@ -50,7 +52,7 @@ const feed=new BinanceFeed({
  onCandle(bar,opts){
   const signal=liveSignalEngine.onCandle(bar,opts);
   if(signal?.eligible&&opts.live&&feed.healthy()&&browserFutures.armed)
-   browserFutures.signal(signal,true,
+   portfolio.handleSignal('BTCUSDT',signal,true,
     ()=>btcMarketQuote.snapshot({healthy:feed.healthy(),state:feed.state}))
     .catch(e=>console.error('Futures AUTO:',e.message));
  },
@@ -62,6 +64,11 @@ const comparisonHtml=readFileSync(new URL('./OCC_COMPARE.html',import.meta.url),
 const tradingViewReferenceHtml=readFileSync(new URL('./OCC_TV_WIDGET.html',import.meta.url),'utf8');
 // Public Binance Futures candles; chart endpoints remain GET/read-only.
 const compareCandleCache=new Map(),compareCandleTasks=new Map();
+const assertConfiguredSymbol=value=>{
+ const symbol=String(value||'BTCUSDT').toUpperCase();
+ if(!validSymbol(symbol)||!portfolio.get(symbol))throw Error('Coin chưa được thêm vào OCC Workbench');
+ return symbol;
+};
 const DAY=86400000,M15=900000,H4=14400000;
 const CHART_DAYS=new Set([1,3,7,14,30]);
 export const chartDaysParam=value=>{
@@ -70,15 +77,15 @@ export const chartDaysParam=value=>{
   throw Error('Unsupported chart range. Choose 1, 3, 7, 14 or 30 days.');
  return d;
 };
-async function getComparisonCandles(days=7){
- const now=Date.now(),cache=compareCandleCache.get(days);
+async function getComparisonCandles(days=7,symbol='BTCUSDT'){
+ const now=Date.now(),cacheKey=symbol+':'+days,cache=compareCandleCache.get(cacheKey);
  if(cache&&cache.expiresAt>now)return cache;
- if(compareCandleTasks.has(days))return compareCandleTasks.get(days);
+ if(compareCandleTasks.has(cacheKey))return compareCandleTasks.get(cacheKey);
  const task=(async()=>{
   const start=Math.floor((now-days*DAY)/M15)*M15;
   const get=async(interval,params)=>{
    const url='https://fapi.binance.com/fapi/v1/klines?'+
-    new URLSearchParams({symbol:'BTCUSDT',interval,...params}).toString();
+    new URLSearchParams({symbol,interval,...params}).toString();
    const response=await fetch(url,{signal:AbortSignal.timeout(12000),cache:'no-store'});
    if(!response.ok)throw Error('Binance candles '+interval+' HTTP '+response.status);
    const data=await response.json();
@@ -107,25 +114,26 @@ async function getComparisonCandles(days=7){
   const last=Number(m15.at(-1)?.[0]);
   if(last<now-3*M15)throw Error('Stale Binance M15 chart history');
   const result={h4:h,m15,days,expiresAt:Date.now()+45000};
-  compareCandleCache.set(days,result);
+  compareCandleCache.set(cacheKey,result);
   return result;
  })();
- compareCandleTasks.set(days,task);
- try{return await task;}finally{compareCandleTasks.delete(days);}
+ compareCandleTasks.set(cacheKey,task);
+ try{return await task;}finally{compareCandleTasks.delete(cacheKey);}
 }
-async function readChartComparison(days=7){
- const {h4,m15}=await getComparisonCandles(days),now=Date.now();
- const saved=readVerifiedChartHistory(resolve(dir,'binance-live-stats.sqlite'),now-30*DAY);
+async function readChartComparison(days=7,symbol='BTCUSDT'){
+ const {h4,m15}=await getComparisonCandles(days,symbol),now=Date.now();
+ const session=portfolio.get(symbol);if(!session)throw Error('Unknown chart symbol');
+ const saved=readVerifiedChartHistory(session.ledgerPath,now-30*DAY);
  const model=buildOCCChartComparison({h4,m15,
   fills:saved.fills,signalLinks:saved.signalLinks,
-  settings:browserFutures.config,now});
+  settings:session.config,now,symbol});
  // A second independent, exchange-signed read-only source gives the current
  // real STOP and TP levels. Never plot guessed SL/TP from the saved config
  // as though they were Binance live orders.
  let livePosition=null,liveReadbackError=null;
- if(browserFutures.api&&!browserFutures.busy){
+ if(session.api&&!session.busy){
   try{
-   const current=await browserFutures.positionAnalysis();
+   const current=await session.positionAnalysis();
    if(current.status==='open'){
     const owned=current.ownershipVerified===true;
     livePosition={verified:owned,fetchedAt:current.fetchedAt,
