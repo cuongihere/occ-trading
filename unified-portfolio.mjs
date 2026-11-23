@@ -176,10 +176,10 @@ export class UnifiedPortfolio{
  async enable(symbol,confirmation,marketPrice=null){
   const s=this.get(symbol);
   if(!s)throw Error('Coin chưa được thêm');
-  if(symbol!=='BTCUSDT')await this.connectPeers();
   if(symbol==='BTCUSDT'&&confirmation!=='CHAP NHAN BTC FUTURES'||
      symbol!=='BTCUSDT'&&confirmation!=='CHAP NHAN '+symbol+' FUTURES')
    throw Error('Chưa xác nhận giao dịch thật '+symbol);
+  if(symbol!=='BTCUSDT')await this.connectPeers();
   await this.inspectPeers(symbol);
   await s.arm('CHAP NHAN BTC FUTURES',marketPrice??await this.quote(symbol));
   this.log(symbol,'AUTO_ON','Đang theo dõi giao cắt OCC mới');
