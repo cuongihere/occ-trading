@@ -9,7 +9,7 @@ test('One Windows trading screen has one Binance fill chart and Auto settings po
  const b=page.indexOf('<section class="kpis">');
  const c=page.indexOf('<section class="topgrid">');
  const d=page.indexOf('<section class="chartWorkbench panel"');
- const e=page.indexOf('<section class="positionSection"');
+ const e=page.indexOf('<section id="btcPositionSection" class="positionSection"');
  const f=page.indexOf('<details class="historyDrawer"');
  assert.ok(a>=0&&b>a&&c>b&&d>c&&e>d&&f>e,'Unified page hierarchy');
  assert.match(page,/id="tradeCompareFrame"[\s\S]*?src="\/occ-compare\?embed=1&view=real"/);
@@ -59,6 +59,6 @@ test('Trading core and native credential storage unchanged by unified dashboard'
  assert.match(build,/'BINANCE_UI_PREVIEW\.html'/);
  assert.match(build,/'OCC_COMPARE\.html'/);
  assert.match(server,/readVerifiedChartHistory/);
- assert.match(server,/browserFutures\.signal\(signal,true,/);
+ assert.match(server,/portfolio\.handleSignal\('BTCUSDT',signal,true,/);
  assert.match(server,/req\.url==='\/binance'/);
 });
