@@ -175,11 +175,16 @@ export class LiveStatsLedger{
  report(){return computeLiveReport(this.orders(),
   this.#db.prepare('SELECT * FROM fills ORDER BY filled_at,CAST(fill_id AS INTEGER)').all(),
   this.incomeEvents(),Date.now(),this.exchangeFills(),this.exchangeCheckedAt(),this.exchangeStartAt(),
-  this.historyMeta('income_checked_at'),this.historyMeta('income_start_at'));}
+  this.historyMeta('income_checked_at'),this.historyMeta('income_start_at'),this.symbol);}
  close(){this.#db.close();}
 }
-export function computeLiveReport(orders,fills,incomes=[],now=Date.now(),exchangeFills=[],exchangeCheckedAt=null,exchangeStartAt=null,incomeCheckedAt=null,incomeStartAt=null){
+export function computeLiveReport(orders,fills,incomes=[],now=Date.now(),exchangeFills=[],exchangeCheckedAt=null,exchangeStartAt=null,incomeCheckedAt=null,incomeStartAt=null,symbol='BTCUSDT'){
  const r=emptyLiveReport(),known=new Map(),groups=new Map();
+ r.symbol=symbol;
+ if(symbol!=='BTCUSDT')r.warnings=[
+  'Chỉ tính lệnh '+symbol+' đã được bot đăng ký ID và đối chiếu với Binance.',
+  'P&L sau phí USDT chưa bao gồm funding, phí không tính bằng USDT và giao dịch không thuộc OCC.'
+ ];
  for(const order of orders){
   known.set(order.order_id,order);
   if(!groups.has(order.group_id))groups.set(order.group_id,[]);
@@ -257,14 +262,14 @@ export function computeLiveReport(orders,fills,incomes=[],now=Date.now(),exchang
  const incomeMonthComplete=Number.isSafeInteger(incomeStartAt)&&incomeStartAt<=monthStart+60000&&
   Number.isSafeInteger(incomeCheckedAt)&&now>=incomeCheckedAt&&
   now-incomeCheckedAt<=15*60000;
- r.incomeAudit30={source:'BINANCE_INCOME_BTCUSDT_30D',checkedAt:incomeCheckedAt,startAt:incomeStartAt,
+ r.incomeAudit30={source:'BINANCE_INCOME_'+symbol+'_30D',checkedAt:incomeCheckedAt,startAt:incomeStartAt,
   complete30d:incomeMonthComplete,entries:monthIncome.length,
   realizedUSDT:incomeMonthComplete?monthSum('REALIZED_PNL'):null,
   commissionUSDT:incomeMonthComplete?monthSum('COMMISSION'):null,
   fundingUSDT:incomeMonthComplete?monthSum('FUNDING_FEE'):null,
   totalUSDT:incomeMonthComplete?Number((monthSum('REALIZED_PNL')+
    monthSum('COMMISSION')+monthSum('FUNDING_FEE')).toFixed(8)):null,
-  warning:'Đây là Income BTCUSDT toàn tài khoản, không phải P&L OCC.'};
+  warning:'Đây là Income '+symbol+' toàn tài khoản, không phải P&L OCC.'};
  const windowStart=now-7*86400000;
  const window=incomes.filter(x=>x.occurred_at>=windowStart&&x.occurred_at<=now&&x.asset==='USDT');
  const total=type=>Number(window.filter(x=>x.income_type===type)
@@ -314,14 +319,14 @@ export function computeLiveReport(orders,fills,incomes=[],now=Date.now(),exchang
  const matched=window.filter(x=>['REALIZED_PNL','COMMISSION'].includes(x.income_type)&&
   x.trade_id&&knownFillIds.has(String(x.trade_id)));
  const roundSum=list=>Number(list.reduce((v,x)=>v+x.amount,0).toFixed(8));
- r.incomeAudit={source:'BINANCE_INCOME_BTCUSDT',startAt:windowStart,endAt:now,
+ r.incomeAudit={source:'BINANCE_INCOME_'+symbol,startAt:windowStart,endAt:now,
   entries:window.length,realizedUSDT:total('REALIZED_PNL'),
   commissionUSDT:total('COMMISSION'),fundingUSDT:total('FUNDING_FEE'),
   totalUSDT:Number((total('REALIZED_PNL')+total('COMMISSION')+total('FUNDING_FEE')).toFixed(8)),
   matchedTradeIncomeUSDT:roundSum(matched),matchedTradeEvents:matched.length,
   unmatchedTradeIncomeUSDT:roundSum(unmatched),
   unmatchedTradeEvents:unmatched.length,available:window.length>0,
-  warning:'Binance Income BTCUSDT có thể gồm cả giao dịch ngoài OCC. Funding không có ID vị thế nên không tự gán vào từng lệnh.'};
+  warning:'Binance Income '+symbol+' có thể gồm cả giao dịch ngoài OCC. Funding không có ID vị thế nên không tự gán vào từng lệnh.'};
  if(s.binanceUnverifiedClosed)r.warnings.push(s.binanceUnverifiedClosed+
   ' lệnh OCC đã đóng chưa đối chiếu đầy đủ với Binance Income theo tradeId.');
  if(r.openPositions.length)r.warnings.push(r.openPositions.length+
@@ -332,8 +337,8 @@ export function computeLiveReport(orders,fills,incomes=[],now=Date.now(),exchang
  r.curve=r.positions.filter(x=>x.netExFundingUSDT!==null).map(x=>({at:x.exitAt,cumulative:cumulative+=x.netExFundingUSDT}));
  r.asOf=Date.now();return r;
 }
-export function readLiveReport(path){
- if(!existsSync(path))return emptyLiveReport();
+export function readLiveReport(path,{symbol='BTCUSDT'}={}){
+ if(!existsSync(path))return { ...emptyLiveReport(),symbol, warnings:['Chưa có fill Binance xác minh cho '+symbol+'.'] };
  const db=new DatabaseSync(path,{readOnly:true});
  try{
   const hasIncome=!!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='income_events'").get();
@@ -350,7 +355,7 @@ export function readLiveReport(path){
    !!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='history_meta'").get()?
     Number(db.prepare("SELECT value FROM history_meta WHERE key='income_checked_at'").get()?.value)||null:null,
    !!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='history_meta'").get()?
-    Number(db.prepare("SELECT value FROM history_meta WHERE key='income_start_at'").get()?.value)||null:null);
+    Number(db.prepare("SELECT value FROM history_meta WHERE key='income_start_at'").get()?.value)||null:null,symbol);
  }
  finally{db.close();}
 }
