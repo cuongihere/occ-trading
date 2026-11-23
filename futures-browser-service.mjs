@@ -195,7 +195,7 @@ export class BrowserFutures{
   ]);
   const analysis=analyzeFuturesPosition({riskRows,algoOrders,openOrders,
    checkpoint:this.activeProtection||this.previousProtection,
-   managed:!!this.activeProtection,leverage:this.account?.leverage,fetchedAt:Date.now()});
+   managed:!!this.activeProtection,leverage:this.account?.leverage,fetchedAt:Date.now(),symbol:this.symbol});
   const compact=projectCompactSLTP({position:analysis.position,config:this.config,filters:this.filters,
    referencePrice,availableUSDT:this.account?.availableUSDT});
   const protectedOrder=this.activeProtection||this.previousProtection;
