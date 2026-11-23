@@ -159,9 +159,33 @@ const server=createServer(async(req,res)=>{
   res.setHeader('Content-Type','application/json');
   if(req.headers.origin!==`http://${host}`||req.headers['x-occ-local']!=='1'){res.writeHead(403);return res.end(JSON.stringify({error:'Local origin required'}));}
   try{let body='';for await(const chunk of req){body+=chunk;if(body.length>4096)throw Error('Request too large');}const p=JSON.parse(body||'{}');
-   if(req.url==='/control/live/connect'){
+   if(req.url.startsWith('/control/unified/')){
+    const action=req.url.slice('/control/unified/'.length);
+    const symbol=action==='add'?String(p.symbol||'').trim().toUpperCase():
+     ['on-all','off-all'].includes(action)?'BTCUSDT':assertConfiguredSymbol(p.symbol);
+    let result;
+    if(action==='add')result=await portfolio.add(symbol);
+    else if(action==='remove')result=await portfolio.remove(symbol);
+    else if(action==='select')result=portfolio.select(symbol,p.enabled);
+    else if(action==='config')result=portfolio.configure(symbol,p.config);
+    else if(action==='on')result=await portfolio.enable(symbol,p.confirmation);
+    else if(action==='off')result=await portfolio.disable(symbol);
+    else if(action==='on-all')result=await portfolio.enableSelected(p.confirmation);
+    else if(action==='off-all')result=await portfolio.disableAll();
+    else if(action==='leverage')result=await portfolio.get(symbol).applyExchangeLeverage({
+     requestedLeverage:p.requestedLeverage,confirmation:'SYNC_'+symbol+'_LEVERAGE'
+    });
+    else if(action==='reconcile')result=await portfolio.get(symbol).checkBinanceAndReconcile();
+    else if(action==='history-refresh')result=await portfolio.get(symbol).refreshRealHistory({force:true});
+    else if(action==='manual-exit')result=await portfolio.get(symbol).manualMarketExit(p);
+    else if(action==='protection-repair')result=await portfolio.get(symbol).repairMissingProtection(p);
+    else throw Error('Unknown unified action');
+    return res.end(JSON.stringify({ok:true,result}));
+   }
+   else if(req.url==='/control/live/connect'){
     // Credentials are not logged, journaled, cached or stored in the browser.
     await browserFutures.connect({apiKey:p.apiKey,apiSecret:p.apiSecret,environment:'production',remember:p.remember!==false});
+    await portfolio.connectPeers();
    }
    else if(req.url==='/control/live/validate'){
     const quote=btcMarketQuote.snapshot({healthy:feed.healthy(),state:feed.state});
@@ -183,6 +207,7 @@ const server=createServer(async(req,res)=>{
     if(!feed.healthy()||!liveSignalEngine.ready||!liveSignalEngine.healthy)
      throw Error('Cần dữ liệu Binance liên tục và nến OCC đã đồng bộ trước khi bật Auto');
     const quote=btcMarketQuote.snapshot({healthy:feed.healthy(),state:feed.state});
+    await portfolio.inspectPeers('BTCUSDT');
     await browserFutures.arm(p.acceptance,quote.lastPrice);
    }
    else if(req.url==='/control/live/off'){
@@ -203,10 +228,10 @@ const server=createServer(async(req,res)=>{
    }
    else if(req.url==='/control/live/history-refresh'){await browserFutures.refreshRealHistory({force:true});}
    else if(req.url==='/control/live/disconnect'){
-    browserFutures.close();
+    await portfolio.detach();browserFutures.close();
    }
    else if(req.url==='/control/live/forget'){
-    browserFutures.forgetSavedCredentials();
+    await portfolio.detach();browserFutures.forgetSavedCredentials();
    }
    else if(req.url==='/control/live/square/key'){square.connect(p.key);}
    else if(req.url==='/control/live/square/on'){square.toggle(p.enabled);}
