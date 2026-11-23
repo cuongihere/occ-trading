@@ -67,7 +67,7 @@ export async function discoverOCCOrderIds(api,ledger,{checkpoint=null,intent=nul
   if(ROOT.test(prefix)&&id){
    try{
     const o=await api.get('/fapi/v1/order',{symbol,orderId:id});
-    if(o?.symbol==='BTCUSDT'&&String(o.orderId)===id&&o.clientOrderId===prefix&&
+    if(o?.symbol===symbol&&String(o.orderId)===id&&o.clientOrderId===prefix&&
       ['MARKET','LIMIT'].includes(o.type)&&o.status==='FILLED'&&o.positionSide==='BOTH'&&
       o.side===sideFor(entry.side)&&Number(o.executedQty)>0)
      add({orderId:id,groupId:prefix,clientId:prefix,role:'ENTRY',side:o.side});
@@ -111,7 +111,7 @@ export async function discoverOCCOrderIds(api,ledger,{checkpoint=null,intent=nul
  if(ROOT.test(String(intent?.oldClientId||''))&&ROOT.test(String(intent?.closeId||''))){
   try{
    const o=await api.get('/fapi/v1/order',{symbol,origClientOrderId:intent.closeId});
-   if(o?.symbol==='BTCUSDT'&&o.clientOrderId===intent.closeId&&
+   if(o?.symbol===symbol&&o.clientOrderId===intent.closeId&&
      o.status==='FILLED'&&o.type==='MARKET'&&(o.reduceOnly===true||o.reduceOnly==='true')&&
      numericOrder(o.orderId)){
     const role=['TP1','TP2','TP3','CLOSE'].includes(intent.role)?intent.role:'REVERSE';
