@@ -113,7 +113,7 @@ test('Live chart lines require Binance-verified OCC ownership and never send tra
  const page=readFileSync(new URL('./OCC_COMPARE.html',import.meta.url),'utf8');
  const section=server.slice(server.indexOf("async function readChartComparison(days=7,symbol='BTCUSDT'){"),
   server.indexOf('const server=createServer',server.indexOf("async function readChartComparison(days=7,symbol='BTCUSDT'){")));
- assert.match(section,/browserFutures\.positionAnalysis\(\)/);
+ assert.match(section,/session\.positionAnalysis\(\)/);
  assert.match(section,/current\.ownershipVerified===true/);
  assert.match(section,/confirmed===true/);
  assert.match(section,/BOT_ĐANG_QUẢN_LÝ/);
