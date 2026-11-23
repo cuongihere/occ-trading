@@ -62,3 +62,19 @@ test('Trading core and native credential storage unchanged by unified dashboard'
  assert.match(server,/portfolio\.handleSignal\('BTCUSDT',signal,true,/);
  assert.match(server,/req\.url==='\/binance'/);
 });
+
+test('Only the selected coin has a visible AUTO switch; bulk-on duplicates are removed',()=>{
+ const page=read('BINANCE_UI_PREVIEW.html');
+ const header=page.slice(page.indexOf('<header class="topbar">'),page.indexOf('</header>'));
+ const symbols=page.slice(page.indexOf('<section class="symbolStrip"'),page.indexOf('<section class="chartWorkbench'));
+ for(const id of ['enabled','altAutoControl','altAutoToggle','altAutoLabel'])
+  assert.match(header,new RegExp('id="'+id+'"'));
+ assert.match(page,/body\.coinAlt #autoWrap/);
+ assert.match(page,/body\.coinAlt #altAutoControl\{display:flex!important/);
+ assert.doesNotMatch(symbols,/id="autoAllOn"|id="includeInAll"|BẬT AUTO TỔNG|AUTO tổng/);
+ assert.match(symbols,/id="autoAllOff"/);
+ assert.match(symbols,/DỪNG AUTO TẤT CẢ/);
+ assert.match(page,/el\('altAutoLabel'\)\.textContent=selected/);
+ assert.match(page,/el\('altAutoToggle'\)\.disabled=!!row\.busy\|\|\(!row\.armed/);
+ assert.doesNotMatch(page,/el\('autoAllOn'\)|el\('includeInAll'\)/);
+});

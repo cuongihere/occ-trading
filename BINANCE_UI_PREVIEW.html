@@ -717,6 +717,7 @@ body:has(#credentialEditor[open])::before{content:'';position:fixed;inset:0;z-in
 .symbolActions input[type=text]{width:125px;height:27px;padding:4px 7px;border:1px solid #355674;background:#102439;color:#fff;border-radius:5px}
 .symbolActions .small{font-size:10px}
 .altOnly{display:none!important}body.coinAlt .altOnly{display:block!important}
+body.coinAlt #altAutoControl{display:flex!important;flex-direction:row;align-items:center}
 body.coinAlt #autoWrap,body.coinAlt #btcMarketTicker,body.coinAlt #btcPositionSection,body.coinAlt #historyDrawer{display:none!important}
 body:not(.coinAlt) #altPositionSection{display:none!important}
 #altMarketQuote{padding:7px;color:#f9ce69}#altMarketQuote strong{font-size:20px;display:block}#altMarketQuote small{font-size:10px;color:#96c0de}
@@ -746,7 +747,7 @@ body:not(.coinAlt) #altPositionSection{display:none!important}
  <div><div class="brand" id="currentSymbolLabel">OCC / BTCUSDT</div><div class="small">Futures · Binance</div></div>
  <div class="controls">
  <span id="connection" class="status">CHƯA KẾT NỐI</span>
- <label class="auto" id="autoWrap" style="flex-direction:row;color:#eff6ff;font-size:12px"><input id="enabled" type="checkbox" disabled><span id="autoLabel">AUTO BTC OFF</span></label><label class="auto altOnly" id="altAutoControl"><input id="altAutoToggle" type="checkbox"> AUTO MÃ</label>
+ <label class="auto" id="autoWrap" style="flex-direction:row;color:#eff6ff;font-size:12px"><input id="enabled" type="checkbox" disabled><span id="autoLabel">AUTO BTC OFF</span></label><label class="auto altOnly" id="altAutoControl" style="flex-direction:row;color:#eff6ff;font-size:12px"><input id="altAutoToggle" type="checkbox" disabled><span id="altAutoLabel">AUTO MÃ OFF</span></label>
  <button class="link" type="button" id="openConfigBtn">Cài đặt</button><button class="link" type="button" id="openHistoryBtn">Lịch sử</button></div>
 </header>
 <section class="kpis">
@@ -837,15 +838,13 @@ body:not(.coinAlt) #altPositionSection{display:none!important}
   </details>
  </div>
 </section>
-<section class="symbolStrip" aria-label="Chọn coin giao dịch và AUTO tổng">
+<section class="symbolStrip" aria-label="Chọn coin giao dịch">
  <div id="symbolTabs" class="symbolTabs"><button type="button" class="active">BTCUSDT</button></div>
  <div class="symbolActions">
   <input id="addSymbolInput" type="text" placeholder="ETHUSDT, SOLUSDT" aria-label="Thêm mã coin">
   <button id="addSymbolBtn" type="button" class="minor">+ Coin</button>
-  <label style="font-size:10px;color:#bfdbeb"><input id="includeInAll" type="checkbox"> AUTO tổng</label>
   <button id="openCoinSettings" type="button" class="minor altOnly">Cài đặt mã</button>
-  <button id="autoAllOn" type="button" class="minor">BẬT AUTO TỔNG</button>
-  <button id="autoAllOff" type="button" class="minor">TẮT TẤT CẢ</button>
+  <button id="autoAllOff" type="button" class="minor" title="Chỉ tắt AUTO của tất cả coin; không đóng vị thế hoặc hủy STOP/TP trên Binance">DỪNG AUTO TẤT CẢ</button>
   <span class="small" id="unifiedStatus">AUTO mặc định OFF</span>
  </div>
 </section>
@@ -1809,12 +1808,14 @@ const unifiedUI=(()=>{
    btn.onclick=()=>choose(row.symbol);list.append(btn);
   }
   const row=current();if(!row)return;
-  el('includeInAll').checked=row.selected===true;
   el('unifiedPositionCount').textContent=String(model.openPositions??0);
   el('unifiedStatus').textContent=(model.armedCount||0)+' AUTO ON · '+(model.openPositions||0)+' vị thế';
   el('altAutoToggle').checked=!!row.armed;
+  el('altAutoLabel').textContent=selected+' · '+(row.halted?(row.armed?'AUTO ON · KHÓA AN TOÀN':'AUTO KHÓA'):row.armed?'AUTO ON':'AUTO OFF');
+  el('altAutoControl').className='auto altOnly'+(row.armed?' on':'')+(row.halted?' halted':'');
   el('altBotStatus').textContent=row.halted?'KHÓA AN TOÀN':row.armed?'AUTO ON':'AUTO OFF';
-  el('altAutoToggle').disabled=!!row.busy||!model.connected||row.halted;
+  // Allow OFF while armed even if Binance disconnects or the executor is halted.
+  el('altAutoToggle').disabled=!!row.busy||(!row.armed&&(!row.connected||row.halted||!!row.pendingLimit));
   el('altPositionTitle').textContent='Vị thế OCC · '+selected;
   const table=el('unifiedPositionsRows');table.replaceChildren();
   for(const v of model.rows){
@@ -1835,7 +1836,7 @@ const unifiedUI=(()=>{
   if(loading)return;loading=true;
   try{
    model=await get('/api/unified/status');
-   if(!model.rows.some(x=>x.symbol===selected))selected='BTCUSDT';
+   if(!model.rows.some(x=>x.symbol===selected)){selected='';choose('BTCUSDT');}
    render();
    if(selected!=='BTCUSDT'&&Date.now()-lastRead>15000)await readSelected();
   }catch(e){el('unifiedStatus').textContent='Chưa đồng bộ: '+e.message;}
@@ -1938,10 +1939,6 @@ const unifiedUI=(()=>{
  el('addSymbolInput').addEventListener('keydown',e=>{
   if(e.key==='Enter'){e.preventDefault();el('addSymbolBtn').click();}
  });
- el('includeInAll').onchange=async()=>{
-  try{await control('select',{symbol:selected,enabled:el('includeInAll').checked});await refresh();}
-  catch(e){el('unifiedStatus').textContent=e.message;await refresh();}
- };
  el('altAutoToggle').onchange=async()=>{
   const symbol=selected,on=el('altAutoToggle').checked;
   try{
@@ -1953,13 +1950,6 @@ const unifiedUI=(()=>{
    }else await control('off',{symbol});
    await refresh();
   }catch(e){msg(e.message);await refresh();}
- };
- el('autoAllOn').onclick=async()=>{
-  if(!confirm('BẬT AUTO TẤT CẢ coin đã chọn bằng tiền thật? Mỗi coin có vị thế, ký quỹ và SL/TP riêng.'))return;
-  const confirmation=prompt('Nhập CHAP NHAN AUTO TAT CA:');
-  if(confirmation!=='CHAP NHAN AUTO TAT CA')return;
-  try{await control('on-all',{confirmation});await refresh();}
-  catch(e){el('unifiedStatus').textContent=e.message;}
  };
  el('autoAllOff').onclick=async()=>{
   if(!confirm('TẮT AUTO tất cả coin? Lệnh SL/TP trên Binance vẫn giữ nguyên.'))return;
