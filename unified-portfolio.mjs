@@ -26,7 +26,7 @@ export class UnifiedPortfolio{
   const saved=existsSync(this.file)?JSON.parse(readFileSync(this.file,'utf8')):{symbols:[]};
   if(!Array.isArray(saved.symbols)||saved.symbols.length>MAX_ADDITIONAL_SYMBOLS)
    throw Error('Invalid unified symbols file: manual review required');
-  this.rows=[];
+  this.rows=[];this.btcSelected=saved.btcSelected===true;
   for(const row of saved.symbols){
    if(!validSymbol(row.symbol)||row.symbol==='BTCUSDT'||this.rows.some(x=>x.symbol===row.symbol))
     throw Error('Invalid or duplicate unified symbol: '+row.symbol);
@@ -65,7 +65,7 @@ export class UnifiedPortfolio{
  persist(){
   mkdirSync(this.dir,{recursive:true,mode:0o700});
   const temp=this.file+'.pending';
-  writeFileSync(temp,JSON.stringify({symbols:this.rows},null,2),{mode:0o600});
+  writeFileSync(temp,JSON.stringify({symbols:this.rows,btcSelected:this.btcSelected},null,2),{mode:0o600});
   renameSync(temp,this.file);
  }
  async fetchMarket(path,params={}){
@@ -117,6 +117,8 @@ export class UnifiedPortfolio{
  }
  select(symbol,yes){
   if(typeof yes!=='boolean')throw Error('AUTO coin phải là ON hoặc OFF');
+  if(symbol==='BTCUSDT'){this.btcSelected=yes;this.persist();if(!yes)this.btc.disarm();
+   return this.status();}
   if(!this.peers.has(symbol))throw Error('Coin chưa được thêm');
   const row=this.rows.find(x=>x.symbol===symbol);
   row.selected=yes;this.persist();
@@ -191,7 +193,7 @@ export class UnifiedPortfolio{
  }
  async enableSelected(confirmation,btcPrice=null){
   if(confirmation!=='CHAP NHAN AUTO TAT CA')throw Error('Cần xác nhận AUTO nhiều coin bằng tiền thật');
-  const chosen=this.rows.filter(r=>r.selected).map(r=>r.symbol);
+  const chosen=[...(this.btcSelected?['BTCUSDT']:[]),...this.rows.filter(r=>r.selected).map(r=>r.symbol)];
   if(!chosen.length)throw Error('Chưa bật AUTO cho coin nào trong danh sách');
   const newly=[];
   try{
@@ -279,9 +281,9 @@ export class UnifiedPortfolio{
   this.engines.clear();
  }
  status(){
-  const rows=[{symbol:'BTCUSDT',selected:this.btc.armed},...this.rows].map(row=>{
+  const rows=[{symbol:'BTCUSDT',selected:this.btcSelected},...this.rows].map(row=>{
    const s=this.get(row.symbol);const snapshot=s.snapshot();
-   return {symbol:row.symbol,selected:row.symbol==='BTCUSDT'?s.armed:row.selected,
+   return {symbol:row.symbol,selected:row.selected,
     armed:s.armed,connected:snapshot.connected,halted:s.halted,busy:s.busy,
     error:s.error,config:s.config,
     pendingLimit:snapshot.pendingLimit,protectedPosition:snapshot.protectedPosition,
