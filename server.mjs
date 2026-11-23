@@ -283,7 +283,7 @@ const server=createServer(async(req,res)=>{
    if(u.pathname==='/api/unified/position')return res.end(JSON.stringify(await session.positionAnalysis()));
    if(u.pathname==='/api/unified/report'){
     if(symbol!=='BTCUSDT'&&session.api)await session.refreshRealHistory();
-    return res.end(JSON.stringify({symbol,...readLiveReport(session.ledgerPath)}));
+    return res.end(JSON.stringify({symbol,...readLiveReport(session.ledgerPath,{symbol})}));
    }
    if(u.pathname==='/api/unified/quote')return res.end(JSON.stringify({
     symbol,price:await portfolio.quote(symbol),at:Date.now()
