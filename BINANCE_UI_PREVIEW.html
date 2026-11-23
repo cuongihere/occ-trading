@@ -707,15 +707,46 @@ body:has(#credentialEditor[open])::before{content:'';position:fixed;inset:0;z-in
 .squareKeyControls a{border:1px solid #395b78;padding:7px 9px;border-radius:6px;text-decoration:none;font-size:11px}
 .squareSettings>.small{line-height:1.5}
 
+/* Unified one-screen workbench */
+.symbolStrip{display:flex;align-items:center;gap:5px;padding:5px 8px;margin:5px 0;border:1px solid #294a65;border-radius:7px;background:#0d2033;flex-wrap:wrap}
+.symbolTabs{display:flex;gap:5px;flex:1 1 auto;overflow:auto;align-items:center;min-width:150px}
+.symbolTabs button{white-space:nowrap;padding:5px 8px;border:1px solid #365572;border-radius:6px;background:#16304b;color:#c9ddeb;font-size:11px}
+.symbolTabs button.active{background:#25657a;color:white;border-color:#5fc0d4}
+.symbolTabs button.armed::after{content:' ●';color:#79e2a2}
+.symbolActions{display:flex;flex-wrap:wrap;align-items:center;gap:5px}
+.symbolActions input[type=text]{width:125px;height:27px;padding:4px 7px;border:1px solid #355674;background:#102439;color:#fff;border-radius:5px}
+.symbolActions .small{font-size:10px}
+.altOnly{display:none!important}body.coinAlt .altOnly{display:block!important}
+body.coinAlt #autoWrap,body.coinAlt #btcMarketTicker,body.coinAlt #btcPositionSection,body.coinAlt #historyDrawer{display:none!important}
+body:not(.coinAlt) #altPositionSection{display:none!important}
+#altMarketQuote{padding:7px;color:#f9ce69}#altMarketQuote strong{font-size:20px;display:block}#altMarketQuote small{font-size:10px;color:#96c0de}
+.altRisk{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.altRisk>div{padding:7px;border:1px solid #294965;border-radius:6px;background:#0d2136;overflow:hidden}
+.altRisk small{display:block;font-size:10px;color:#9ab6cd}.altRisk strong{font-size:12px;color:#eefaff}
+.altActions,.altAlgos{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:7px;font-size:11px}
+.altAlgos span{border:1px solid #365570;border-radius:5px;padding:4px 9px}
+#altActionStatus{color:#f8c993;min-height:16px;font-size:11px}
+.portfolioTable{margin-top:6px;border:1px solid #294965;border-radius:7px;background:#0d2033;padding:4px 9px}
+.portfolioTable strong{font-size:11px}.portfolioTable .scroll{max-height:115px;overflow:auto}
+.portfolioTable table{width:100%;border-collapse:collapse;font-size:10px}
+.portfolioTable th,.portfolioTable td{padding:4px 8px;text-align:left;border-top:1px solid #28445c}
+.portfolioTable tr:hover{background:#19384c}
+.coinDialog{background:#11273c;color:#e8f4ff;border:1px solid #466b89;border-radius:11px;padding:16px;width:min(680px,95vw);max-height:89vh;overflow:auto}
+.coinDialog::backdrop{background:#000b}.coinDialog h2{font-size:17px;margin:0 0 9px}
+.coinForm{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.coinForm label{display:flex;flex-direction:column;gap:4px;font-size:11px;color:#bfd8e8}
+.coinForm input,.coinForm select{width:100%;min-width:0;padding:5px;border-radius:5px;background:#0b1d2e;color:#ecf8ff;border:1px solid #41627c}
+.coinButtons{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px}
+@media(max-width:900px){.altRisk{grid-template-columns:repeat(3,minmax(0,1fr))}.coinForm{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 </head>
 <body>
 <div class="app">
 <header class="topbar">
- <div><div class="brand">OCC / BTCUSDT</div><div class="small">Futures · Binance</div></div>
+ <div><div class="brand" id="currentSymbolLabel">OCC / BTCUSDT</div><div class="small">Futures · Binance</div></div>
  <div class="controls">
  <span id="connection" class="status">CHƯA KẾT NỐI</span>
- <label class="auto" id="autoWrap" style="flex-direction:row;color:#eff6ff;font-size:12px"><input id="enabled" type="checkbox" disabled><span id="autoLabel">AUTO OFF</span></label>
+ <label class="auto" id="autoWrap" style="flex-direction:row;color:#eff6ff;font-size:12px"><input id="enabled" type="checkbox" disabled><span id="autoLabel">AUTO BTC OFF</span></label><label class="auto altOnly" id="altAutoControl"><input id="altAutoToggle" type="checkbox"> AUTO MÃ</label>
  <button class="link" type="button" id="openConfigBtn">Cài đặt</button><button class="link" type="button" id="openHistoryBtn">Lịch sử</button></div>
 </header>
 <section class="kpis">
@@ -723,7 +754,7 @@ body:has(#credentialEditor[open])::before{content:'';position:fixed;inset:0;z-in
  <div class="kpi"><div class="label">Khả dụng</div><div id="available" class="value">—</div><div class="detail">USDT · Available</div></div>
  <div class="kpi"><div class="label">Equity</div><div id="equity" class="value">—</div><div class="detail">USDT · Margin balance</div></div>
  <div class="kpi"><div class="label">PnL mở</div><div id="unrealized" class="value">—</div><div class="detail">USDT · Futures</div></div>
- <div class="kpi"><div class="label">BTC</div><div id="btcPosition" class="value">—</div><div class="detail">BTCUSDT · +Long / −Short</div></div>
+ <div class="kpi"><div class="label">Vị thế mở</div><div id="unifiedPositionCount" class="value">0</div><span id="btcPosition" hidden>—</span><div class="detail">Các mã đang quản lý</div></div>
  <div class="kpi" title="Binance Income BTCUSDT toàn tài khoản · Realized P&L + phí + funding, không gồm lãi/lỗ chưa chốt. Chỉ hiển thị tổng 30 ngày sau khi quét đủ dữ liệu."><div class="label" id="binanceIncomeTitle">P&L Binance BTC · 30 ngày</div><div id="binanceIncomeTotal" class="value">—</div><div id="incomeKpiDetail" class="detail">Đang đối soát Binance Income 30 ngày</div></div>
 </section>
 <section class="topgrid">
@@ -749,6 +780,7 @@ body:has(#credentialEditor[open])::before{content:'';position:fixed;inset:0;z-in
   <div class="quoteMeta"><span id="btcLastState" class="quoteState">ĐANG KẾT NỐI</span> · Mark <span id="btcMarketMark">—</span></div>
   <div class="quoteMeta" id="btcPriceTime">Chưa nhận được giao dịch trực tiếp</div>
  </div>
+ <div id="altMarketQuote" class="altOnly"><small>USDT PERPETUAL · LAST</small><strong id="altLastPrice">—</strong><small id="altPriceStatus">Đang đồng bộ Binance</small></div>
  </div>
  <div class="panel configPanel">
   <details id="autoConfigDetails" class="autoConfigDetails">
@@ -805,18 +837,30 @@ body:has(#credentialEditor[open])::before{content:'';position:fixed;inset:0;z-in
   </details>
  </div>
 </section>
+<section class="symbolStrip" aria-label="Chọn coin giao dịch và AUTO tổng">
+ <div id="symbolTabs" class="symbolTabs"><button type="button" class="active">BTCUSDT</button></div>
+ <div class="symbolActions">
+  <input id="addSymbolInput" type="text" placeholder="ETHUSDT, SOLUSDT" aria-label="Thêm mã coin">
+  <button id="addSymbolBtn" type="button" class="minor">+ Coin</button>
+  <label style="font-size:10px;color:#bfdbeb"><input id="includeInAll" type="checkbox"> AUTO tổng</label>
+  <button id="openCoinSettings" type="button" class="minor altOnly">Cài đặt mã</button>
+  <button id="autoAllOn" type="button" class="minor">BẬT AUTO TỔNG</button>
+  <button id="autoAllOff" type="button" class="minor">TẮT TẤT CẢ</button>
+  <span class="small" id="unifiedStatus">AUTO mặc định OFF</span>
+ </div>
+</section>
 <section class="chartWorkbench panel" id="chartWorkbench" aria-label="Biểu đồ BTCUSDT và lệnh OCC thực tế trên Binance">
  <div class="chartWorkbenchTop">
-  <div class="chartWorkbenchTitle"><strong>BTCUSDT · Lệnh OCC</strong></div>
+  <div class="chartWorkbenchTitle"><strong id="selectedChartTitle">BTCUSDT · Lệnh OCC</strong></div>
   <div class="chartWorkbenchActions">
    <span class="chartReadonly">LIVE · CHỈ ĐỌC</span>
-   <a href="/occ-compare?view=real" class="chartExpand" target="_blank" rel="noopener noreferrer">Mở rộng</a>
+   <a id="selectedChartExpand" href="/occ-compare?view=real" class="chartExpand" target="_blank" rel="noopener noreferrer">Mở rộng</a>
   </div>
  </div>
  <iframe id="tradeCompareFrame" title="Biểu đồ nến thật BTCUSDT và lệnh OCC thực tế trên Binance"
   src="/occ-compare?embed=1&view=real" loading="eager" referrerpolicy="no-referrer"></iframe>
 </section>
-<section class="positionSection" aria-label="Vị thế BTCUSDT và quản lý chốt lời">
+<section id="btcPositionSection" class="positionSection" aria-label="Vị thế BTCUSDT và quản lý chốt lời">
  <div class="panel accountPanel">
   <h2>Vị thế · Bot</h2>
   <div class="riskHeadline" id="riskHeadline">Đang đọc vị thế từ Binance…</div>
