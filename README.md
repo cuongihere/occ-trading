@@ -1,9 +1,9 @@
-# OCC Trading — BTCUSDT Futures (Windows)
+# OCC Trading — Unified USDT Perpetual Futures (Windows)
 
 Live Binance USDⓈ-M Futures trading, OCC crossover signals, LIMIT/MARKET entries,
 exchange-confirmed STOP and TP1/TP2/TP3, and optional Binance Square chart posts.
 
-**Windows PC only.** This repository ships the BTCUSDT-only Windows trading application and PC-focused regression tests. The Windows portable build is the only release target.
+**Windows PC only.** One trading dashboard switches between BTCUSDT and up to 12 additional Binance USDⓈ-M USDT perpetual symbols. The same causal OCC H4/M15 engine, verified exchange-side STOP, TP1/TP2/TP3, LIMIT/MARKET entry and reversal logic are reused for every configured symbol. The Windows portable build is the release target.
 
 **Paper Trading is not available in the application or Windows build.** Historical
 paper fixtures remain only as development/regression tests and are never executed.
@@ -37,15 +37,16 @@ Square media support/API permissions depend on your Creator account and region.
 We cannot validate an actual Square post without your posting-only key.
 Posts are public and cryptocurrency futures trading is high risk.
 
-## Upgrading from multi-coin versions
+## Unified one-screen trading
 
-Multi-coin Futures Auto and the market-wide Square Scanner have been removed.
-The app does not place, cancel or monitor any non-BTC positions/orders.
-**Before upgrading**, check Binance directly for existing ETH/altcoin positions
-and their STOP/TP orders; manage them on Binance yourself. Removing app features
-does not close positions or cancel exchange orders. Keep the `data/` directory
-intact; existing local audit records remain on disk but are not monitored by
-this BTC-only release. BTC Auto remains OFF after restarting.
+- Add symbols using the **+ Coin** field on the same dashboard; Binance `exchangeInfo` must verify the symbol is TRADING, USDT-quoted and USDT-margined perpetual.
+- Click a coin tab to switch the single chart and selected-coin position/SL/TP readback. The position summary below remains multi-coin.
+- Each symbol has independent margin, leverage, side filter, Entry mode, STOP, TP settings and reversal toggle. Copy from BTC and adjust; leverage must match the leverage set on Binance.
+- BTC's existing `data/futures-*` state and `binance-live-stats.sqlite` are preserved. Additional symbols use `data/futures-SYMBOL-*.json` and `data/binance-SYMBOL-live-stats.sqlite`, never shared across symbols.
+- AUTO defaults OFF for every symbol after startup. Individual coin AUTO and the explicit **AUTO TẤT CẢ** action are opt-in; selecting a coin for AUTO does not arm it. OFF does not remove exchange-side STOP/TP.
+- A per-account serial trade queue checks a fresh signed Binance balance before each Entry; unrelated exchange positions/unknown orders block trading. Previously managed positions must be verified using their exact Entry and Algo IDs.
+- The market-wide Square Scanner is removed. **Square posts only BTCUSDT verified FILLED trades**, never ETH, SOL or other symbols.
+- This is live-money Futures software; keep `data/`, check all existing positions and exchange-side conditional orders directly on Binance before upgrading, and do not run two copies of the same account.
 
 ## Development
 
