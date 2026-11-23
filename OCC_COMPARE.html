@@ -746,7 +746,7 @@ function renderHistory(){
   }
   const td=document.createElement('td'),btn=document.createElement('button');
   btn.type='button';btn.textContent=group.groupId===selectedGroupId?'Đang xem':'Xem';
-  btn.title='Đến vị trí Entry/Exit ${chartSymbol} của nhóm '+group.groupId;
+  btn.title='Đến vị trí Entry/Exit Futures của nhóm '+group.groupId;
   btn.onclick=()=>focusGroup(group.groupId);
   td.append(btn);tr.append(td);
   tr.onclick=e=>{if(e.target!==btn)focusGroup(group.groupId);};
