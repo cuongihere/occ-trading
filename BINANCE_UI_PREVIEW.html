@@ -1764,5 +1764,258 @@ $('squareEnabled').onchange=async e=>{
 squareRefresh();
 setInterval(squareRefresh,30000);
 
+
+// Unified coin selector: the existing BTC controls are preserved, while
+// every additional symbol uses the SAME protected OCC executor and chart.
+const unifiedUI=(()=>{
+ const el=id=>document.getElementById(id);
+ let selected='BTCUSDT',model=null,analysis=null,loading=false,lastRead=0;
+ const current=()=>model?.rows?.find(row=>row.symbol===selected)||null;
+ const msg=text=>{el('altActionStatus').textContent=String(text||'');};
+ async function control(action,data={}){
+  const r=await fetch('/control/unified/'+action,{method:'POST',
+   headers:{'Content-Type':'application/json','X-OCC-Local':'1'},
+   body:JSON.stringify(data)});
+  const result=await r.json();if(!r.ok)throw Error(result.error||'Thao tác Binance không thành công');
+  return result;
+ }
+ async function get(path){
+  const r=await fetch(path,{cache:'no-store'}),body=await r.json();
+  if(!r.ok)throw Error(body.error||'Không đọc được trạng thái Binance');
+  return body;
+ }
+ function choose(symbol){
+  if(!model?.rows?.some(x=>x.symbol===symbol))return;
+  if(selected===symbol)return;
+  selected=symbol;analysis=null;lastRead=0;
+  const alt=symbol!=='BTCUSDT';
+  document.body.classList.toggle('coinAlt',alt);
+  el('altPositionSection').hidden=!alt;
+  el('currentSymbolLabel').textContent='OCC / '+symbol;
+  el('selectedChartTitle').textContent=symbol+' · Lệnh OCC';
+  el('selectedChartExpand').href='/occ-compare?view=real&symbol='+encodeURIComponent(symbol);
+  el('tradeCompareFrame').src='/occ-compare?embed=1&view=real&symbol='+encodeURIComponent(symbol);
+  if(alt)el('historyDrawer').open=false;
+  render();
+  if(alt)readSelected().catch(e=>msg(e.message));
+ }
+ function render(){
+  if(!model)return;
+  const list=el('symbolTabs');list.replaceChildren();
+  for(const row of model.rows){
+   const btn=document.createElement('button');btn.type='button';btn.textContent=row.symbol;
+   btn.className=(selected===row.symbol?'active ':'')+(row.armed?'armed':'');
+   btn.title=row.error||'Chọn biểu đồ và vị thế '+row.symbol;
+   btn.onclick=()=>choose(row.symbol);list.append(btn);
+  }
+  const row=current();if(!row)return;
+  el('includeInAll').checked=row.selected===true;
+  el('unifiedPositionCount').textContent=String(model.openPositions??0);
+  el('unifiedStatus').textContent=(model.armedCount||0)+' AUTO ON · '+(model.openPositions||0)+' vị thế';
+  el('altAutoToggle').checked=!!row.armed;
+  el('altBotStatus').textContent=row.halted?'KHÓA AN TOÀN':row.armed?'AUTO ON':'AUTO OFF';
+  el('altAutoToggle').disabled=!!row.busy||!model.connected||row.halted;
+  el('altPositionTitle').textContent='Vị thế OCC · '+selected;
+  const table=el('unifiedPositionsRows');table.replaceChildren();
+  for(const v of model.rows){
+   const tr=document.createElement('tr'),a=v.account,p=Number(a?.positionQty||0);
+   const vals=[v.symbol,v.halted?'KHÓA':v.armed?'ON':'OFF',
+    !a?'CHƯA KẾT NỐI':p>0?'LONG':p<0?'SHORT':'FLAT',
+    a?fmt(Math.abs(p),8):'—',a?fmt(a.entryPrice,6):'—',
+    a?fmt(a.unrealizedUSDT,3):'—',
+    v.protectedPosition?.stop?'Đã ghi checkpoint':a?.openAlgos?'Cần đối soát':'—'];
+   for(const val of vals){const td=document.createElement('td');td.textContent=val;tr.append(td);}
+   const td=document.createElement('td'),btn=document.createElement('button');btn.type='button';
+   btn.className='minor';btn.textContent='Xem';btn.onclick=()=>choose(v.symbol);
+   td.append(btn);tr.append(td);table.append(tr);
+  }
+  el('unifiedPortfolioSummary').textContent='SL/TP chỉ xác nhận sau khi kiểm tra Binance · dữ liệu từ sàn';
+ }
+ async function refresh(){
+  if(loading)return;loading=true;
+  try{
+   model=await get('/api/unified/status');
+   if(!model.rows.some(x=>x.symbol===selected))selected='BTCUSDT';
+   render();
+   if(selected!=='BTCUSDT'&&Date.now()-lastRead>15000)await readSelected();
+  }catch(e){el('unifiedStatus').textContent='Chưa đồng bộ: '+e.message;}
+  finally{loading=false;}
+ }
+ async function readSelected(){
+  if(selected==='BTCUSDT')return;
+  const symbol=selected, row=current();lastRead=Date.now();
+  el('altQty').textContent='Đang đọc…';
+  try{
+   const [pos,quote]=await Promise.all([
+    get('/api/unified/position?symbol='+encodeURIComponent(symbol)),
+    get('/api/unified/quote?symbol='+encodeURIComponent(symbol))
+   ]);
+   if(symbol!==selected)return;
+   analysis=pos;
+   const p=pos.position;
+   el('altQty').textContent=p?p.side+' · '+fmt(p.quantityBTC,8):'FLAT';
+   el('altEntry').textContent=p?fmt(p.entryPrice,8):'—';
+   el('altMark').textContent=p?fmt(p.markPrice,8):'—';
+   el('altLiq').textContent=p?fmt(p.liquidationPrice,8):'—';
+   el('altPnl').textContent=p?fmt(p.unrealizedUSDT,4)+' USDT':'0 USDT';
+   el('altLeverage').textContent=(row?.account?.leverage||'—')+'x';
+   el('altLastPrice').textContent=fmt(quote.price,8);
+   el('altPriceStatus').textContent=symbol+' · cập nhật '+vn(quote.at);
+   const verified=(pos.levels||[]).filter(o=>o.confirmed&&o.origin!=='CHƯA_XÁC_MINH');
+   el('altProtection').textContent=pos.ownershipVerified?
+    verified.length+' Algo xác minh':p?'CHƯA XÁC MINH':'—';
+   const levels=el('altOrderLevels');levels.replaceChildren();
+   for(const o of verified){
+    const e=document.createElement('span');
+    e.textContent=(o.clientId?.match(/-(SL|TP[123])$/)?.[1]||o.role)+
+     ' '+fmt(o.price,8)+' · '+(o.active?'LIVE':'KHÔNG HOẠT ĐỘNG');
+    levels.append(e);
+   }
+   if(!verified.length){const e=document.createElement('span');
+    e.textContent=p?'Không xác minh được SL/TP đang hoạt động. Kiểm tra trực tiếp Binance.':'Không có SL/TP đang mở';levels.append(e);}
+   const actions={TP1:'altManualTP1',TP2:'altManualTP2',TP3:'altManualTP3',ALL:'altManualClose'};
+   for(const [role,id] of Object.entries(actions))
+    el(id).disabled=!pos.manual?.allowed||!pos.manual?.[role];
+   msg((pos.warnings||[]).slice(0,2).join(' · '));
+  }catch(e){msg('Không xác minh được vị thế '+symbol+': '+e.message);
+   for(const id of ['altManualTP1','altManualTP2','altManualTP3','altManualClose'])el(id).disabled=true;}
+ }
+ function fillCoinConfig(cfg){
+  const map={coinMargin:'marginUSDT',coinLeverage:'leverage',coinSide:'side',
+   coinEntryMode:'entryMode',coinSl:'slPercent',coinTpMode:'tpMode',
+   coinTp1:'tp1Val',coinTp2:'tp2Val',coinTp3:'tp3Val',
+   coinQty1:'tp1Qty',coinQty2:'tp2Qty',coinReverse:'reverseOnSignal',
+   coinLimitBasis:'limitBasis',coinLimitOffset:'limitOffsetPct',coinLimitWait:'limitWaitSeconds'};
+  for(const [id,key] of Object.entries(map))el(id).value=String(cfg[key]);
+ }
+ function readCoinConfig(){
+  return {marginUSDT:Number(el('coinMargin').value),
+   leverage:Number(el('coinLeverage').value),side:el('coinSide').value,
+   entryMode:el('coinEntryMode').value,slPercent:Number(el('coinSl').value),
+   tpMode:el('coinTpMode').value,tp1Val:Number(el('coinTp1').value),
+   tp2Val:Number(el('coinTp2').value),tp3Val:Number(el('coinTp3').value),
+   tp1Qty:Number(el('coinQty1').value),tp2Qty:Number(el('coinQty2').value),
+   reverseOnSignal:el('coinReverse').value==='true',
+   limitBasis:el('coinLimitBasis').value,
+   limitOffsetPct:Number(el('coinLimitOffset').value),
+   limitWaitSeconds:Number(el('coinLimitWait').value)};
+ }
+ el('openCoinSettings').onclick=()=>{
+  const row=current();if(!row||selected==='BTCUSDT')return;
+  el('coinSettingsTitle').textContent='Cài đặt riêng · '+selected;
+  fillCoinConfig(row.config);
+  el('coinSettingsMsg').textContent='';
+  el('coinSettingsDialog').showModal();
+ };
+ el('coinSettingsClose').onclick=()=>el('coinSettingsDialog').close();
+ el('coinCopyBTC').onclick=()=>{
+  const btc=model?.rows?.find(x=>x.symbol==='BTCUSDT');
+  if(btc){fillCoinConfig(btc.config);el('coinSettingsMsg').textContent='Đã sao chép cấu hình BTC vào form; chưa lưu.';}
+ };
+ el('coinSave').onclick=async()=>{
+  const symbol=selected;
+  try{await control('config',{symbol,config:readCoinConfig()});
+   el('coinSettingsMsg').textContent='Đã lưu thông số '+symbol+'; AUTO không tự bật.';
+   await refresh();
+  }catch(e){el('coinSettingsMsg').textContent=e.message;}
+ };
+ el('coinApplyLeverage').onclick=async()=>{
+  const symbol=selected,leverage=Number(el('coinLeverage').value);
+  if(!confirm('ÁP DỤNG '+leverage+'x LÊN BINANCE '+symbol+' THẬT? Chỉ thực hiện khi không có vị thế/lệnh mở.'))return;
+  try{await control('config',{symbol,config:readCoinConfig()});
+   await control('leverage',{symbol,requestedLeverage:leverage});
+   el('coinSettingsMsg').textContent='Binance xác minh leverage '+symbol+' '+leverage+'x';
+   await refresh();
+  }catch(e){el('coinSettingsMsg').textContent=e.message;}
+ };
+ el('addSymbolBtn').onclick=async()=>{
+  const input=el('addSymbolInput');let symbol=input.value.trim().toUpperCase();
+  if(!symbol)return;
+  if(!symbol.endsWith('USDT'))symbol+='USDT';
+  try{await control('add',{symbol});input.value='';await refresh();choose(symbol);}
+  catch(e){el('unifiedStatus').textContent=e.message;}
+ };
+ el('addSymbolInput').addEventListener('keydown',e=>{
+  if(e.key==='Enter'){e.preventDefault();el('addSymbolBtn').click();}
+ });
+ el('includeInAll').onchange=async()=>{
+  try{await control('select',{symbol:selected,enabled:el('includeInAll').checked});await refresh();}
+  catch(e){el('unifiedStatus').textContent=e.message;await refresh();}
+ };
+ el('altAutoToggle').onchange=async()=>{
+  const symbol=selected,on=el('altAutoToggle').checked;
+  try{
+   if(on){
+    if(!confirm('BẬT AUTO '+symbol+' FUTURES TIỀN THẬT theo OCC, có thể mất vốn?')){el('altAutoToggle').checked=false;return;}
+    const confirmation=prompt('Nhập CHAP NHAN '+symbol+' FUTURES:');
+    if(confirmation!=='CHAP NHAN '+symbol+' FUTURES')throw Error('Chưa xác nhận');
+    await control('on',{symbol,confirmation});
+   }else await control('off',{symbol});
+   await refresh();
+  }catch(e){msg(e.message);await refresh();}
+ };
+ el('autoAllOn').onclick=async()=>{
+  if(!confirm('BẬT AUTO TẤT CẢ coin đã chọn bằng tiền thật? Mỗi coin có vị thế, ký quỹ và SL/TP riêng.'))return;
+  const confirmation=prompt('Nhập CHAP NHAN AUTO TAT CA:');
+  if(confirmation!=='CHAP NHAN AUTO TAT CA')return;
+  try{await control('on-all',{confirmation});await refresh();}
+  catch(e){el('unifiedStatus').textContent=e.message;}
+ };
+ el('autoAllOff').onclick=async()=>{
+  if(!confirm('TẮT AUTO tất cả coin? Lệnh SL/TP trên Binance vẫn giữ nguyên.'))return;
+  try{await control('off-all');await refresh();}
+  catch(e){el('unifiedStatus').textContent=e.message;}
+ };
+ async function manual(role){
+  const symbol=selected,p=analysis?.position;
+  if(!p||!analysis?.manual?.allowed||!current()?.protectedPosition?.entry)return;
+  if(!confirm('CHỐT '+role+' '+symbol+' BẰNG MARKET reduceOnly TIỀN THẬT?'))return;
+  const confirmation=prompt('Nhập XAC NHAN '+role+' '+symbol+':');
+  if(confirmation!=='XAC NHAN '+role+' '+symbol)return;
+  try{
+   await control('manual-exit',{symbol,role,confirmation,
+    expectedEntryOrderId:analysis.manual.entryOrderId,
+    expectedRemainingBTC:analysis.manual.remainingBTC});
+   await refresh();await readSelected();
+  }catch(e){msg(e.message);}
+ }
+ for(const [role,id] of Object.entries({TP1:'altManualTP1',TP2:'altManualTP2',TP3:'altManualTP3',ALL:'altManualClose'}))
+  el(id).onclick=()=>manual(role);
+ el('altReconcile').onclick=async()=>{
+  const symbol=selected;if(!confirm('Đối soát '+symbol+' với Binance? AUTO phải OFF.'))return;
+  try{await control('reconcile',{symbol});await refresh();await readSelected();}
+  catch(e){msg(e.message);}
+ };
+ el('altRemoveSymbol').onclick=async()=>{
+  const symbol=selected;
+  if(!confirm('Xóa '+symbol+' khỏi danh sách? Chỉ khi Binance FLAT và không còn lệnh/checkpoint.'))return;
+  try{await control('remove',{symbol});await refresh();choose('BTCUSDT');}
+  catch(e){msg(e.message);}
+ };
+ async function readHistory(){
+  const symbol=selected;if(symbol==='BTCUSDT')return;
+  try{
+   const result=await get('/api/unified/report?symbol='+encodeURIComponent(symbol));
+   if(symbol!==selected)return;
+   const sum=result.summary||{},rows=el('altHistoryRows');rows.replaceChildren();
+   el('altHistorySummary').textContent='Đã đóng '+(sum.closed||0)+' · Net sau phí (chưa funding) '+
+    fmt(sum.netExFundingUSDT,3)+' USDT'+(result.warnings?.length?' · Cần kiểm tra nguồn dữ liệu':'');
+   for(const t of (result.positions||[]).slice(0,25)){
+    const tr=document.createElement('tr'),vals=[
+     t.entryAt?vn(t.entryAt):'—',t.side||'—',fmt(t.entryPrice,8),
+     fmt(t.exitPrice,8),fmt(t.netExFundingUSDT,3),t.status||'—'];
+    for(const value of vals){const td=document.createElement('td');td.textContent=value;tr.append(td);}
+    rows.append(tr);
+   }
+  }catch(e){el('altHistorySummary').textContent='Chưa xác minh PnL: '+e.message;}
+ }
+ el('altHistoryRefresh').onclick=async()=>{
+  try{await control('history-refresh',{symbol:selected});await readHistory();}
+  catch(e){msg(e.message);}
+ };
+ el('altHistory').addEventListener('toggle',()=>{if(el('altHistory').open)readHistory();});
+ refresh();setInterval(refresh,6500);
+ return {refresh,choose,readSelected};
+})();
 </script>
 </body></html>
