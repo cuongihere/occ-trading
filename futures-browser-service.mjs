@@ -31,6 +31,7 @@ export class BrowserFutures{
   this.intentPath=resolve(this.dir,filename('futures-live-intent.json','futures-'+symbol+'-intent.json'));
   this.protectionPath=resolve(this.dir,filename('futures-live-protection.json','futures-'+symbol+'-protection.json'));
   this.reversalPath=resolve(this.dir,filename('futures-last-reversal.json','futures-'+symbol+'-last-reversal.json'));
+  this.ledgerPath=resolve(this.dir,filename('binance-live-stats.sqlite','binance-'+symbol+'-live-stats.sqlite'));
   this.config=validateLiveConfig(existsSync(this.path)?JSON.parse(readFileSync(this.path,'utf8')):DEFAULT);
   this.transportFactory=transportFactory||((params)=>new FuturesTransport(params));
   if(!btcOnly&&!credentialVault)throw Error('Non-BTC session requires a non-persisting credential adapter');
@@ -81,10 +82,9 @@ export class BrowserFutures{
  // Provenance tracking is diagnostic only; failure must not affect
  // Binance entry/protection, reverse logic or risk checkpoints.
  recordVerifiedSignal({orderId,clientId,signal}){
-  if(this.symbol!=='BTCUSDT')return false; // BTC audit ledger is strictly BTC-only.
   try{
    if(!signal||!Number.isSafeInteger(Number(signal.barTime)))return false;
-   const ledger=new LiveStatsLedger(resolve(this.dir,'binance-live-stats.sqlite'));
+   const ledger=new LiveStatsLedger(this.ledgerPath,{symbol:this.symbol});
    try{
     return ledger.recordEntrySignal({
      groupId:clientId,orderId,side:signal.side,
@@ -99,28 +99,26 @@ export class BrowserFutures{
   }
  }
  registerRealOrder({orderId,groupId,clientId,role,side}){
-  if(this.symbol!=='BTCUSDT')return false;
-  const path=resolve(this.dir,'binance-live-stats.sqlite');
+  const path=this.ledgerPath;
   mkdirSync(this.dir,{recursive:true});
   const ledger=new LiveStatsLedger(path);
   try{return ledger.register({orderId,groupId,clientId,role,side});}
   finally{ledger.close();}
  }
  async refreshRealHistory({force=false}={}){
-  if(this.symbol!=='BTCUSDT')return null;
   if(!this.api||!this.account)return null;
   if(this.historySyncTask)return this.historySyncTask;
-  if(!force&&Date.now()-this.lastHistorySync<60000)return null;
+  if(!force&&Date.now()-this.lastHistorySync<(this.symbol==='BTCUSDT'?60000:900000))return null;
   this.historySyncTask=(async()=>{
    mkdirSync(this.dir,{recursive:true});
-   const ledger=new LiveStatsLedger(resolve(this.dir,'binance-live-stats.sqlite'));
+   const ledger=new LiveStatsLedger(this.ledgerPath,{symbol:this.symbol});
    try{
     const intent=existsSync(this.intentPath)?JSON.parse(readFileSync(this.intentPath,'utf8')):null;
     const checkpoint=this.activeProtection||this.previousProtection;
     // Income endpoint has a high Binance request weight; only sample every
     // five minutes, or at an explicit manual refresh/reconnect.
-    const syncIncome=force||Date.now()-this.lastIncomeSync>=300000;
-    const syncExchangeTrades=force||Date.now()-this.lastExchangeTradeAttempt>=300000;
+    const syncIncome=force||Date.now()-this.lastIncomeSync>=(this.symbol==='BTCUSDT'?300000:1800000);
+    const syncExchangeTrades=force||Date.now()-this.lastExchangeTradeAttempt>=(this.symbol==='BTCUSDT'?300000:1800000);
     if(syncExchangeTrades)this.lastExchangeTradeAttempt=Date.now();
     const result=await syncOCCLiveHistory(this.api,ledger,{
      checkpoint,intent,syncIncome,syncExchangeTrades});
@@ -300,7 +298,7 @@ export class BrowserFutures{
    if(remember===true)this.vault.save({apiKey,apiSecret});
    else if(remember===false&&this.vault.exists())this.vault.delete();
    this.log('CONNECTED','Đã xác minh Binance Futures thật; Auto mặc định OFF');
-   await this.refreshRealHistory({force:true});
+   if(this.symbol==='BTCUSDT')await this.refreshRealHistory({force:true});
    // Only a completed OCC-protected position that is now fully FLAT may
    // clear its stale restart checkpoint automatically. Never auto-arm.
    await this.reconcileClosedAfterReconnect();
@@ -425,7 +423,7 @@ export class BrowserFutures{
    }else if(this.halted&&this.previousProtection?.phase==='PROTECTED')
     await this.reconcileVerifiedClosedPosition();
    else await this.reconcileFlat();
-   await this.refreshRealHistory({force:true});
+   if(this.symbol==='BTCUSDT')await this.refreshRealHistory({force:true});
    this.recoveryStatus='recovered';this.lastRecoveryCheck=Date.now();
    return this.snapshot();
   }catch(e){
