@@ -326,17 +326,21 @@ const limitMonitor=setInterval(()=>browserFutures.pollLimit().catch(e=>console.e
 const accountRefresh=setInterval(()=>browserFutures.refreshAccountOverview().catch(e=>{
   console.error('Futures account refresh:',e.message);
 }),25000);accountRefresh.unref();
+const unifiedScan=setInterval(()=>portfolio.tick().catch(e=>console.error('Unified OCC scan:',e.message)),30000);unifiedScan.unref();
+const unifiedMonitor=setInterval(()=>portfolio.monitor().catch(e=>console.error('Unified OCC monitor:',e.message)),15000);unifiedMonitor.unref();
 const liveHistoryRefresh=setInterval(()=>browserFutures.refreshRealHistory()
  .catch(e=>console.error('Binance OCC history:',e.message)),60000);
 liveHistoryRefresh.unref();
 server.listen(port,'127.0.0.1',()=>{
  console.log('BTCUSDT Futures http://127.0.0.1:'+port+'/binance; AUTO OFF by default');
- browserFutures.restoreSavedConnection().catch(e=>console.error('Saved Binance credentials:',e.message));
+ browserFutures.restoreSavedConnection().then(()=>{if(browserFutures.api)return portfolio.connectPeers();})
+  .catch(e=>console.error('Saved Binance credentials/unified peers:',e.message));
  feed.connect();
 });
 function shutdown(code=0){
  if(closing)return;closing=true;
- clearInterval(futuresMonitor);clearInterval(limitMonitor);clearInterval(accountRefresh);clearInterval(liveHistoryRefresh);
+ clearInterval(futuresMonitor);clearInterval(limitMonitor);clearInterval(accountRefresh);clearInterval(liveHistoryRefresh);clearInterval(unifiedScan);clearInterval(unifiedMonitor);
+ portfolio.detach().catch(e=>console.error('Shutdown peer audit:',e.message));
  try{browserFutures.close();}catch{}
  try{feed.disconnect();}catch{}
  try{lock.close();}catch{}
