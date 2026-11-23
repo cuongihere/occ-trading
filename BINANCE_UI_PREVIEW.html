@@ -902,6 +902,41 @@ body:not(.coinAlt) #altPositionSection{display:none!important}
   <div class="positionEmpty" id="emptyOrders">Không có SL/TP đang mở</div><div class="riskAlerts" id="riskAlerts" role="status"></div>
  </div>
 </section>
+<section id="altPositionSection" class="positionSection" hidden><div class="panel">
+ <div class="row" style="justify-content:space-between"><h2 id="altPositionTitle">Vị thế OCC · Coin đang chọn</h2><span class="small" id="altBotStatus">AUTO OFF</span></div>
+ <div class="altRisk">
+  <div><small>Chiều / KL</small><strong id="altQty">—</strong></div>
+  <div><small>Entry</small><strong id="altEntry">—</strong></div>
+  <div><small>Mark</small><strong id="altMark">—</strong></div>
+  <div><small>Liq</small><strong id="altLiq">—</strong></div>
+  <div><small>PnL mở</small><strong id="altPnl">—</strong></div>
+  <div><small>Leverage</small><strong id="altLeverage">—</strong></div>
+  <div><small>SL/TP xác minh</small><strong id="altProtection">—</strong></div>
+ </div>
+ <div class="altAlgos" id="altOrderLevels"><span>Đang xác minh lệnh Binance</span></div>
+ <div class="altActions">
+  <button id="altManualTP1" class="minor" disabled>Chốt TP1 MARKET</button>
+  <button id="altManualTP2" class="minor" disabled>Chốt TP2 MARKET</button>
+  <button id="altManualTP3" class="minor" disabled>Chốt TP3 MARKET</button>
+  <button id="altManualClose" class="minor" disabled>Đóng toàn bộ</button>
+  <button id="altReconcile" class="minor">Đối soát</button>
+  <button id="altHistoryRefresh" class="minor">Làm mới PnL</button>
+  <button id="altRemoveSymbol" class="minor">Xóa mã</button>
+ </div>
+ <div id="altActionStatus" role="status" style="color:#ffc99d;font-size:11px;min-height:16px"></div>
+ <details id="altHistory"><summary style="font-size:11px">Lịch sử thực tế · Coin đang chọn</summary>
+  <div id="altHistorySummary" class="small">Chưa đồng bộ</div>
+  <div class="tableScroll"><table style="font-size:10px;width:100%">
+  <thead><tr><th>Thời gian</th><th>Chiều</th><th>Entry</th><th>Exit</th><th>Net USDT</th><th>Trạng thái</th></tr></thead>
+  <tbody id="altHistoryRows"><tr><td colspan="6">Chưa có giao dịch đối soát</td></tr></tbody></table></div>
+ </details>
+</div></section>
+<section id="unifiedPositions" class="portfolioTable">
+ <strong>Vị thế & AUTO · Tất cả mã</strong><span id="unifiedPortfolioSummary" class="small" style="float:right">Đang đồng bộ Binance…</span>
+ <div class="scroll"><table><thead><tr><th>Coin</th><th>AUTO</th><th>Chiều</th>
+ <th>Khối lượng</th><th>Entry</th><th>PnL mở</th><th>SL/TP</th><th>Xem</th></tr></thead>
+ <tbody id="unifiedPositionsRows"><tr><td colspan="8">Chưa có dữ liệu</td></tr></tbody></table></div>
+</section>
 <details class="historyDrawer" id="historyDrawer">
  <summary class="historyDrawerSummary"><strong>Hiệu suất · Lịch sử</strong><button type="button" id="closeHistoryBtn" class="historyModalClose" aria-label="Đóng lịch sử">×</button>
   <span id="historyDrawerBrief">Đang đối soát lệnh và P&L…</span>
