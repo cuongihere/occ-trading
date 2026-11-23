@@ -25,7 +25,7 @@ export class BrowserFutures{
   if(!/^[A-Z0-9]{2,20}USDT$/.test(symbol))throw Error('Invalid managed USDT perpetual symbol');
   this.symbol=symbol;
   this.managedOtherSymbols=managedOtherSymbols;
-  const btcOnly=symbol===this.symbol;
+  const btcOnly=symbol==='BTCUSDT';
   const filename=(btc,other)=>btcOnly?btc:other;
   this.dir=resolve(dataDir);this.path=resolve(this.dir,filename('futures-browser-settings.json','futures-'+symbol+'-settings.json'));
   this.intentPath=resolve(this.dir,filename('futures-live-intent.json','futures-'+symbol+'-intent.json'));
@@ -72,7 +72,7 @@ export class BrowserFutures{
  setSquarePublisher(publisher){this.squarePublisher=publisher;}
  // A Square failure MUST NOT alter BTC position, SL/TP, or halt trading.
  notifySquareProtected(result){
-  if(this.symbol!==this.symbol||!this.squarePublisher)return;
+  if(this.symbol!=='BTCUSDT'||!this.squarePublisher)return;
   Promise.resolve().then(()=>this.squarePublisher.onProtected(result))
    .then(out=>{if(out?.status==='SENT')this.log('SQUARE_POSTED','Bài BTCUSDT đã đăng Binance Square.');})
    .catch(e=>this.log('SQUARE_FAILED','Square: '+String(e.message||e).slice(0,180)));
@@ -81,7 +81,7 @@ export class BrowserFutures{
  // Provenance tracking is diagnostic only; failure must not affect
  // Binance entry/protection, reverse logic or risk checkpoints.
  recordVerifiedSignal({orderId,clientId,signal}){
-  if(this.symbol!==this.symbol)return false; // BTC audit ledger is strictly BTC-only.
+  if(this.symbol!=='BTCUSDT')return false; // BTC audit ledger is strictly BTC-only.
   try{
    if(!signal||!Number.isSafeInteger(Number(signal.barTime)))return false;
    const ledger=new LiveStatsLedger(resolve(this.dir,'binance-live-stats.sqlite'));
@@ -99,7 +99,7 @@ export class BrowserFutures{
   }
  }
  registerRealOrder({orderId,groupId,clientId,role,side}){
-  if(this.symbol!==this.symbol)return false;
+  if(this.symbol!=='BTCUSDT')return false;
   const path=resolve(this.dir,'binance-live-stats.sqlite');
   mkdirSync(this.dir,{recursive:true});
   const ledger=new LiveStatsLedger(path);
@@ -107,7 +107,7 @@ export class BrowserFutures{
   finally{ledger.close();}
  }
  async refreshRealHistory({force=false}={}){
-  if(this.symbol!==this.symbol)return null;
+  if(this.symbol!=='BTCUSDT')return null;
   if(!this.api||!this.account)return null;
   if(this.historySyncTask)return this.historySyncTask;
   if(!force&&Date.now()-this.lastHistorySync<60000)return null;
@@ -231,7 +231,7 @@ export class BrowserFutures{
   if(!info||!Array.isArray(info.symbols))
    throw Error('Binance /fapi/v1/exchangeInfo: thiếu thông tin hợp đồng');
   const market=info.symbols.find(x=>x?.symbol===this.symbol&&x.contractType==='PERPETUAL'&&x.status==='TRADING'&&x.quoteAsset==='USDT');
-  if(!symbol)throw Error('Binance /fapi/v1/exchangeInfo: BTCUSDT Perpetual chưa ở trạng thái TRADING');
+  if(!market)throw Error('Binance /fapi/v1/exchangeInfo: BTCUSDT Perpetual chưa ở trạng thái TRADING');
   const f=k=>market?.filters?.find(x=>x.filterType===k);
   const marketLot=f('MARKET_LOT_SIZE'),regularLot=f('LOT_SIZE');
   const lot=marketLot&&Number(marketLot.stepSize)>0&&Number(marketLot.minQty)>0?marketLot:regularLot;
