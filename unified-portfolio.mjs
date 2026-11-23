@@ -1,7 +1,6 @@
 // One-screen, per-symbol OCC trade coordinator. Reuses the same BrowserFutures,
 // OCCSignalEngine, LIMIT, reversal and exchange-side protection as BTCUSDT.
 // All futures mutations remain opt-in, symbol-scoped and fail-closed.
-import {randomBytes} from 'node:crypto';
 import {existsSync,mkdirSync,readFileSync,writeFileSync,renameSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {BrowserFutures} from './futures-browser-service.mjs';
@@ -12,8 +11,6 @@ const MARKET='https://fapi.binance.com';
 export const validSymbol=s=>typeof s==='string'&&/^[A-Z0-9]{2,20}USDT$/.test(s);
 const MAX_ADDITIONAL_SYMBOLS=12;
 const inertVault=()=>({exists:()=>false,load:()=>null,save:()=>{},delete:()=>{}});
-const ownEntry=s=>s?.activeProtection?.phase==='PROTECTED'||
- s?.activeProtection?.entry&&s?.activeProtection?.stop;
 export class UnifiedPortfolio{
  constructor({dataDir,btc,clock=Date.now,publicGet=null}){
   if(!btc||!btc.symbol||btc.symbol!=='BTCUSDT')throw Error('Canonical BTC executor required');
@@ -104,18 +101,22 @@ export class UnifiedPortfolio{
   this.log(symbol,'ADDED','Đã thêm coin; AUTO mặc định OFF');
   return this.status();
  }
- remove(symbol){
+ async remove(symbol){
   const s=this.peers.get(symbol);
   if(!s)throw Error('Không có coin trong danh sách');
-  if(s.armed||s.busy||s.pendingLimit||s.activeProtection||s.previousProtection||
-     s.halted||s.account?.positionBTC||s.account?.openOrders||s.account?.openAlgos)
-   throw Error('Coin còn vị thế/lệnh hoặc checkpoint chưa đối soát; không được xóa');
+  if(s.armed||s.busy||s.pendingLimit||s.activeProtection||s.previousProtection||s.halted)
+   throw Error('Coin có vị thế hoặc checkpoint chưa đối soát; không được xóa');
+  if(!s.api)throw Error('Phải kết nối và xác minh Binance trước khi xóa coin');
+  // Never infer FLAT from a stale account snapshot. Read real exchange twice.
+  const first=await s.inspect(),second=await s.inspect();
+  if([first,second].some(a=>a.positionBTC!==0||a.openOrders!==0||a.openAlgos!==0))
+   throw Error('Binance còn vị thế hoặc STOP/TP '+symbol+'; không xóa');
   s.close();this.peers.delete(symbol);this.engines.delete(symbol);
   this.rows=this.rows.filter(x=>x.symbol!==symbol);this.persist();
-  this.log(symbol,'REMOVED','Ẩn coin khỏi workbench (giữ lại dữ liệu audit trên ổ đĩa)');
+  this.log(symbol,'REMOVED','Đã xác minh Binance FLAT và sạch lệnh; giữ dữ liệu kiểm toán trên ổ đĩa');
   return this.status();
  }
- select(symbol,yes){
+  select(symbol,yes){
   if(typeof yes!=='boolean')throw Error('AUTO coin phải là ON hoặc OFF');
   if(symbol==='BTCUSDT'){this.btcSelected=yes;this.persist();if(!yes)this.btc.disarm();
    return this.status();}
@@ -176,7 +177,8 @@ export class UnifiedPortfolio{
   const s=this.get(symbol);
   if(!s)throw Error('Coin chưa được thêm');
   if(symbol!=='BTCUSDT')await this.connectPeers();
-  if(symbol!=='BTCUSDT'&&confirmation!=='CHAP NHAN '+symbol+' FUTURES')
+  if(symbol==='BTCUSDT'&&confirmation!=='CHAP NHAN BTC FUTURES'||
+     symbol!=='BTCUSDT'&&confirmation!=='CHAP NHAN '+symbol+' FUTURES')
    throw Error('Chưa xác nhận giao dịch thật '+symbol);
   await this.inspectPeers(symbol);
   await s.arm('CHAP NHAN BTC FUTURES',marketPrice??await this.quote(symbol));
@@ -201,7 +203,7 @@ export class UnifiedPortfolio{
    for(const symbol of chosen){
     const session=this.get(symbol);
     if(session.armed)continue;
-    await this.enable(symbol,'CHAP NHAN '+symbol+' FUTURES',btcPrice&&symbol==='BTCUSDT'?btcPrice:null);
+    await this.enable(symbol,symbol==='BTCUSDT'?'CHAP NHAN BTC FUTURES':'CHAP NHAN '+symbol+' FUTURES',btcPrice&&symbol==='BTCUSDT'?btcPrice:null);
     newly.push(symbol);
    }
    return this.status();
