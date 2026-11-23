@@ -2,13 +2,14 @@
 // This module only validates fresh readbacks; it never submits/cancels orders.
 import {floorStep} from './futures-sizing.mjs';
 const ACTIVE=new Set(['NEW','ACCEPTED','PENDING_NEW']);
-const name=/^OCCBTC-[0-9a-f]{14}$/;
+const name=/^OCC(?:BTC|M)-[0-9a-f]{14}$/;
 const positive=x=>Number.isFinite(Number(x))&&Number(x)>0?Number(x):null;
 export function validateManagedExit({managed,account,algos,entryOrder,filters,role=null,expectedRemainingBTC=null,expectedEntryOrderId=null}){
  if(!managed?.entry||!managed?.stop||!Array.isArray(managed.tps)||
    !name.test(String(managed.entry.clientPrefix||''))||!['LONG','SHORT'].includes(managed.entry.side))
   throw Error('Không có checkpoint OCC hợp lệ cho lệnh này');
  const entry=managed.entry,prefix=entry.clientPrefix,algoPrefix=entry.algoPrefix||prefix;
+ const symbol=entry.symbol||'BTCUSDT';
  if(expectedEntryOrderId!==null&&String(expectedEntryOrderId)!==String(entry.orderId))
   throw Error('Lệnh trên màn hình đã thay đổi; cập nhật lại trước khi chốt');
  if(!account||!account.canTrade||account.dualSidePosition!==false||
@@ -23,7 +24,7 @@ export function validateManagedExit({managed,account,algos,entryOrder,filters,ro
     Math.abs(Number(expectedRemainingBTC)-qty)>1e-9)
   throw Error('Khối lượng BTC thay đổi; cập nhật vị thế trước khi chốt');
  if(!entryOrder||String(entryOrder.orderId)!==String(entry.orderId)||
-    entryOrder.symbol!=='BTCUSDT'||entryOrder.clientOrderId!==prefix||
+    entryOrder.symbol!==symbol||entryOrder.clientOrderId!==prefix||
     entryOrder.side!==(sign===1?'BUY':'SELL')||
     entryOrder.status!=='FILLED'||!['MARKET','LIMIT'].includes(entryOrder.type)||entryOrder.positionSide!=='BOTH'||
     !(Number(entryOrder.executedQty)>=qty-1e-9))
@@ -41,7 +42,7 @@ export function validateManagedExit({managed,account,algos,entryOrder,filters,ro
  const active=new Map();
  for(const o of algos){
   const saved=expected.get(String(o?.algoId));
-  if(!saved||o.symbol!=='BTCUSDT'||o.clientAlgoId!==saved.clientId||
+  if(!saved||o.symbol!==symbol||o.clientAlgoId!==saved.clientId||
      o.positionSide!=='BOTH'||o.side!==(sign===1?'SELL':'BUY')||
      !ACTIVE.has(String(o.algoStatus)))
    throw Error('Có lệnh Algo không thuộc OCC hoặc trạng thái không rõ; không chốt');
