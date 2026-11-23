@@ -229,7 +229,7 @@ export class UnifiedPortfolio{
   return this.serial(async()=>{
    const s=this.get(symbol);
    if(!s||!s.armed||s.halted||!feedHealthy)return;
-   if(this.clock()-Number(signal?.time)>10*60*1000)return;
+   if(this.clock()-Number(signal?.time)>2*60*1000)return;
    await this.inspectPeers(symbol);
    return s.signal(signal,feedHealthy,quoteProvider);
   });
@@ -261,7 +261,7 @@ export class UnifiedPortfolio{
      }
      if(recent.length===1){
       const signal=engine.onCandle(recent[0],{live:true,observedAt:now});
-      if(signal?.eligible&&now>=signal.time&&now-signal.time<=10*60*1000)
+      if(signal?.eligible&&now>=signal.time&&now-signal.time<=2*60*1000)
        await this.handleSignal(symbol,signal,true);
      }
     }catch(e){this.engines.delete(symbol);this.log(symbol,'SCAN_ERROR',e.message);}
