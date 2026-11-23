@@ -34,13 +34,14 @@ export function liveTargets(entry,side,c){
  const tp=v=>c.tpMode==='Percent'?entry*(1+dir*v/100):entry+dir*v;
  return {stop:entry*(1-dir*c.slPercent/100),tp1:tp(c.tp1Val),tp2:tp(c.tp2Val),tp3:tp(c.tp3Val)};
 }
-export function sizeBTC({entry,availableUSDT,step,minQty,minNotional},settings){
+export function sizeBTC({entry,availableUSDT,step,minQty,minNotional,maxQty=Infinity},settings){
  const c=validateLiveConfig(settings);
  if(!Number.isFinite(entry)||entry<=0||!Number.isFinite(availableUSDT)||availableUSDT<c.marginUSDT)
   throw Error('Insufficient available USDT or invalid entry');
  const notional=c.marginUSDT*c.leverage;
  const qty=floorStep(notional/entry,step);
  if(qty<minQty||qty*entry<minNotional)throw Error('Order smaller than Binance minimum qty/notional');
+ if(Number.isFinite(maxQty)&&qty>maxQty)throw Error('Order larger than Binance maximum quantity');
  const a=floorStep(qty*c.tp1Qty/100,step),b=floorStep(qty*c.tp2Qty/100,step),d=floorStep(qty-a-b,step);
  if([a,b,d].some(x=>x<minQty))throw Error('Each of TP1/TP2/TP3 must meet Binance minimum BTC quantity. Increase margin or leverage.');
  return {notional,qty,legs:[a,b,d]};
@@ -63,7 +64,8 @@ export function previewLiveSizing(settings,filters,price,availableUSDT){
  const p=Number(price),step=Number(filters.stepSize),minQty=Number(filters.minQty),
   minNotional=Number(filters.minNotional);
  const attempt=m=>{
-  try{return sizeBTC({entry:p,availableUSDT:1000,step,minQty,minNotional},
+  try{return sizeBTC({entry:p,availableUSDT:1000,step,minQty,minNotional,
+    maxQty:Number(filters.maxQty)>0?Number(filters.maxQty):Infinity},
    {...config,marginUSDT:m});}
   catch{return null;}
  };
