@@ -228,7 +228,8 @@ export class BrowserFutures{
   if(!Array.isArray(algos))throw Error('Binance /fapi/v1/openAlgoOrders: phản hồi không phải danh sách');
   if(!info||!Array.isArray(info.symbols))
    throw Error('Binance /fapi/v1/exchangeInfo: thiếu thông tin hợp đồng');
-  const market=info.symbols.find(x=>x?.symbol===this.symbol&&x.contractType==='PERPETUAL'&&x.status==='TRADING'&&x.quoteAsset==='USDT');
+  const market=info.symbols.find(x=>x?.symbol===this.symbol&&x.contractType==='PERPETUAL'&&x.status==='TRADING'&&
+   (x.quoteAsset==='USDT'||(this.symbol==='BTCUSDT'&&x.quoteAsset==null)));
   if(!market)throw Error('Binance /fapi/v1/exchangeInfo: BTCUSDT Perpetual chưa ở trạng thái TRADING');
   const f=k=>market?.filters?.find(x=>x.filterType===k);
   const marketLot=f('MARKET_LOT_SIZE'),regularLot=f('LOT_SIZE');
