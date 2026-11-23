@@ -40,14 +40,16 @@ test('Windows workflow tests and bundles all required runtime files',()=>{
  assert.match(workflow,/actions\/upload-artifact@v4/);
 });
 
-test('BTC-only Windows bundle has no multi-symbol executor, Scanner, or posting endpoints',()=>{
+test('Unified Futures has isolated symbols and no market-wide Square Scanner',()=>{
  const server=read('server.mjs'),ui=read('BINANCE_UI_PREVIEW.html');
  const build=read('BUILD_PORTABLE.ps1'),transport=read('futures-transport.mjs');
  for(const removed of ['multi-auto-worker.mjs','multi-auto-sizing.mjs','occ-square-scanner.mjs','OCC_SCANNER.html'])
   assert.ok(!build.includes("'"+removed+"'"),'removed component still in portable: '+removed);
  assert.doesNotMatch(server,/MultiAutoWorker|OccSquareScanner|\/control\/multi\/|\/api\/multi\/|\/control\/scanner\/|\/api\/scanner\/|\/occ-scanner/);
  assert.doesNotMatch(ui,/openMultiBtn|multiDialog|\/occ-scanner|\/control\/multi\/|\/api\/multi\//);
- assert.match(transport,/Only BTCUSDT permitted for Futures trading/);
+ assert.match(transport,/OCC_UNIFIED_SYMBOL_EXECUTOR/);
+ assert.match(server,/\/control\/unified\//);
+ assert.match(build,/'unified-portfolio\.mjs'/);
  assert.match(server,/Only BTCUSDT Square posts permitted/);
  const square=read('square-publisher.mjs');
  assert.doesNotMatch(square,/async onSignal\(|squareSignalCaption/);
