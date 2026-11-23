@@ -241,7 +241,7 @@ test('API, real Binance quote and minimized Auto config share a row without losi
  const apiStart=html.indexOf('<div class="panel apiPanel">');
  const priceStart=html.indexOf('<div class="panel pricePanel"');
  const configStart=html.indexOf('<div class="panel configPanel">');
- const positionStart=html.indexOf('<section class="positionSection"');
+ const positionStart=html.indexOf('<section id="btcPositionSection" class="positionSection"');
  assert.ok(apiStart>=0&&priceStart>apiStart&&configStart>priceStart&&positionStart>configStart);
  const api=html.slice(apiStart,priceStart),price=html.slice(priceStart,configStart),config=html.slice(configStart,positionStart);
  assert.doesNotMatch(api,/id="btcMarketTicker"/);
@@ -296,7 +296,7 @@ test('30-day Binance Income with verified freshness is shown separately from OCC
 test('BTC position is one full-width horizontal panel BELOW API and Auto settings, not the third top-grid column',()=>{
  const html=read('BINANCE_UI_PREVIEW.html');
  const top=html.indexOf('<section class="topgrid">');
- const position=html.indexOf('<section class="positionSection"');
+ const position=html.indexOf('<section id="btcPositionSection" class="positionSection"');
  const history=html.indexOf('<section class="below">');
  assert.ok(top>=0&&position>top&&history>position);
  const upper=html.slice(top,position),section=html.slice(position,history);
@@ -306,7 +306,7 @@ test('BTC position is one full-width horizontal panel BELOW API and Auto setting
  assert.match(section,/class="panel accountPanel"/);
  assert.match(section,/id="positionAnalysis"/);
  assert.equal((html.match(/class="panel accountPanel"/g)||[]).length,1);
- assert.equal((html.match(/class="positionSection"/g)||[]).length,1);
+ assert.equal((html.match(/class="positionSection"/g)||[]).length,2);
  for(const id of ['riskHeadline','riskUpdated','riskSummary','positionAnalysis',
   'entryPrice','markPrice','liqPrice','btcPnl','marginMode','accountLeverage',
   'botState','autoHint','compactSLprice','compactTP1price','compactTP2price','compactTP3price',
