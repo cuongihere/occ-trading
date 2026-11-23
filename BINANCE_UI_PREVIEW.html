@@ -937,6 +937,34 @@ body:not(.coinAlt) #altPositionSection{display:none!important}
  <th>Khối lượng</th><th>Entry</th><th>PnL mở</th><th>SL/TP</th><th>Xem</th></tr></thead>
  <tbody id="unifiedPositionsRows"><tr><td colspan="8">Chưa có dữ liệu</td></tr></tbody></table></div>
 </section>
+<dialog id="coinSettingsDialog" class="coinDialog">
+ <h2 id="coinSettingsTitle">Cài đặt coin</h2>
+ <div class="coinForm">
+  <label>Ký quỹ USDT<input id="coinMargin" type="number" min=".01" step="any"></label>
+  <label>Đòn bẩy 1–20x<input id="coinLeverage" type="number" min="1" max="20" step="1"></label>
+  <label>Chiều<select id="coinSide"><option value="BOTH">LONG & SHORT</option><option value="LONG">LONG</option><option value="SHORT">SHORT</option></select></label>
+  <label>Entry<select id="coinEntryMode"><option value="MARKET">MARKET</option><option value="LIMIT_PULLBACK">LIMIT Pullback</option></select></label>
+  <label>SL (%)<input id="coinSl" type="number" step="any" min=".1"></label>
+  <label>TP mode<select id="coinTpMode"><option value="Percent">Percent (%)</option><option value="Points">Points</option></select></label>
+  <label>TP1<input id="coinTp1" type="number" step="any"></label>
+  <label>TP2<input id="coinTp2" type="number" step="any"></label>
+  <label>TP3<input id="coinTp3" type="number" step="any"></label>
+  <label>Chốt TP1 (%)<input id="coinQty1" type="number" step="any"></label>
+  <label>Chốt TP2 (%)<input id="coinQty2" type="number" step="any"></label>
+  <label>Đảo chiều OCC<select id="coinReverse"><option value="false">OFF</option><option value="true">ON</option></select></label>
+  <label>Mốc LIMIT<select id="coinLimitBasis"><option value="OCC_CROSS">Giá giao cắt</option><option value="M15_CLOSE">Giá đóng nến</option><option value="OCC_TRIGGER">Giá kích hoạt</option></select></label>
+  <label>Lệch LIMIT (%)<input id="coinLimitOffset" type="number" step="any"></label>
+  <label>Chờ LIMIT (s)<input id="coinLimitWait" type="number" step="1"></label>
+ </div>
+ <p class="small">Cùng logic OCC BTC; mỗi mã có ký quỹ, leverage, SL/TP và checkpoint riêng. Không sửa khi vị thế/lệnh chưa đối soát.</p>
+ <div id="coinSettingsMsg" class="small" style="color:#fac99a"></div>
+ <div class="coinButtons">
+  <button id="coinCopyBTC" class="minor">Sao chép từ BTC</button>
+  <button id="coinSave" class="primary">Lưu cấu hình</button>
+  <button id="coinApplyLeverage" class="minor">Đồng bộ leverage Binance</button>
+  <button id="coinSettingsClose" class="minor">Đóng</button>
+ </div>
+</dialog>
 <details class="historyDrawer" id="historyDrawer">
  <summary class="historyDrawerSummary"><strong>Hiệu suất · Lịch sử</strong><button type="button" id="closeHistoryBtn" class="historyModalClose" aria-label="Đóng lịch sử">×</button>
   <span id="historyDrawerBrief">Đang đối soát lệnh và P&L…</span>
