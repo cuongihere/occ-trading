@@ -44,7 +44,7 @@ export class UnifiedPortfolio{
   for(const [symbol,s] of this.sessions()){
    if(symbol===except)continue;
    const cp=s.activeProtection||s.previousProtection;
-   if(!s.halted&&cp?.phase==='PROTECTED'&&cp?.entry?.symbol===symbol&&
+   if(!s.halted&&(!cp?.phase||cp.phase==='PROTECTED')&&cp?.entry?.symbol===symbol&&
       cp?.stop&&!cp?.inFlight)list.push(symbol);
   }
   return list;
@@ -148,7 +148,7 @@ export class UnifiedPortfolio{
   const source=this.btc.api;
   if(!source?.key||!source?.secret)throw Error('Kết nối API Futures trên BTC trước');
   for(const peer of this.peers.values()){
-   if(peer.api&&peer.api.key===source.key)continue;
+   if(peer.api&&peer.api.key===source.key&&peer.api.secret===source.secret)continue;
    if(peer.armed||peer.busy||peer.pendingLimit)throw Error(peer.symbol+' chưa thể đổi kết nối API');
    await peer.connect({apiKey:source.key,apiSecret:source.secret,
     environment:'production',remember:null});
