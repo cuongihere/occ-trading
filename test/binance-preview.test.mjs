@@ -243,7 +243,7 @@ test('API, real Binance quote and minimized Auto config share a row without losi
  const configStart=html.indexOf('<div class="panel configPanel">');
  const positionStart=html.indexOf('<section id="btcPositionSection" class="positionSection"');
  assert.ok(apiStart>=0&&priceStart>apiStart&&configStart>priceStart&&positionStart>configStart);
- const api=html.slice(apiStart,priceStart),price=html.slice(priceStart,configStart),config=html.slice(configStart,positionStart);
+ const api=html.slice(apiStart,priceStart),price=html.slice(priceStart,configStart),config=html.slice(configStart,html.indexOf('<section class="symbolStrip"'));
  assert.doesNotMatch(api,/id="btcMarketTicker"/);
  assert.match(price,/class="marketTicker stale" id="btcMarketTicker"/);
  assert.equal((html.match(/id="btcMarketTicker"/g)||[]).length,1);
