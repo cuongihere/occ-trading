@@ -99,6 +99,10 @@ export class UnifiedPortfolio{
   peer.saveConfig({...this.btc.config}); // Clone strategy settings, not trade/account state.
   this.rows.push({symbol,selected:false});this.persist();
   this.log(symbol,'ADDED','Đã thêm coin; AUTO mặc định OFF');
+  // A selected coin must be viewable before AUTO is armed. Connections here
+  // perform authenticated reads only; no futures order is sent.
+  if(this.btc.api)try{await this.connectPeers();}
+  catch(e){this.log(symbol,'READONLY_CONNECT_FAILED',e.message);}
   return this.status();
  }
  async remove(symbol){
