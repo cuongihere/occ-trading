@@ -13,7 +13,7 @@ const near=(a,b)=>Number.isFinite(Number(a))&&Number.isFinite(Number(b))&&
  Math.abs(Number(a)-Number(b))<1e-8;
 const closeSide=side=>side==='LONG'?'SELL':'BUY';
 function checkOrder(o,p){
- if(!o||o.symbol!=='BTCUSDT'||String(o.orderId)!==String(p.orderId)||
+ if(!o||o.symbol!==(p.symbol||'BTCUSDT')||String(o.orderId)!==String(p.orderId)||
   o.clientOrderId!==p.clientId||o.positionSide!=='BOTH'||
   o.type!=='LIMIT'||o.timeInForce!=='GTD'||o.side!==(p.side==='LONG'?'BUY':'SELL')||
   !near(o.price,p.price)||!near(o.origQty,p.qty)||
@@ -24,7 +24,7 @@ function checkOrder(o,p){
 }
 export async function readVerifiedLimit(s,p){
  return checkOrder(await s.api.get('/fapi/v1/order',
-  {symbol:'BTCUSDT',orderId:p.orderId}),p);
+  {symbol:s.symbol,orderId:p.orderId}),p);
 }
 export function installLimitEntry(BrowserFutures){
  BrowserFutures.prototype.submitLimit=async function(signal,account,marketPrice){
@@ -39,7 +39,7 @@ export function installLimitEntry(BrowserFutures){
   const exactTrigger=c.limitBasis==='OCC_TRIGGER';
   const reference=side==='LONG'?Math.min(basis,marketPrice):Math.max(basis,marketPrice);
   const data=await this.api.get('/fapi/v1/exchangeInfo');
-  const symbol=data?.symbols?.find(x=>x.symbol==='BTCUSDT'&&x.status==='TRADING'&&x.contractType==='PERPETUAL');
+  const symbol=data?.symbols?.find(x=>x.symbol===this.symbol&&x.status==='TRADING'&&x.contractType==='PERPETUAL');
   const lot=symbol?.filters?.find(x=>x.filterType==='LOT_SIZE');
   const tick=Number(symbol?.filters?.find(x=>x.filterType==='PRICE_FILTER')?.tickSize);
   const minNotional=Number(symbol?.filters?.find(x=>x.filterType==='MIN_NOTIONAL')?.notional)||5;
@@ -56,9 +56,9 @@ export function installLimitEntry(BrowserFutures){
   const plan=draftProtectedOrder({side,account,
    filters:{stepSize:Number(lot.stepSize),minQty:Number(lot.minQty),
     minNotional,tickSize:tick},quotePrice:price},c);
-  const clientId='OCCBTC-'+randomBytes(7).toString('hex');
+  const clientId=(this.symbol==='BTCUSDT'?'OCCBTC-':'OCCM-')+randomBytes(7).toString('hex');
   const now=Date.now(),goodTillDate=Math.floor((now+660000)/1000)*1000;
-  const p={clientId,side,qty:plan.qtyBTC,price,signalId:signal.id,
+  const p={symbol:this.symbol,clientId,side,qty:plan.qtyBTC,price,signalId:signal.id,
     signalBarTime:Number(signal.barTime),signalClose:Number(signal.candleClose),
     signalTriggerPrice:Number(signal.triggerPrice),signalCrossMA:Number(signal.crossPrice),
    orderId:null,startedAt:now,expiresAt:now+c.limitWaitSeconds*1000,goodTillDate,
@@ -68,7 +68,7 @@ export function installLimitEntry(BrowserFutures){
   this.saveIntent({phase:'LIMIT_SENDING',...p});
   // Never retry a mutation if ACK is lost.
   const ack=await this.api.post('/fapi/v1/order',{
-   symbol:'BTCUSDT',side:side==='LONG'?'BUY':'SELL',positionSide:'BOTH',
+   symbol:this.symbol,side:side==='LONG'?'BUY':'SELL',positionSide:'BOTH',
    type:'LIMIT',timeInForce:'GTD',quantity:String(plan.qtyBTC),price:String(price),
    goodTillDate,newClientOrderId:clientId,newOrderRespType:'ACK'
   });
@@ -108,7 +108,7 @@ export function installLimitEntry(BrowserFutures){
    // filled position behind a stale pendingLimit guard.
    this.saveIntent({phase:'LIMIT_FILLED',...p,filledQty:qty});
    this.pendingLimit=null;this.limitCancelUncertain=false;
-   const coordinator=new ProtectionCoordinator({api:this.api,
+   const coordinator=new ProtectionCoordinator({symbol:this.symbol,api:this.api,
     checkpoint:new ProtectionCheckpoint(this.protectionPath),
     settings:this.config,notify:n=>this.log('CRITICAL',n.reason)});
    const result=await coordinator.protectConfirmedEntry({
@@ -133,16 +133,16 @@ export function installLimitEntry(BrowserFutures){
   const verify=await this.inspect();
   if(!near(Math.abs(verify.positionBTC),qty)||verify.openOrders||verify.openAlgos)
    throw Error('Không thể xác minh vị thế LIMIT khớp một phần trước emergency close');
-  const exitId='OCCBTC-'+randomBytes(7).toString('hex');
+  const exitId=(this.symbol==='BTCUSDT'?'OCCBTC-':'OCCM-')+randomBytes(7).toString('hex');
   this.saveIntent({phase:'LIMIT_PARTIAL_CLOSE_SENDING',...p,
    filledQty:qty,exitId});
   const ack=await this.api.post('/fapi/v1/order',{
-   symbol:'BTCUSDT',side:closeSide(p.side),positionSide:'BOTH',
+   symbol:this.symbol,side:closeSide(p.side),positionSide:'BOTH',
    type:'MARKET',reduceOnly:'true',quantity:String(qty),
    newClientOrderId:exitId,newOrderRespType:'RESULT'});
   if(!ack?.orderId||ack.status!=='FILLED')
    throw Error('Chốt phần LIMIT khớp chưa được Binance xác nhận');
-  const v=await this.api.get('/fapi/v1/order',{symbol:'BTCUSDT',orderId:ack.orderId});
+  const v=await this.api.get('/fapi/v1/order',{symbol:this.symbol,orderId:ack.orderId});
   if(v.clientOrderId!==exitId||v.status!=='FILLED'||
     !(v.reduceOnly===true||v.reduceOnly==='true')||!near(v.executedQty,qty))
    throw Error('Binance chốt LIMIT khớp một phần chưa xác minh reduceOnly');
@@ -174,7 +174,7 @@ export function installLimitEntry(BrowserFutures){
    this.limitCancelUncertain=true;
    mutated=true;
    await this.api.del('/fapi/v1/order',{
-    symbol:'BTCUSDT',orderId:p.orderId,origClientOrderId:p.clientId});
+    symbol:this.symbol,orderId:p.orderId,origClientOrderId:p.clientId});
    o=await readVerifiedLimit(this,p);
    if(!completed.has(o.status))throw Error('LIMIT chưa dừng sau cancel');
    await this.finalizeLimit(o);
