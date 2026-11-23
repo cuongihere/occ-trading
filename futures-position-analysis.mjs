@@ -1,4 +1,4 @@
-// Read-only BTCUSDT Futures position/risk analysis. Inputs are exchange readbacks,
+// Read-only USDT Perpetual Futures position/risk analysis. Inputs are exchange readbacks,
 // never current bot settings. No order is submitted, changed, cancelled or inferred.
 const finite=v=>v!==null&&v!==undefined&&v!==''&&Number.isFinite(Number(v))?Number(v):null;
 const positive=v=>{const n=finite(v);return n!==null&&n>0?n:null;};
@@ -6,14 +6,14 @@ const isTrue=v=>v===true||v==='true';
 const activeStatus=new Set(['NEW','ACCEPTED','PENDING_NEW']);
 const round=n=>Number(n.toFixed(8));
 const gain=(direction,entry,price,qty)=>round(direction*(price-entry)*qty);
-export function analyzeFuturesPosition({riskRows,algoOrders,openOrders,checkpoint=null,managed=false,leverage=null,fetchedAt=Date.now()}){
+export function analyzeFuturesPosition({riskRows,algoOrders,openOrders,checkpoint=null,managed=false,leverage=null,fetchedAt=Date.now(),symbol='BTCUSDT'}){
  if(!Array.isArray(riskRows)||!Array.isArray(algoOrders)||!Array.isArray(openOrders))
   throw Error('Không xác minh được vị thế hoặc danh sách lệnh Binance');
- const matches=riskRows.filter(r=>r?.symbol==='BTCUSDT');
+ const matches=riskRows.filter(r=>r?.symbol===symbol);
  if(matches.some(x=>x.positionSide!=='BOTH')||matches.length>1)
-  throw Error('Vị thế BTCUSDT không ở chế độ One-way hoặc có nhiều kết quả');
+  throw Error('Vị thế USDT Perpetual không ở chế độ One-way hoặc có nhiều kết quả');
  const p=matches[0]||null,amount=finite(p?.positionAmt);
- if(p&&amount===null)throw Error('Binance trả về khối lượng BTCUSDT không hợp lệ');
+ if(p&&amount===null)throw Error('Binance trả về khối lượng USDT Perpetual không hợp lệ');
  const amt=amount||0,qty=Math.abs(amt),side=amt>0?'LONG':amt<0?'SHORT':null,
   direction=amt>0?1:-1,entry=positive(p?.entryPrice),mark=positive(p?.markPrice),
   liq=positive(p?.liquidationPrice);
@@ -23,7 +23,7 @@ export function analyzeFuturesPosition({riskRows,algoOrders,openOrders,checkpoin
  // against the exact SL/TP record previously acknowledged and checkpointed.
  for(const x of [checkpoint?.stop,...(checkpoint?.tps||[])])
   if(x?.id!=null&&x?.clientId)known.set(String(x.id),String(x.clientId));
- const orders=algoOrders.filter(o=>o?.symbol==='BTCUSDT').map(o=>{
+ const orders=algoOrders.filter(o=>o?.symbol===symbol).map(o=>{
   const kind=String(o.orderType||o.type||'UNKNOWN').toUpperCase();
   const price=positive(o.triggerPrice),quantity=positive(o.quantity);
   const status=String(o.algoStatus||o.status||'UNKNOWN').toUpperCase();
@@ -43,7 +43,7 @@ export function analyzeFuturesPosition({riskRows,algoOrders,openOrders,checkpoin
     (managed?'BOT_ĐANG_QUẢN_LÝ':'KHỚP_CHECKPOINT'):'CHƯA_XÁC_MINH',
    validStop:!!validStop,validTp:!!validTp};
  });
- const normalCount=openOrders.filter(o=>o?.symbol==='BTCUSDT').length;
+ const normalCount=openOrders.filter(o=>o?.symbol===symbol).length;
  const snapshot={status:side?'open':'flat',fetchedAt,position:side?{
    side,quantityBTC:qty,entryPrice:entry,markPrice:mark,liquidationPrice:liq,
    notionalUSDT:round(qty*(mark||entry)),unrealizedUSDT:finite(p?.unRealizedProfit??p?.unrealizedProfit)??(mark?gain(direction,entry,mark,qty):null),
@@ -57,7 +57,7 @@ export function analyzeFuturesPosition({riskRows,algoOrders,openOrders,checkpoin
   // Without a position there is no meaningful quantity share or PnL projection.
   snapshot.levels=orders.map(o=>({...o,label:o.role,quantityBTC:o.quantity,
    sharePercent:null,priceMovePercent:null,grossUSDT:null,confirmed:false}));
-  if(orders.length||normalCount)warnings.push('Không có vị thế BTCUSDT nhưng còn lệnh đang mở: cần kiểm tra Binance trước khi bật lại AUTO.');
+  if(orders.length||normalCount)warnings.push('Không có vị thế USDT Perpetual nhưng còn lệnh đang mở: cần kiểm tra Binance trước khi bật lại AUTO.');
   return snapshot;
  }
  if(normalCount)warnings.push('Có '+normalCount+' lệnh thường trên Binance; kịch bản bên dưới không tính các lệnh này.');
