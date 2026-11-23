@@ -21,13 +21,19 @@ const DEFAULT={side:'BOTH',marginUSDT:20,leverage:5,slPercent:1,tpMode:'Percent'
  tp1Val:1,tp2Val:2,tp3Val:3,tp1Qty:33,tp2Qty:33,reverseOnSignal:false};
 const safeJSON=(value)=>JSON.parse(JSON.stringify(value));
 export class BrowserFutures{
- constructor({dataDir,transportFactory=null,credentialVault=null}){
-  this.dir=resolve(dataDir);this.path=resolve(this.dir,'futures-browser-settings.json');
-  this.intentPath=resolve(this.dir,'futures-live-intent.json');
-  this.protectionPath=resolve(this.dir,'futures-live-protection.json');
-  this.reversalPath=resolve(this.dir,'futures-last-reversal.json');
+ constructor({dataDir,transportFactory=null,credentialVault=null,symbol='BTCUSDT',managedOtherSymbols=()=>[]}){
+  if(!/^[A-Z0-9]{2,20}USDT$/.test(symbol))throw Error('Invalid managed USDT perpetual symbol');
+  this.symbol=symbol;
+  this.managedOtherSymbols=managedOtherSymbols;
+  const btcOnly=symbol===this.symbol;
+  const filename=(btc,other)=>btcOnly?btc:other;
+  this.dir=resolve(dataDir);this.path=resolve(this.dir,filename('futures-browser-settings.json','futures-'+symbol+'-settings.json'));
+  this.intentPath=resolve(this.dir,filename('futures-live-intent.json','futures-'+symbol+'-intent.json'));
+  this.protectionPath=resolve(this.dir,filename('futures-live-protection.json','futures-'+symbol+'-protection.json'));
+  this.reversalPath=resolve(this.dir,filename('futures-last-reversal.json','futures-'+symbol+'-last-reversal.json'));
   this.config=validateLiveConfig(existsSync(this.path)?JSON.parse(readFileSync(this.path,'utf8')):DEFAULT);
   this.transportFactory=transportFactory||((params)=>new FuturesTransport(params));
+  if(!btcOnly&&!credentialVault)throw Error('Non-BTC session requires a non-persisting credential adapter');
   this.vault=credentialVault||new WindowsCredentialVault(resolve(this.dir,'futures-api.dpapi.json'));
   this.squarePublisher=null;
   this.lastAccountSync=null;
@@ -66,7 +72,7 @@ export class BrowserFutures{
  setSquarePublisher(publisher){this.squarePublisher=publisher;}
  // A Square failure MUST NOT alter BTC position, SL/TP, or halt trading.
  notifySquareProtected(result){
-  if(!this.squarePublisher)return;
+  if(this.symbol!==this.symbol||!this.squarePublisher)return;
   Promise.resolve().then(()=>this.squarePublisher.onProtected(result))
    .then(out=>{if(out?.status==='SENT')this.log('SQUARE_POSTED','Bài BTCUSDT đã đăng Binance Square.');})
    .catch(e=>this.log('SQUARE_FAILED','Square: '+String(e.message||e).slice(0,180)));
@@ -75,6 +81,7 @@ export class BrowserFutures{
  // Provenance tracking is diagnostic only; failure must not affect
  // Binance entry/protection, reverse logic or risk checkpoints.
  recordVerifiedSignal({orderId,clientId,signal}){
+  if(this.symbol!==this.symbol)return false; // BTC audit ledger is strictly BTC-only.
   try{
    if(!signal||!Number.isSafeInteger(Number(signal.barTime)))return false;
    const ledger=new LiveStatsLedger(resolve(this.dir,'binance-live-stats.sqlite'));
@@ -92,6 +99,7 @@ export class BrowserFutures{
   }
  }
  registerRealOrder({orderId,groupId,clientId,role,side}){
+  if(this.symbol!==this.symbol)return false;
   const path=resolve(this.dir,'binance-live-stats.sqlite');
   mkdirSync(this.dir,{recursive:true});
   const ledger=new LiveStatsLedger(path);
@@ -99,6 +107,7 @@ export class BrowserFutures{
   finally{ledger.close();}
  }
  async refreshRealHistory({force=false}={}){
+  if(this.symbol!==this.symbol)return null;
   if(!this.api||!this.account)return null;
   if(this.historySyncTask)return this.historySyncTask;
   if(!force&&Date.now()-this.lastHistorySync<60000)return null;
@@ -159,7 +168,7 @@ export class BrowserFutures{
   const temp=this.intentPath+'.tmp';writeFileSync(temp,JSON.stringify(record,null,2),{mode:0o600});renameSync(temp,this.intentPath);
  }
  snapshot(){
-  return {connected:!!this.api&&!!this.account,environment:this.environment,armed:this.armed,
+  return {symbol:this.symbol,connected:!!this.api&&!!this.account,environment:this.environment,armed:this.armed,
    realFuturesOnly:true,halted:this.halted,busy:this.busy,error:this.error,
    recoveryStatus:this.recoveryStatus,lastRecoveryCheck:this.lastRecoveryCheck,
    lastHistorySync:this.lastHistorySync,lastIncomeSync:this.lastIncomeSync,
@@ -182,9 +191,9 @@ export class BrowserFutures{
   if(!this.api)throw Error('Chưa kết nối Binance Futures API');
   if(this.busy)return {status:'syncing',fetchedAt:Date.now(),warnings:['Đang thực hiện giao dịch/đối soát; chờ dữ liệu Binance ổn định.']};
   const [riskRows,algoOrders,openOrders]=await Promise.all([
-   this.api.get('/fapi/v3/positionRisk',{symbol:'BTCUSDT'}),
-   this.api.get('/fapi/v1/openAlgoOrders',{symbol:'BTCUSDT'}),
-   this.api.get('/fapi/v1/openOrders',{symbol:'BTCUSDT'})
+   this.api.get('/fapi/v3/positionRisk',{symbol:this.symbol}),
+   this.api.get('/fapi/v1/openAlgoOrders',{symbol:this.symbol}),
+   this.api.get('/fapi/v1/openOrders',{symbol:this.symbol})
   ]);
   const analysis=analyzeFuturesPosition({riskRows,algoOrders,openOrders,
    checkpoint:this.activeProtection||this.previousProtection,
@@ -204,26 +213,26 @@ export class BrowserFutures{
   // Never treat an absent BTCUSDT row as a failed API connection.
   const [account,mode,config,positions,orders,algos,info]=await Promise.all([
    this.api.get('/fapi/v2/account'),this.api.get('/fapi/v1/positionSide/dual'),
-   this.api.get('/fapi/v1/symbolConfig',{symbol:'BTCUSDT'}),
-   this.api.get('/fapi/v3/positionRisk',{symbol:'BTCUSDT'}),
-   this.api.get('/fapi/v1/openOrders',{symbol:'BTCUSDT'}),
-   this.api.get('/fapi/v1/openAlgoOrders',{symbol:'BTCUSDT'}),
+   this.api.get('/fapi/v1/symbolConfig',{symbol:this.symbol}),
+   this.api.get('/fapi/v3/positionRisk',{symbol:this.symbol}),
+   this.api.get('/fapi/v1/openOrders',{symbol:this.symbol}),
+   this.api.get('/fapi/v1/openAlgoOrders',{symbol:this.symbol}),
    this.api.get('/fapi/v1/exchangeInfo')]);
   if(!account||typeof account!=='object'||!Array.isArray(account.assets))
    throw Error('Binance /fapi/v2/account: thiếu assets; kiểm tra quyền đọc tài khoản Futures');
   if(!mode||typeof mode.dualSidePosition!=='boolean')
    throw Error('Binance /fapi/v1/positionSide/dual: dữ liệu One-way/Hedge không hợp lệ');
   if(!Array.isArray(config))throw Error('Binance /fapi/v1/symbolConfig: phản hồi không phải danh sách');
-  const c=config.find(x=>x?.symbol==='BTCUSDT');
+  const c=config.find(x=>x?.symbol===this.symbol);
   if(!c)throw Error('Binance /fapi/v1/symbolConfig: không có cấu hình BTCUSDT');
   if(!Array.isArray(positions))throw Error('Binance /fapi/v3/positionRisk: phản hồi không phải danh sách');
   if(!Array.isArray(orders))throw Error('Binance /fapi/v1/openOrders: phản hồi không phải danh sách');
   if(!Array.isArray(algos))throw Error('Binance /fapi/v1/openAlgoOrders: phản hồi không phải danh sách');
   if(!info||!Array.isArray(info.symbols))
    throw Error('Binance /fapi/v1/exchangeInfo: thiếu thông tin hợp đồng');
-  const symbol=info.symbols.find(x=>x?.symbol==='BTCUSDT'&&x.contractType==='PERPETUAL'&&x.status==='TRADING');
+  const market=info.symbols.find(x=>x?.symbol===this.symbol&&x.contractType==='PERPETUAL'&&x.status==='TRADING'&&x.quoteAsset==='USDT');
   if(!symbol)throw Error('Binance /fapi/v1/exchangeInfo: BTCUSDT Perpetual chưa ở trạng thái TRADING');
-  const f=k=>symbol.filters?.find(x=>x.filterType===k);
+  const f=k=>market?.filters?.find(x=>x.filterType===k);
   const marketLot=f('MARKET_LOT_SIZE'),regularLot=f('LOT_SIZE');
   const lot=marketLot&&Number(marketLot.stepSize)>0&&Number(marketLot.minQty)>0?marketLot:regularLot;
   this.filters={stepSize:Number(lot?.stepSize),minQty:Number(lot?.minQty),
@@ -235,7 +244,7 @@ export class BrowserFutures{
   const availableUSDT=Number(usdt.availableBalance),walletUSDT=Number(usdt.walletBalance);
   if(!Number.isFinite(availableUSDT)||!Number.isFinite(walletUSDT))
    throw Error('Binance /fapi/v2/account: số dư USDT không hợp lệ');
-  const matching=positions.filter(x=>x?.symbol==='BTCUSDT');
+  const matching=positions.filter(x=>x?.symbol===this.symbol);
   if(matching.some(x=>x.positionSide!=='BOTH')||matching.length>1)
    throw Error('Binance /fapi/v3/positionRisk: vị thế BTCUSDT không ở chế độ One-way');
   const p=matching[0]??null;
@@ -250,10 +259,11 @@ export class BrowserFutures{
   const markPrice=p?Number(p.markPrice??0):null;
   const liquidationPrice=p?Number(p.liquidationPrice??0):null;
   this.account={
-   symbol:'BTCUSDT',contractType:'PERPETUAL',dualSidePosition:mode.dualSidePosition,
+   symbol:this.symbol,contractType:'PERPETUAL',dualSidePosition:mode.dualSidePosition,
    marginType:c.marginType,leverage,canTrade:account.canTrade===true,
    hasOtherPositions:Array.isArray(account.positions)&&account.positions.some(
-    x=>x.symbol!=='BTCUSDT'&&Number(x.positionAmt)!==0),
+    x=>x.symbol!==this.symbol&&Number(x.positionAmt)!==0&&
+     !new Set(this.managedOtherSymbols()).has(x.symbol)),
    hasUnknownOrders:orders.length>0||algos.length>0,
    positionBTC,entryPrice:p?Number(p.entryPrice)||0:0,availableUSDT,walletUSDT,
    totalWalletUSDT:Number.isFinite(totalWallet)?totalWallet:walletUSDT,
@@ -283,7 +293,8 @@ export class BrowserFutures{
   }
   this.api?.close();this.api=null;this.account=null;this.environment='production';
   const connection=this.transportFactory({apiKey,apiSecret,environment:'production',
-   productionConsent:'I_ACCEPT_LIVE_BTCUSDT'});
+   productionConsent:'I_ACCEPT_LIVE_BTCUSDT',allowedSymbols:[this.symbol],
+   unifiedConsent:this.symbol==='BTCUSDT'?null:'OCC_UNIFIED_SYMBOL_EXECUTOR'});
   this.api=connection;
   try{await this.inspect();this.error=this.halted?this.error:null;
    if(remember===true)this.vault.save({apiKey,apiSecret});
@@ -325,7 +336,7 @@ export class BrowserFutures{
   const saved=this.previousProtection,entry=saved.entry;
   const intent=existsSync(this.intentPath)?JSON.parse(readFileSync(this.intentPath,'utf8')):null;
   if(!entry||!saved.stop||!Array.isArray(saved.tps)||!saved.tps.length||
-     saved.inFlight||!/^OCCBTC-[a-f0-9]{14}$/.test(String(entry.clientPrefix||''))||
+     saved.inFlight||!/^OCC(?:BTC|M)-[a-f0-9]{14}$/.test(String(entry.clientPrefix||''))||
      !['PROTECTED','STALE_ALGO_CANCEL_SENDING'].includes(intent?.phase))
    throw Error('Checkpoint/intent chưa rõ nguồn gốc; không tự hủy lệnh');
   this.busy=true;this.recoveryStatus='checking';this.lastRecoveryCheck=Date.now();
@@ -344,7 +355,7 @@ export class BrowserFutures{
      throw Error('ID Algo không khớp checkpoint OCC; không hủy');
     expected.set(String(x.id),x);
    }
-   const algos=await this.api.get('/fapi/v1/openAlgoOrders',{symbol:'BTCUSDT'});
+   const algos=await this.api.get('/fapi/v1/openAlgoOrders',{symbol:this.symbol});
    if(!Array.isArray(algos))throw Error('Không đọc được SL/TP đang treo');
    const active=new Set(['NEW','ACCEPTED','PENDING_NEW']);
    const closeSide=entry.side==='LONG'?'SELL':'BUY';
@@ -352,7 +363,7 @@ export class BrowserFutures{
    for(const algo of algos){
     const old=expected.get(String(algo.algoId));
     const isStop=old?.role==='SL';
-    if(!old||algo.symbol!=='BTCUSDT'||algo.clientAlgoId!==old.clientId||
+    if(!old||algo.symbol!==this.symbol||algo.clientAlgoId!==old.clientId||
       algo.side!==closeSide||algo.positionSide!=='BOTH'||
       !active.has(String(algo.algoStatus))||
       (isStop?(algo.orderType!=='STOP_MARKET'||algo.closePosition!==true):
@@ -367,7 +378,7 @@ export class BrowserFutures{
      throw Error('Vị thế mới xuất hiện trong lúc đối soát; dừng hủy SL/TP');
     this.saveIntent({phase:'STALE_ALGO_CANCEL_SENDING',
      oldClientId:entry.clientPrefix,removingAlgoId:String(algo.algoId),at:Date.now()});
-    await this.api.del('/fapi/v1/algoOrder',{symbol:'BTCUSDT',algoId:algo.algoId});
+    await this.api.del('/fapi/v1/algoOrder',{symbol:this.symbol,algoId:algo.algoId});
     this.log('STALE_ALGO_CANCELLED','Đã yêu cầu hủy SL/TP cũ #'+algo.algoId+' khi BTCUSDT FLAT.');
    }
    const result=await this.inspect();
@@ -432,11 +443,11 @@ export class BrowserFutures{
  async refreshAccountOverview(){
   if(!this.api||this.busy)return this.account;
   const [account,positions]=await Promise.all([
-   this.api.get('/fapi/v2/account'),this.api.get('/fapi/v3/positionRisk',{symbol:'BTCUSDT'})]);
+   this.api.get('/fapi/v2/account'),this.api.get('/fapi/v3/positionRisk',{symbol:this.symbol})]);
   if(!account||!Array.isArray(account.assets)||!Array.isArray(positions))throw Error('Không đọc được số dư/vị thế Binance');
   const usdt=account.assets.find(x=>x.asset==='USDT');
   if(!usdt)throw Error('Tài khoản Futures không có tài sản USDT');
-  const btc=positions.find(x=>x.symbol==='BTCUSDT'&&x.positionSide==='BOTH');
+  const btc=positions.find(x=>x.symbol===this.symbol&&x.positionSide==='BOTH');
   const numberOr=(a,b)=>Number.isFinite(Number(a))?Number(a):b;
   const wallet=numberOr(usdt.walletBalance,this.account?.walletUSDT??0);
   const unrealized=numberOr(account.totalUnrealizedProfit,numberOr(btc?.unRealizedProfit,0));
@@ -456,7 +467,7 @@ export class BrowserFutures{
   if(this.armed||this.busy||this.halted||this.activeProtection||this.pendingLimit)
    throw Error('Tắt Auto và xử lý hết lệnh/vị thế BTC trước khi thay đòn bẩy');
   const requested=Number(requestedLeverage);
-  if(confirmation!=='SYNC_BTCUSDT_LEVERAGE'||!Number.isInteger(requested)||
+  if(confirmation!=='SYNC_'+this.symbol+'_LEVERAGE'||!Number.isInteger(requested)||
      requested!==this.config.leverage||requested<1||requested>20)
    throw Error('Cần xác nhận áp dụng đúng đòn bẩy đã lưu cho BTCUSDT');
   this.busy=true;
@@ -471,8 +482,8 @@ export class BrowserFutures{
    }
    this.log('LEVERAGE_CHANGE_REQUEST','Yêu cầu thay BTCUSDT '+before.leverage+'x → '+requested+'x');
    // Never retry a leverage POST on unknown network outcome; inspect before further actions.
-   const acknowledgement=await this.api.post('/fapi/v1/leverage',{symbol:'BTCUSDT',leverage:requested});
-   if(acknowledgement?.symbol!=='BTCUSDT'||Number(acknowledgement.leverage)!==requested)
+   const acknowledgement=await this.api.post('/fapi/v1/leverage',{symbol:this.symbol,leverage:requested});
+   if(acknowledgement?.symbol!==this.symbol||Number(acknowledgement.leverage)!==requested)
     throw Error('Binance chưa xác nhận thay đòn bẩy BTCUSDT');
    const verified=await this.inspect();
    if(verified.leverage!==requested)
@@ -508,11 +519,11 @@ export class BrowserFutures{
      !(a.entryPrice>0)||!(this.filters?.tickSize>0))
    throw Error('Vị thế Binance không khớp cấu hình OCC, hoặc còn lệnh thường/vị thế khác');
   const [order,algos]=await Promise.all([
-   this.api.get('/fapi/v1/order',{symbol:'BTCUSDT',orderId:entry.orderId}),
-   this.api.get('/fapi/v1/openAlgoOrders',{symbol:'BTCUSDT'})
+   this.api.get('/fapi/v1/order',{symbol:this.symbol,orderId:entry.orderId}),
+   this.api.get('/fapi/v1/openAlgoOrders',{symbol:this.symbol})
   ]);
   const tick=this.filters.tickSize;
-  if(order?.symbol!=='BTCUSDT'||String(order.orderId)!==String(entry.orderId)||
+  if(order?.symbol!==this.symbol||String(order.orderId)!==String(entry.orderId)||
      order.clientOrderId!==entry.clientPrefix||order.status!=='FILLED'||
      !['MARKET','LIMIT'].includes(order.type)||order.positionSide!=='BOTH'||
      order.side!==(side==='LONG'?'BUY':'SELL')||
@@ -535,7 +546,7 @@ export class BrowserFutures{
   let foundStop=false,tpQty=0;
   for(const o of algos){
    const savedOrder=expected.get(String(o?.algoId));
-   if(o?.symbol!=='BTCUSDT'||!savedOrder||o.clientAlgoId!==savedOrder.clientId||
+   if(o?.symbol!==this.symbol||!savedOrder||o.clientAlgoId!==savedOrder.clientId||
       o.positionSide!=='BOTH'||o.side!==closeSide||
       !active.has(String(o.algoStatus))||
       (o.workingType&&o.workingType!=='CONTRACT_PRICE')||
@@ -600,22 +611,22 @@ export class BrowserFutures{
  // Never retry an ambiguous order and never submit opposite-opening quantity.
  async emergencyCloseIfUnprotected(){
   if(!this.api||this.environment!=='production')return;
-  const risk=await this.api.get('/fapi/v3/positionRisk',{symbol:'BTCUSDT'});
+  const risk=await this.api.get('/fapi/v3/positionRisk',{symbol:this.symbol});
   if(!Array.isArray(risk))throw Error('Cannot verify position');
-  const row=risk.find(x=>x.symbol==='BTCUSDT'&&x.positionSide==='BOTH');
+  const row=risk.find(x=>x.symbol===this.symbol&&x.positionSide==='BOTH');
   const amt=row?Number(row.positionAmt):0;
   if(!Number.isFinite(amt))throw Error('Unknown BTC position amount');
   if(amt===0){this.log('EMERGENCY_FLAT','Vị thế BTCUSDT đã đóng');return;}
   const intent=existsSync(this.intentPath)?JSON.parse(readFileSync(this.intentPath,'utf8')):null;
   if(!intent?.clientId)throw Error('Missing recorded entry client ID');
-  const ownEntry=await this.api.get('/fapi/v1/order',{symbol:'BTCUSDT',origClientOrderId:intent.clientId});
-  if(ownEntry?.symbol!=='BTCUSDT'||ownEntry.clientOrderId!==intent.clientId||
+  const ownEntry=await this.api.get('/fapi/v1/order',{symbol:this.symbol,origClientOrderId:intent.clientId});
+  if(ownEntry?.symbol!==this.symbol||ownEntry.clientOrderId!==intent.clientId||
      !['FILLED','PARTIALLY_FILLED'].includes(ownEntry.status)||
      ownEntry.side!==(amt>0?'BUY':'SELL')||!(Number(ownEntry.executedQty)>0)||
      Math.abs(amt)>Number(ownEntry.executedQty)+1e-9)
    throw Error('Cannot prove this BTC position belongs to OCC entry; manual review required');
 
-  const orders=await this.api.get('/fapi/v1/openAlgoOrders',{symbol:'BTCUSDT'});
+  const orders=await this.api.get('/fapi/v1/openAlgoOrders',{symbol:this.symbol});
   if(!Array.isArray(orders))throw Error('Cannot verify exchange stop');
   if(orders.some(o=>(
    o.clientAlgoId===(this.activeProtection?.stop?.clientId||
@@ -626,14 +637,14 @@ export class BrowserFutures{
   }
   const qty=floorStep(Math.abs(amt),this.filters.stepSize);
   if(qty<this.filters.minQty)throw Error('BTC remaining below exchange minQty; manual action required');
-  const closeId='OCCBTC-'+randomBytes(7).toString('hex');
+  const closeId=(this.symbol==='BTCUSDT'?'OCCBTC-':'OCCM-')+randomBytes(7).toString('hex');
   this.saveIntent({...intent,phase:'EMERGENCY_CLOSE_SENDING',closeId,qty,at:Date.now()});
-  const result=await this.api.post('/fapi/v1/order',{symbol:'BTCUSDT',positionSide:'BOTH',
+  const result=await this.api.post('/fapi/v1/order',{symbol:this.symbol,positionSide:'BOTH',
    side:amt>0?'SELL':'BUY',type:'MARKET',reduceOnly:'true',quantity:String(qty),
    newClientOrderId:closeId,newOrderRespType:'RESULT'});
   if(!result?.orderId)throw Error('Emergency close response unknown');
-  const resultRows=await this.api.get('/fapi/v3/positionRisk',{symbol:'BTCUSDT'});
-  if(!Array.isArray(resultRows)||Number(resultRows.find(x=>x.symbol==='BTCUSDT'&&x.positionSide==='BOTH')?.positionAmt??0)!==0)
+  const resultRows=await this.api.get('/fapi/v3/positionRisk',{symbol:this.symbol});
+  if(!Array.isArray(resultRows)||Number(resultRows.find(x=>x.symbol===this.symbol&&x.positionSide==='BOTH')?.positionAmt??0)!==0)
    throw Error('Emergency close not verified FLAT');
   this.log('EMERGENCY_CLOSED','Đã xác minh giảm vị thế BTCUSDT về 0');
  }
@@ -643,7 +654,7 @@ export class BrowserFutures{
  async manualMarketExit({role,confirmation,expectedEntryOrderId,expectedRemainingBTC}={}){
   if(!['TP1','TP2','TP3','ALL'].includes(role))
    throw Error('Chỉ hỗ trợ TP1, TP2, TP3 hoặc Đóng toàn bộ');
-  if(confirmation!=='XAC NHAN '+role+' BTCUSDT')
+  if(confirmation!=='XAC NHAN '+role+' '+this.symbol)
    throw Error('Chưa xác nhận thao tác MARKET tiền thật');
   if(!this.api||!this.account||this.environment!=='production')
    throw Error('Chưa có kết nối Binance Futures thật');
@@ -661,8 +672,8 @@ export class BrowserFutures{
    const read=async()=>{
     const account=await this.inspect();
     const [algos,entryOrder]=await Promise.all([
-     this.api.get('/fapi/v1/openAlgoOrders',{symbol:'BTCUSDT'}),
-     this.api.get('/fapi/v1/order',{symbol:'BTCUSDT',orderId:managed.entry.orderId})
+     this.api.get('/fapi/v1/openAlgoOrders',{symbol:this.symbol}),
+     this.api.get('/fapi/v1/order',{symbol:this.symbol,orderId:managed.entry.orderId})
     ]);
     return {account,algos,entryOrder};
    };
@@ -671,7 +682,7 @@ export class BrowserFutures{
     expectedRemainingBTC,expectedEntryOrderId};
    const pre=validateManagedExit(options);
    const originalAlgos=new Map(pre.active.map(x=>[String(x.algoId),x]));
-   const closeId='OCCBTC-'+randomBytes(7).toString('hex');
+   const closeId=(this.symbol==='BTCUSDT'?'OCCBTC-':'OCCM-')+randomBytes(7).toString('hex');
    if(role!=='ALL'){
     // Cancel selected TP BEFORE reducing the position. This avoids having
     // both the queued TP and the manual MARKET reducing BTC simultaneously.
@@ -679,7 +690,7 @@ export class BrowserFutures{
     this.saveIntent({phase:'MANUAL_TP_CANCEL_SENDING',oldClientId:managed.entry.clientPrefix,
      oldEntryId:String(managed.entry.orderId),role,closeId,
      removingAlgoId:String(pre.leg.id),quantity:pre.closeQty,at:Date.now()});
-    await this.api.del('/fapi/v1/algoOrder',{symbol:'BTCUSDT',algoId:pre.leg.id});
+    await this.api.del('/fapi/v1/algoOrder',{symbol:this.symbol,algoId:pre.leg.id});
     const recheck=await read();
     const updated=validateManagedExit({...options,...recheck,role:'ALL'});
     if(Math.abs(updated.quantityBTC-pre.quantityBTC)>1e-9||!updated.stop||
@@ -697,12 +708,12 @@ export class BrowserFutures{
    this.saveIntent({phase:'MANUAL_MARKET_SENDING',oldClientId:managed.entry.clientPrefix,
     oldEntryId:String(managed.entry.orderId),role,closeId,quantity:pre.closeQty,at:Date.now()});
    const side=pre.side==='LONG'?'SELL':'BUY';
-   const order=await this.api.post('/fapi/v1/order',{symbol:'BTCUSDT',positionSide:'BOTH',
+   const order=await this.api.post('/fapi/v1/order',{symbol:this.symbol,positionSide:'BOTH',
     side,type:'MARKET',reduceOnly:'true',quantity:String(pre.closeQty),
     newClientOrderId:closeId,newOrderRespType:'RESULT'});
    if(!order?.orderId||order.status!=='FILLED')throw Error('Binance chưa xác nhận MARKET FILLED');
-   const verified=await this.api.get('/fapi/v1/order',{symbol:'BTCUSDT',orderId:order.orderId});
-   if(verified?.symbol!=='BTCUSDT'||String(verified.orderId)!==String(order.orderId)||
+   const verified=await this.api.get('/fapi/v1/order',{symbol:this.symbol,orderId:order.orderId});
+   if(verified?.symbol!==this.symbol||String(verified.orderId)!==String(order.orderId)||
       verified.clientOrderId!==closeId||verified.side!==side||
       verified.status!=='FILLED'||verified.positionSide!=='BOTH'||
       !(verified.reduceOnly===true||verified.reduceOnly==='true')||
@@ -716,7 +727,7 @@ export class BrowserFutures{
    this.registerRealOrder({orderId:order.orderId,groupId:managed.entry.clientPrefix,
     clientId:closeId,role:role==='ALL'?'CLOSE':role,side});
    if(pre.remainingBTC===0){
-    const remaining=await this.api.get('/fapi/v1/openAlgoOrders',{symbol:'BTCUSDT'});
+    const remaining=await this.api.get('/fapi/v1/openAlgoOrders',{symbol:this.symbol});
     if(!Array.isArray(remaining)||
        remaining.some(o=>!originalAlgos.has(String(o.algoId))||
         o.clientAlgoId!==originalAlgos.get(String(o.algoId))?.clientAlgoId))
@@ -724,7 +735,7 @@ export class BrowserFutures{
     for(const o of [...remaining]){
      this.saveIntent({phase:'MANUAL_ALGO_CLEARING',oldClientId:managed.entry.clientPrefix,
       role,closeId,removingAlgoId:String(o.algoId),at:Date.now()});
-     await this.api.del('/fapi/v1/algoOrder',{symbol:'BTCUSDT',algoId:o.algoId});
+     await this.api.del('/fapi/v1/algoOrder',{symbol:this.symbol,algoId:o.algoId});
     }
     const clean=await this.inspect();
     if(clean.positionBTC!==0||clean.openOrders!==0||clean.openAlgos!==0)
@@ -737,7 +748,7 @@ export class BrowserFutures{
     this.halted=false;this.error=null;
     this.log('MANUAL_EXIT_ALL','Đã đóng BTCUSDT toàn bộ bằng MARKET và dọn sạch SL/TP OCC.');
    }else{
-    const live=await this.api.get('/fapi/v1/openAlgoOrders',{symbol:'BTCUSDT'});
+    const live=await this.api.get('/fapi/v1/openAlgoOrders',{symbol:this.symbol});
     const ids=new Set(originalAlgos.keys());
     ids.delete(String(pre.leg?.id));
     if(!Array.isArray(live)||!live.some(o=>String(o.algoId)===String(managed.stop.id))||
@@ -780,11 +791,11 @@ export class BrowserFutures{
   const qty=floorStep(Math.abs(amt),this.filters.stepSize);
   if(qty<this.filters.minQty||Math.abs(qty-Math.abs(amt))>1e-9||
      qty>Number(managed.entry.qty)+1e-9)throw Error('Invalid remaining reduceOnly BTC quantity');
-  const algo=await this.api.get('/fapi/v1/openAlgoOrders',{symbol:'BTCUSDT'});
+  const algo=await this.api.get('/fapi/v1/openAlgoOrders',{symbol:this.symbol});
   if(!Array.isArray(algo))throw Error('Cannot verify open Algo orders');
   const ids=new Set([managed.stop.id,...managed.tps.map(x=>x.id)].map(String));
   const statuses=new Set(['NEW','ACCEPTED','PENDING_NEW']);
-  const active=algo.filter(x=>x?.symbol==='BTCUSDT');
+  const active=algo.filter(x=>x?.symbol===this.symbol);
   if(active.some(o=>!ids.has(String(o.algoId))||!statuses.has(String(o.algoStatus))))
    throw Error('Unmanaged or unexpected Algo order; reversal blocked');
   const stop=active.find(o=>String(o.algoId)===String(managed.stop.id));
@@ -794,12 +805,12 @@ export class BrowserFutures{
   if(active.some(o=>o!==stop&&(o.orderType!=='TAKE_PROFIT_MARKET'||
     o.reduceOnly!==true||o.side!==stop.side)))
    throw Error('Original TP orders are not verified reduceOnly');
-  const closeId='OCCBTC-'+randomBytes(7).toString('hex');
+  const closeId=(this.symbol==='BTCUSDT'?'OCCBTC-':'OCCM-')+randomBytes(7).toString('hex');
   // Checkpoint BEFORE any network mutation; unknown close or cancel outcome halts.
   this.saveIntent({phase:'REVERSE_CLOSE_SENDING',oldClientId:managed.entry.clientPrefix,
     oldEntryId:String(managed.entry.orderId),closeId,qty,targetSide:to,barTime:signal.barTime,at:Date.now()});
   this.log('REVERSE_CLOSE','Đang đóng '+qty+' BTC '+from+' bằng reduceOnly trước khi đảo sang '+to);
-  const ack=await this.api.post('/fapi/v1/order',{symbol:'BTCUSDT',positionSide:'BOTH',
+  const ack=await this.api.post('/fapi/v1/order',{symbol:this.symbol,positionSide:'BOTH',
    side:from==='LONG'?'SELL':'BUY',type:'MARKET',reduceOnly:'true',quantity:String(qty),
    newClientOrderId:closeId,newOrderRespType:'RESULT'});
   if(!ack?.orderId||ack.status!=='FILLED')throw Error('Reduce-only close not confirmed FILLED');
@@ -810,14 +821,14 @@ export class BrowserFutures{
    ' nhưng chưa ghi được lịch sử: '+e.message);}
   const flat=await this.inspect();
   if(flat.positionBTC!==0)throw Error('Binance did not confirm BTCUSDT FLAT');
-  const remaining=await this.api.get('/fapi/v1/openAlgoOrders',{symbol:'BTCUSDT'});
-  if(!Array.isArray(remaining)||remaining.some(o=>o.symbol!=='BTCUSDT'||!ids.has(String(o.algoId))))
+  const remaining=await this.api.get('/fapi/v1/openAlgoOrders',{symbol:this.symbol});
+  if(!Array.isArray(remaining)||remaining.some(o=>o.symbol!==this.symbol||!ids.has(String(o.algoId))))
    throw Error('Unrecognized Algo remains after FLAT; do not cancel unknown orders');
   // Snapshot the list: a mock or shared adapter may mutate it on DELETE.
   for(const o of [...remaining]){
    this.saveIntent({phase:'REVERSE_ALGO_CLEARING',closeId,oldClientId:managed.entry.clientPrefix,
     removingAlgoId:String(o.algoId),at:Date.now()});
-   await this.api.del('/fapi/v1/algoOrder',{symbol:'BTCUSDT',algoId:o.algoId});
+   await this.api.del('/fapi/v1/algoOrder',{symbol:this.symbol,algoId:o.algoId});
   }
   const clean=await this.inspect();
   if(clean.positionBTC!==0||clean.openOrders!==0||clean.openAlgos!==0)
@@ -875,13 +886,13 @@ try{
  const liveQuote=async()=>{
   if(typeof quoteProvider==='function'){
    const q=quoteProvider(),age=Date.now()-Number(q?.lastReceivedAt);
-   if(q?.symbol!=='BTCUSDT'||q?.live!==true||
+   if(q?.symbol!==this.symbol||q?.live!==true||
       !Number.isFinite(q?.lastPrice)||q.lastPrice<=0||
       !Number.isFinite(age)||age< -3000||age>5000)
     throw Error('Giá Binance aggTrade đã quá hạn; chưa được đảo vị thế OCC');
    return q.lastPrice;
   }
-  const q=await this.api.get('/fapi/v1/ticker/price',{symbol:'BTCUSDT'});
+  const q=await this.api.get('/fapi/v1/ticker/price',{symbol:this.symbol});
   const price=Number(q?.price);
   if(!(price>0))throw Error('Giá Binance không hợp lệ; giữ nguyên vị thế OCC');
   return price;
@@ -940,7 +951,7 @@ try{
   const a=await this.inspect();
   plan=draftProtectedOrder({side:signal.side,account:a,filters:this.filters,quotePrice},this.config);
  }
-const clientId='OCCBTC-'+randomBytes(7).toString('hex');
+const clientId=(this.symbol==='BTCUSDT'?'OCCBTC-':'OCCM-')+randomBytes(7).toString('hex');
 // From this point an entry might be sent; unknown outcomes require a safety halt.
 entrySubmissionPossible=true;
 if(reverseCompleted)this.markReversal('ENTRY_SENDING');
@@ -953,7 +964,7 @@ this.lastEntryTiming={barTime:signal.barTime,
  exchangeAckMs:null};
 this.log('ENTRY_REQUEST_TIMING','M15 '+new Date(signal.barTime).toISOString()+
  ' · sau mở nến '+this.lastEntryTiming.signalToSendMs+' ms (gồm kiểm tra Binance)');
-   const response=await this.api.post('/fapi/v1/order',{symbol:'BTCUSDT',
+   const response=await this.api.post('/fapi/v1/order',{symbol:this.symbol,
     side:signal.side==='LONG'?'BUY':'SELL',positionSide:'BOTH',type:'MARKET',
     quantity:String(plan.qtyBTC),newClientOrderId:clientId,newOrderRespType:'RESULT'});
    if(!response?.orderId)throw Error('Binance không xác nhận orderId Entry');
@@ -966,7 +977,7 @@ this.log('ENTRY_REQUEST_TIMING','M15 '+new Date(signal.barTime).toISOString()+
    this.saveIntent({phase:'ENTRY_ACK',clientId,orderId:String(response.orderId),side:signal.side});
    if(reverseCompleted)this.markReversal('ENTRY_ACK',{newOrderId:String(response.orderId)});
    // A broken history database must NEVER prevent submitting the STOP.
-   const coordinator=new ProtectionCoordinator({api:this.api,
+   const coordinator=new ProtectionCoordinator({symbol:this.symbol,api:this.api,
     checkpoint:new ProtectionCheckpoint(this.protectionPath),settings:this.config,
     notify:note=>this.log('CRITICAL',note.reason)});
    const result=await coordinator.protectConfirmedEntry({entryOrderId:response.orderId,side:signal.side,
@@ -1011,15 +1022,15 @@ this.notifySquareProtected(result);
   if(!this.api||this.environment!=='production'||this.busy||this.pendingLimit||!this.activeProtection||this.halted)return;
   this.busy=true;
   try{
-   const rows=await this.api.get('/fapi/v3/positionRisk',{symbol:'BTCUSDT'});
-   const p=Array.isArray(rows)?rows.find(x=>x.symbol==='BTCUSDT'&&x.positionSide==='BOTH'):null;
+   const rows=await this.api.get('/fapi/v3/positionRisk',{symbol:this.symbol});
+   const p=Array.isArray(rows)?rows.find(x=>x.symbol===this.symbol&&x.positionSide==='BOTH'):null;
    if(!Array.isArray(rows)||(p&&!Number.isFinite(Number(p.positionAmt))))throw Error('Không xác minh được vị thế BTCUSDT');
    const amt=p?Number(p.positionAmt):0;
-   const algo=await this.api.get('/fapi/v1/openAlgoOrders',{symbol:'BTCUSDT'});
+   const algo=await this.api.get('/fapi/v1/openAlgoOrders',{symbol:this.symbol});
    if(!Array.isArray(algo))throw Error('Không xác minh được danh sách SL/TP');
    const managed=this.activeProtection;
    const expected=new Map([managed.stop,...managed.tps].map(x=>[String(x.id),x.clientId]));
-   if(algo.some(o=>o.symbol!=='BTCUSDT'||!expected.has(String(o.algoId))||
+   if(algo.some(o=>o.symbol!==this.symbol||!expected.has(String(o.algoId))||
       o.clientAlgoId!==expected.get(String(o.algoId))))
     throw Error('Algo không trùng OCC checkpoint; không tự hủy lệnh');
    const ids=new Set(expected.keys());
@@ -1036,9 +1047,9 @@ this.notifySquareProtected(result);
       throw Error('Vị thế BTC thay đổi trước khi hủy Algo');
      this.saveIntent({phase:'STALE_ALGO_CANCEL_SENDING',
       oldClientId:managed.entry.clientPrefix,removingAlgoId:String(item.algoId),at:Date.now()});
-     await this.api.del('/fapi/v1/algoOrder',{symbol:'BTCUSDT',algoId:item.algoId});
+     await this.api.del('/fapi/v1/algoOrder',{symbol:this.symbol,algoId:item.algoId});
     }
-    const left=await this.api.get('/fapi/v1/openAlgoOrders',{symbol:'BTCUSDT'});
+    const left=await this.api.get('/fapi/v1/openAlgoOrders',{symbol:this.symbol});
     if(!Array.isArray(left)||left.some(x=>ids.has(String(x.algoId))))throw Error('Còn lệnh SL/TP cũ chưa hủy sau khi vị thế đóng');
     const other=left.length?left.length:0;
     if(other)throw Error('Có lệnh điều kiện ngoài OCC, không mở lệnh mới');
