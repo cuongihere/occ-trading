@@ -260,11 +260,34 @@ const server=createServer(async(req,res)=>{
    "img-src https: data:; font-src https: data:; frame-src https:; connect-src https: wss:; object-src 'none'");
   return res.end(tradingViewReferenceHtml);
  }
+ if(new URL(req.url,'http://localhost').pathname==='/api/unified/status'){
+  res.setHeader('Content-Type','application/json;charset=utf-8');
+  return res.end(JSON.stringify(portfolio.status()));
+ }
+ if(new URL(req.url,'http://localhost').pathname.startsWith('/api/unified/')){
+  res.setHeader('Content-Type','application/json;charset=utf-8');
+  try{
+   const u=new URL(req.url,'http://localhost'),symbol=assertConfiguredSymbol(u.searchParams.get('symbol'));
+   const session=portfolio.get(symbol);
+   if(u.pathname==='/api/unified/position')return res.end(JSON.stringify(await session.positionAnalysis()));
+   if(u.pathname==='/api/unified/report'){
+    if(symbol!=='BTCUSDT'&&session.api)await session.refreshRealHistory();
+    return res.end(JSON.stringify({symbol,...readLiveReport(session.ledgerPath)}));
+   }
+   if(u.pathname==='/api/unified/quote')return res.end(JSON.stringify({
+    symbol,price:await portfolio.quote(symbol),at:Date.now()
+   }));
+   if(u.pathname==='/api/unified/sizing')return res.end(JSON.stringify(
+    session.sizingPreview(session.config,await portfolio.quote(symbol))));
+   throw Error('Unknown unified API');
+  }catch(e){res.writeHead(409);return res.end(JSON.stringify({error:e.message}));}
+ }
  if(new URL(req.url,'http://localhost').pathname==='/api/binance/occ-chart-compare'){
   res.setHeader('Content-Type','application/json;charset=utf-8');
   try{
    const range=new URL(req.url,'http://localhost').searchParams.get('days')||'7';
-   return res.end(JSON.stringify(await readChartComparison(chartDaysParam(range))));
+   const sym=assertConfiguredSymbol(new URL(req.url,'http://localhost').searchParams.get('symbol'));
+   return res.end(JSON.stringify(await readChartComparison(chartDaysParam(range),sym)));
   }catch(e){res.writeHead(503);return res.end(JSON.stringify({error:'Chart chỉ đọc: '+e.message}));}
  }
  if(req.url==='/api/binance/market'){res.setHeader('Content-Type','application/json;charset=utf-8');return res.end(JSON.stringify(btcMarketQuote.snapshot({healthy:feed.healthy(),state:feed.state})));}
