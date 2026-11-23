@@ -23,14 +23,16 @@ export const emptyLiveReport=()=>({source:'BINANCE_VERIFIED_OCC_ONLY',asOf:null,
  'Hiện chưa có bộ thực thi lệnh thật; khi chỉ chạy Paper/Preview sẽ không có giao dịch thực.']});
 export class LiveStatsLedger{
  #db;
- constructor(path){
+ constructor(path,{symbol='BTCUSDT'}={}){
+  if(!/^[A-Z0-9]{2,20}USDT$/.test(symbol))throw Error('Invalid OCC audit symbol');
+  this.symbol=symbol;
   this.#db=new DatabaseSync(path);this.#db.exec(schema);
   // Upgrade any ledger file created by an older OCC release without losing fills.
   if(!this.#db.prepare('PRAGMA table_info(orders)').all().some(x=>x.name==='synced_at'))
    this.#db.exec('ALTER TABLE orders ADD COLUMN synced_at INTEGER NOT NULL DEFAULT 0');
  }
  register({orderId,groupId,clientId,role,side}){
-  if(!/^[0-9]{1,24}$/.test(String(orderId))||!/^OCCBTC-[A-Za-z0-9_-]{1,29}$/.test(clientId||'')||
+  if(!/^[0-9]{1,24}$/.test(String(orderId))||!/^OCC(?:BTC|M)-[A-Za-z0-9_-]{1,29}$/.test(clientId||'')||
      !/^[A-Za-z0-9_-]{1,55}$/.test(groupId||'')||
      !['ENTRY','TP1','TP2','TP3','SL','CLOSE','REVERSE'].includes(role)||
      !['BUY','SELL'].includes(side))throw Error('Invalid OCCBTC order registration');
@@ -43,7 +45,7 @@ export class LiveStatsLedger{
  // Provenance is captured only for a verified Entry with exchange-side SL/TP.
  // Never infer the identity of historical trades by candle time alone.
  recordEntrySignal({groupId,orderId,side,barTime,confirmAt,signalClose,triggerPrice,crossMA}){
-  if(!/^OCCBTC-[A-Za-z0-9_-]{1,29}$/.test(String(groupId))||
+  if(!/^OCC(?:BTC|M)-[A-Za-z0-9_-]{1,29}$/.test(String(groupId))||
     !/^[0-9]{1,24}$/.test(String(orderId))||!['LONG','SHORT'].includes(side)||
     ![barTime,confirmAt].every(Number.isSafeInteger)||barTime<=0||
     confirmAt!==barTime+900000||
@@ -79,7 +81,7 @@ export class LiveStatsLedger{
   this.#db.exec('BEGIN IMMEDIATE');
   try{
    for(const x of rows){
-    if(x.symbol!=='BTCUSDT'||!['REALIZED_PNL','COMMISSION','FUNDING_FEE'].includes(x.incomeType))
+    if(x.symbol!==this.symbol||!['REALIZED_PNL','COMMISSION','FUNDING_FEE'].includes(x.incomeType))
      continue;
     const amount=Number(x.income),at=Number(x.time),type=String(x.incomeType),
       tran=String(x.tranId),trade=x.tradeId==null?'':String(x.tradeId),
@@ -122,7 +124,7 @@ export class LiveStatsLedger{
   this.#db.exec('BEGIN IMMEDIATE');
   try{
    for(const t of rows){
-    if(t.symbol!=='BTCUSDT')continue;
+    if(t.symbol!==this.symbol)continue;
     if(!/^[0-9]{1,24}$/.test(String(t.id))||!/^[0-9]{1,24}$/.test(String(t.orderId))||
        !['BUY','SELL'].includes(t.side))throw Error('Invalid Binance fill identity');
     const qty=number(t.qty,'qty'),price=number(t.price,'price'),
@@ -156,7 +158,7 @@ export class LiveStatsLedger{
    const add=this.#db.prepare('INSERT INTO fills VALUES (?,?,?,?,?,?,?,?,?)');
    const find=this.#db.prepare('SELECT * FROM fills WHERE fill_id=?');
    for(const t of rows){
-    if(t.symbol!=='BTCUSDT'||!valid.has(String(t.orderId)))continue;
+    if(t.symbol!==this.symbol||!valid.has(String(t.orderId)))continue;
     if(!/^[0-9]{1,24}$/.test(String(t.id))||t.side!==valid.get(String(t.orderId)).side)throw Error('Bad Binance trade identity');
     const qty=number(t.qty,'qty'),price=number(t.price,'price'),realized=number(t.realizedPnl,'realizedPnl'),
      fee=number(t.commission,'commission'),at=number(t.time,'time');
@@ -356,7 +358,7 @@ export async function syncKnownOrderFills(reader,ledger){
  const orders=ledger.orders();
  let added=0;
  for(const o of (typeof ledger.dueOrders==='function'?ledger.dueOrders(24):orders.slice(-24))){
-  const rows=await reader.get('/fapi/v1/userTrades',{symbol:'BTCUSDT',orderId:o.order_id,limit:1000});
+  const rows=await reader.get('/fapi/v1/userTrades',{symbol:ledger.symbol,orderId:o.order_id,limit:1000});
   if(!Array.isArray(rows)||rows.length>=1000)throw Error('Binance fills incomplete; no partial total published');
   added+=ledger.ingest(rows);
   ledger.markChecked?.(o.order_id);
