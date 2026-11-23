@@ -117,7 +117,7 @@ test('Two simultaneous OCC entry signals share one serialization lock',async t=>
  let concurrent=0,maxConcurrent=0,calls=0;
  peer.signal=async()=>{concurrent++;calls++;maxConcurrent=Math.max(concurrent,maxConcurrent);
   await new Promise(resolve=>setTimeout(resolve,5));concurrent--;};
- const bar={side:'LONG',time:1_500_000};
+ const bar={side:'LONG',time:1_700_000};
  await Promise.all([p.handleSignal('ETHUSDT',bar,true),p.handleSignal('ETHUSDT',bar,true)]);
  assert.equal(calls,2);assert.equal(maxConcurrent,1);
  await p.handleSignal('ETHUSDT',{...bar,time:0},true);
