@@ -16,6 +16,7 @@ import {LiveStatsLedger} from './binance-live-stats.mjs';
 import {syncOCCLiveHistory} from './futures-live-history.mjs';
 import {installLimitEntry} from './futures-limit-entry.mjs';
 import {installProtectionRepair} from './futures-protection-repair.mjs';
+import {symbolExecutionFilters} from './futures-symbol-filters.mjs';
 
 const DEFAULT={side:'BOTH',marginUSDT:20,leverage:5,slPercent:1,tpMode:'Percent',
  tp1Val:1,tp2Val:2,tp3Val:3,tp1Qty:33,tp2Qty:33,reverseOnSignal:false};
@@ -234,8 +235,14 @@ export class BrowserFutures{
   const f=k=>market?.filters?.find(x=>x.filterType===k);
   const marketLot=f('MARKET_LOT_SIZE'),regularLot=f('LOT_SIZE');
   const lot=marketLot&&Number(marketLot.stepSize)>0&&Number(marketLot.minQty)>0?marketLot:regularLot;
-  this.filters={stepSize:Number(lot?.stepSize),minQty:Number(lot?.minQty),
-   minNotional:Number(f('MIN_NOTIONAL')?.notional||0),tickSize:Number(f('PRICE_FILTER')?.tickSize)};
+  // BTC retains its legacy exchange sizing. Other symbols must satisfy
+  // market-entry AND protective-algo LOT_SIZE filters, with verified minima.
+  this.filters=this.symbol==='BTCUSDT'?{
+   stepSize:Number(lot?.stepSize),minQty:Number(lot?.minQty),
+   maxQty:Number(lot?.maxQty)||Infinity,
+   minNotional:Number(f('MIN_NOTIONAL')?.notional||0),
+   tickSize:Number(f('PRICE_FILTER')?.tickSize)
+  }:symbolExecutionFilters(market,{strict:true});
   if(!(this.filters.stepSize>0)||!(this.filters.minQty>0)||!(this.filters.tickSize>0))
    throw Error('Binance /fapi/v1/exchangeInfo: thiếu quy tắc bước khối lượng hoặc giá BTCUSDT');
   const usdt=account.assets.find(x=>x.asset==='USDT');
