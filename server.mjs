@@ -10,6 +10,7 @@ import {readLiveReport} from './binance-live-stats.mjs';
 import {buildOCCChartComparison,readVerifiedChartHistory} from './futures-chart-compare.mjs';
 import {BrowserFutures} from './futures-browser-service.mjs';
 import {SquarePublisher} from './square-publisher.mjs';
+import {OccSquareScanner} from './occ-square-scanner.mjs';
 import {UnifiedPortfolio,validSymbol} from './unified-portfolio.mjs';
 
 const args=new Set(process.argv.slice(2));
@@ -24,7 +25,7 @@ const portfolio=new UnifiedPortfolio({dataDir:dir,btc:browserFutures});
 const liveSignalEngine=new OCCSignalEngine();
 const btcMarketQuote=new BtcMarketQuote();
 const square=new SquarePublisher({dataDir:dir,fetchKlines:async({symbol='BTCUSDT',filledAt,limit=96})=>{
- if(symbol!=='BTCUSDT')throw Error('Only BTCUSDT Square posts permitted');
+ if(!/^[A-Z0-9]{2,20}USDT$/.test(symbol))throw Error('Invalid public USD-M chart symbol');
  const params=new URLSearchParams({symbol,interval:'15m',
   endTime:String(Math.floor(Number(filledAt)+60000)),limit:String(Math.min(150,limit))});
  const result=await fetch('https://fapi.binance.com/fapi/v1/klines?'+params,{
@@ -35,6 +36,9 @@ const square=new SquarePublisher({dataDir:dir,fetchKlines:async({symbol='BTCUSDT
  return data;
 }});
 browserFutures.setSquarePublisher(square);
+const watchlistScanner=new OccSquareScanner({dataDir:dir,publisher:square,scope:'WATCHLIST'});
+const allScanner=new OccSquareScanner({dataDir:dir,publisher:square,scope:'ALL',
+ excludeSymbols:()=>new Set(watchlistScanner.config.symbols)});
 let closing=false,status={state:'starting',message:'Synchronizing Binance Futures'};
 function statusEvent(s){
  status=s;if(closing)return;
@@ -245,9 +249,25 @@ const server=createServer(async(req,res)=>{
     await portfolio.detach();browserFutures.forgetSavedCredentials();
    }
    else if(req.url==='/control/live/square/key'){square.connect(p.key);}
+   else if(req.url==='/control/live/square/btc-limit'){square.setBtcLimit(p.maxDailyPosts);}
+   else if(req.url==='/control/live/square/watchlist/config'){
+    const before=watchlistScanner.config.enabled;
+    const result=watchlistScanner.configure(p);
+    allScanner.universeAt=0; // List 1 has priority; avoid cross-group duplicate posts.
+    if(!before&&result.config.enabled)watchlistScanner.tick({force:true})
+     .catch(e=>console.error('Square List 1 Scanner:',e.message));
+    return res.end(JSON.stringify(result));
+   }
+   else if(req.url==='/control/live/square/all/config'){
+    const before=allScanner.config.enabled;
+    const result=allScanner.configure(p);
+    if(!before&&result.config.enabled)allScanner.tick({force:true})
+     .catch(e=>console.error('Square ALL Scanner:',e.message));
+    return res.end(JSON.stringify(result));
+   }
    else if(req.url==='/control/live/square/on'){square.toggle(p.enabled);}
    else if(req.url==='/control/live/square/forget'){
-    square.forget();
+    square.forget();watchlistScanner.configure({enabled:false});allScanner.configure({enabled:false});
    }
    else throw Error('Unknown action');res.end(JSON.stringify({ok:true}));
   }catch(e){res.writeHead(400);res.end(JSON.stringify({error:e.message}));}return;
@@ -323,6 +343,10 @@ if(req.url==='/api/binance/live-status'){res.setHeader('Content-Type','applicati
   res.setHeader('Content-Type','application/json;charset=utf-8');
   return res.end(JSON.stringify(square.status()));
  }
+ if(req.url==='/api/square/scanners'){
+  res.setHeader('Content-Type','application/json;charset=utf-8');
+  return res.end(JSON.stringify({watchlist:watchlistScanner.status(),all:allScanner.status()}));
+ }
  if(req.url==='/api/square/latest-chart.png'){
   const image=square.latestImage();
   if(!image){res.writeHead(404);return res.end('No Binance Square chart has been prepared');}
@@ -339,6 +363,11 @@ const accountRefresh=setInterval(()=>browserFutures.refreshAccountOverview().cat
 }),25000);accountRefresh.unref();
 const unifiedScan=setInterval(()=>portfolio.tick().catch(e=>console.error('Unified OCC scan:',e.message)),30000);unifiedScan.unref();
 const unifiedMonitor=setInterval(()=>portfolio.monitor().catch(e=>console.error('Unified OCC monitor:',e.message)),15000);unifiedMonitor.unref();
+// Read-only public OCC M15 scan; posting is independently opt-in per group.
+const squareScan=setInterval(()=>{
+ watchlistScanner.tick().catch(e=>console.error('Square List 1 Scanner:',e.message));
+ allScanner.tick().catch(e=>console.error('Square ALL Scanner:',e.message));
+},60000);squareScan.unref();
 const liveHistoryRefresh=setInterval(()=>browserFutures.refreshRealHistory()
  .catch(e=>console.error('Binance OCC history:',e.message)),60000);
 liveHistoryRefresh.unref();
@@ -350,7 +379,7 @@ server.listen(port,'127.0.0.1',()=>{
 });
 function shutdown(code=0){
  if(closing)return;closing=true;
- clearInterval(futuresMonitor);clearInterval(limitMonitor);clearInterval(accountRefresh);clearInterval(liveHistoryRefresh);clearInterval(unifiedScan);clearInterval(unifiedMonitor);
+ clearInterval(futuresMonitor);clearInterval(limitMonitor);clearInterval(accountRefresh);clearInterval(liveHistoryRefresh);clearInterval(unifiedScan);clearInterval(unifiedMonitor);clearInterval(squareScan);
  portfolio.detach().catch(e=>console.error('Shutdown peer audit:',e.message));
  try{browserFutures.close();}catch{}
  try{feed.disconnect();}catch{}
