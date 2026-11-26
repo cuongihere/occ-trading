@@ -40,20 +40,27 @@ test('Windows workflow tests and bundles all required runtime files',()=>{
  assert.match(workflow,/actions\/upload-artifact@v4/);
 });
 
-test('Unified Futures has isolated symbols and no market-wide Square Scanner',()=>{
+test('Unified Futures keeps isolated execution and packages read-only Square scanners',()=>{
  const server=read('server.mjs'),ui=read('BINANCE_UI_PREVIEW.html');
  const build=read('BUILD_PORTABLE.ps1'),transport=read('futures-transport.mjs');
- for(const removed of ['multi-auto-worker.mjs','multi-auto-sizing.mjs','occ-square-scanner.mjs','OCC_SCANNER.html'])
+ for(const removed of ['multi-auto-worker.mjs','multi-auto-sizing.mjs','OCC_SCANNER.html'])
   assert.ok(!build.includes("'"+removed+"'"),'removed component still in portable: '+removed);
- assert.doesNotMatch(server,/MultiAutoWorker|OccSquareScanner|\/control\/multi\/|\/api\/multi\/|\/control\/scanner\/|\/api\/scanner\/|\/occ-scanner/);
- assert.doesNotMatch(ui,/openMultiBtn|multiDialog|\/occ-scanner|\/control\/multi\/|\/api\/multi\//);
- assert.match(transport,/OCC_UNIFIED_SYMBOL_EXECUTOR/);
+ assert.match(build,/'occ-square-scanner\.mjs'/);
+ assert.match(server,/OccSquareScanner/);
+ assert.match(server,/watchlistScanner/);
+ assert.match(server,/allScanner/);
+ assert.match(server,/\/api\/square\/scanners/);
+ assert.match(server,/\/control\/live\/square\/watchlist\/config/);
+ assert.match(server,/\/control\/live\/square\/all\/config/);
  assert.match(server,/\/control\/unified\//);
- assert.match(build,/'unified-portfolio\.mjs'/);
- assert.match(server,/Only BTCUSDT Square posts permitted/);
+ assert.match(transport,/OCC_UNIFIED_SYMBOL_EXECUTOR/);
+ for(const id of ['squareEnabled','squareBtcDaily','squareListEnabled','squareListSymbols',
+  'squareListPerCycle','squareListDaily','squareAllEnabled','squareAllPerCycle','squareAllDaily'])
+  assert.match(ui,new RegExp('id="'+id+'"'));
  const square=read('square-publisher.mjs');
- assert.doesNotMatch(square,/async onSignal\(|squareSignalCaption/);
+ assert.match(square,/async onSignal\(/);
  assert.match(square,/entry\.symbol!=='BTCUSDT'/);
+ assert.doesNotMatch(read('occ-square-scanner.mjs'),/FuturesTransport|\.post\('\/fapi\/v1\/order'/);
 });
 
 test('Windows portable must not package Paper Trading code',()=>{

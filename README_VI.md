@@ -27,12 +27,12 @@
 - Thanh chọn coin nằm ngay trên chart hiện tại: **BTCUSDT, ETHUSDT, SOLUSDT…**, nhấn **+ Coin** để thêm. Chỉ nhận hợp đồng Binance USD-M USDT Perpetual đang TRADING; tối đa 12 mã bổ sung nhằm kiểm soát rate limit.
 - Mỗi lần chọn coin chỉ đổi biểu đồ OCC, lệnh Binance, lịch sử và các nút quản lý của coin đang chọn. Bảng vị thế ở dưới vẫn tổng hợp tất cả mã, không có tab AUTO đa mã riêng.
 - Trong popup **Cài đặt mã**, chỉnh ký quỹ USDT, leverage 1–20x, LONG/SHORT, MARKET/LIMIT Pullback, SL%, TP1/2/3, tỷ lệ chốt, đảo chiều OCC. Có nút sao chép thông số BTC; nguồn tín hiệu SMMA8 H4/M15 hoàn toàn giống BTC cũ.
-- **AUTO coin** chạy độc lập. **Chọn AUTO tổng** chỉ đưa coin vào danh sách được phép bật bằng một nút; không tự đặt lệnh. **BẬT AUTO TỔNG** yêu cầu xác nhận tiền thật, **TẮT TẤT CẢ** giữ các STOP/TP đang trên Binance.
+- **AUTO Trade** của coin đang chọn chỉ điều khiển mã đó; nút **DỪNG AUTO TẤT CẢ** chỉ ngừng AUTO, vẫn giữ các STOP/TP trên Binance. Các công tắc Binance Square là chức năng **đăng bài**, không liên quan nút AUTO Trade.
 - Mỗi coin có checkpoint và nhật ký lệnh riêng. Khi Binance gửi ACK không rõ, lỗi mạng, thiếu STOP, sai leverage, không đủ lot/notional của TP hoặc có vị thế chưa xác minh: bot khóa, **không gửi lệnh trùng hoặc tự nhận quyền quản lý**. Chỉ tính PnL từng coin từ fill Binance đã xác minh; không trộn ETH với BTC.
 - Một luồng xử lý Entry tuần tự kiểm tra lại ký quỹ Binance trước từng coin. Một coin chỉ có tối đa một vị thế bot; không tự mở chồng lệnh. Đảo chiều vẫn đóng reduceOnly → xác nhận FLAT → dọn SL/TP cũ → MARKET chiều ngược → STOP rồi TP.
 - Sau khi khởi động lại, **tất cả AUTO đều OFF**; có thể bật lại để xác minh/tiếp quản vị thế bot cũ. Nếu còn lệnh không rõ, kiểm tra trực tiếp Binance.
 - Dữ liệu BTC cũ vẫn giữ tại `data/futures-*` và `binance-live-stats.sqlite`. Các coin mới ghi `futures-SYMBOL-*`, `binance-SYMBOL-live-stats.sqlite` và `unified-symbols.json`; **không xóa thư mục `data/`** khi cập nhật.
-- Binance Square **chỉ đăng BTCUSDT** sau khi Entry thật FILLED có STOP/TP xác minh; ETH/SOL/altcoin không đăng Square. Scanner toàn thị trường không quay lại.
+- Binance Square gồm **BTC giao dịch thật** (chỉ Entry BTCUSDT FILLED đã bảo vệ SL/TP), **List 1** (mã nhập dấu phẩy), **List 2 ALL** (quét toàn bộ USD-M USDT Perpetual hợp lệ); ba nhóm có hạn mức đăng bài riêng. Scanner chỉ đọc nến Binance công khai và gắn nhãn tín hiệu chưa khớp.
 - Khi nâng cấp từ bản đa mã cũ, các checkpoint `multi-*` không tự chuyển sang bộ máy mới. Trước khi sử dụng AUTO, tự kiểm tra tất cả vị thế và SL/TP cũ trực tiếp trên Binance; không dùng hai bản app cùng tài khoản.
 
 ## Chạy app
@@ -43,13 +43,13 @@
 4. Kết nối API Binance Futures; AUTO mặc định OFF. Chỉ bật khi nắm rõ
    cấu hình giao dịch, SL/TP và rủi ro.
 
-## Tự đăng Binance Square sau khi có giao dịch thực
+## Tự đăng Binance Square: BTC thật, List 1, ALL
 
 - Vào [Square Creator Center](https://www.binance.com/square/creator-center/home) → tạo **Square OpenAPI key đăng bài**, KHÔNG phải API Futures.
 - Trong **Cài đặt → Binance Square**, nhập key vào ô riêng, nhấn **Lưu khóa Square**. Khóa được mã hóa bằng Windows DPAPI và lưu trong `data/square-post.dpapi.json`; không nằm trong HTML hoặc localStorage.
-- Bật **Đăng ảnh chart sau khi Entry khớp và SL/TP xác nhận** và chấp thuận cảnh báo bài đăng công khai. Mặc định tính năng **OFF** cho tới khi người dùng kết nối key riêng và bật.
+- Trong **Cài đặt → Binance Square** có 3 công tắc riêng: BTC giao dịch thật, List 1 và List 2 ALL. Cả hai scanner mặc định **OFF**, cần khóa Square riêng và chấp thuận cảnh báo đăng bài công khai. Giao dịch Futures không tự bật khi bật đăng Square.
 - Khi OCC đặt lệnh FUTURES mới: bot chờ **Binance xác nhận FILLED** và có **STOP close-all + 3 TP reduceOnly thực sự đang hoạt động**. Sau đó mới tạo PNG từ nến **BTCUSDT M15 Binance Futures** và các mức Entry/SL/TP1–3.
-- Caption công khai chỉ có `$BTCUSDT PERPETUAL | LONG/SHORT`, `ENTRY`, `SL`, `TP1`, `TP2`, `TP3`.
+- **BTC thật:** Caption công khai chỉ có `$BTCUSDT PERPETUAL | LONG/SHORT`, `ENTRY`, `SL`, `TP1`, `TP2`, `TP3`. Có giới hạn số bài BTC/ngày độc lập (1–20).
 - Ảnh không hiển thị: OCC, SMMA, tên/phương pháp giao cắt, chỉ báo/strategy,
   API key, ký quỹ, đòn bẩy, số dư, khối lượng BTC, ID lệnh hoặc P&L.
 - Mỗi Entry Order ID có một bản ghi `data/square-publisher.json`; ảnh
@@ -65,12 +65,22 @@ Kiểm tra tình trạng đăng qua ô trạng thái Square trong app.
 Về API: Binance Square OpenAPI dùng `/image/presignedUrl`,
 `/image/imageStatus` và `/content/add`; đăng ảnh tùy quyền tài khoản.
 
+
+### List 1 và List 2 ALL: quét tín hiệu M15 và đăng bài
+
+- **List 1**: nhập `ETH,SOL,BNB` hoặc `ETHUSDT,SOLUSDT,BNBUSDT` (cách nhau bằng dấu phẩy, tối đa 50 mã); chỉ chấp nhận Binance USD-M USDT Perpetual đang TRADING. BTCUSDT có nhóm riêng nên không nằm trong List 1.
+- **List 2 ALL**: quét mọi Binance USD-M USDT Perpetual đang TRADING ngoài BTC và các coin đã thuộc List 1. List 1 được ưu tiên để tránh đăng trùng.
+- Mỗi nhóm có **checkbox bật/tắt quét và đăng**, giới hạn **bài/lần quét 1–3**, **bài/ngày 1–20**, và thanh khoản 24 giờ tối thiểu có thể điều chỉnh. Hạn mức không dùng chung với nhóm BTC.
+- Scanner tái sử dụng OCC SMMA8 H4/M15, chỉ phát hiện giao cắt mới khi nến M15 đóng, không phát lại tín hiệu cũ sau khi khởi động/mất dữ liệu, không gửi bất kỳ lệnh Futures nào.
+- Bài scanner dùng giá đóng M15 và SL/TP **tham khảo**, ghi rõ **“Đây là Tín hiệu phân tích kỹ thuật, chưa phải giao dịch đã khớp.”** Không trình bày đây là vị thế hay lệnh thật.
+- Để tránh spam, mức giới hạn ứng dụng không thay thế hạn chế đăng bài/ảnh hoặc chính sách tài khoản Binance Square. Sự cố/timeout có thể làm trạng thái đăng không rõ; không tự đăng lại cùng tín hiệu.
+
 ## Quy tắc an toàn
 
-- Square **chỉ đăng BTCUSDT đã khớp Entry thực** sau khi xác minh STOP close-all và TP1–TP3; không còn Scanner hay bài tín hiệu altcoin.
+- **Nhóm BTC** chỉ đăng Entry BTCUSDT thật được Binance xác minh; **List 1/ALL** là bài phân tích công khai chưa khớp, không được trộn nguồn hoặc tự tạo lệnh.
 - API Futures và API Square được lưu **riêng biệt**. Không chia sẻ API key.
 - Binance Square có giới hạn bài/ảnh, chính sách nội dung và giới hạn theo khu vực.
-- Futures Transport yêu cầu **một symbol được phê duyệt trên mỗi phiên thực thi**, không có endpoint Scanner toàn thị trường; mỗi coin được kiểm tra trên Binance trước khi thêm.
+- Futures Transport yêu cầu **một symbol được phê duyệt trên mỗi phiên thực thi**. Scanner chỉ gọi API thị trường công khai và tách hoàn toàn khỏi Futures Transport; không thêm coin vào danh sách Auto Trade.
 - Không phát lại tín hiệu trong thời gian mất kết nối. AUTO OFF khi khởi động lại.
 - Đảo chiều thực tế: kiểm tra trạng thái Binance, đóng reduceOnly MARKET,
   xác nhận FLAT, mở chiều ngược MARKET và đặt STOP trước các TP.

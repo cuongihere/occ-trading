@@ -115,7 +115,31 @@ test('Square rejects other symbols before sending media or a public post',async 
  assert.equal(h.calls.length,0);
  assert.equal(h.p.posts.length,0);
 });
-test('BTC-only publisher does not expose a Scanner publication method',t=>{
- const {p}=fixture(t);
- assert.equal(typeof p.onSignal,'undefined');
+test('Square scanner publishes analytical signal with disclaimer and independent channel',async t=>{
+ const h=fixture(t);h.p.connect('Square-openapi-example-key-123456');
+ const barTime=Date.UTC(2026,10,26);
+ const signal={key:'ETHUSDT:M15:'+barTime+':LONG',symbol:'ETHUSDT',barTime,
+  side:'LONG',at:barTime+900000,entry:110,sl:108,tps:[112,115,120],
+  source:'PUBLIC_BINANCE_KLINES',isExecuted:false};
+ const published=await h.p.onSignal(signal,'WATCHLIST');
+ assert.equal(published.status,'SENT');
+ assert.equal(h.p.posts[0].channel,'WATCHLIST');
+ assert.equal(h.p.status().postCount,0,'BTC and WATCHLIST post counts are independent');
+ assert.equal(h.p.status().last,null,'Signal must not be presented as BTC executed Entry');
+ const body=JSON.parse(h.calls.find(x=>String(x.url).endsWith('/content/add')).body);
+ assert.match(body.bodyTextOnly,/chưa phải giao dịch đã khớp/);
+ assert.doesNotMatch(body.bodyTextOnly,/OCC|SMMA|khớp thật/);
+ assert.deepEqual(await h.p.onSignal(signal,'ALL'),{duplicate:true},
+  'The same signal must never be published twice even across scanner groups');
+ await assert.rejects(()=>h.p.onSignal({...signal,isExecuted:true},'WATCHLIST'),/chưa khớp/);
+});
+test('BTC daily allowance remains separate from scanner publication',async t=>{
+ const h=fixture(t);h.p.connect('Square-openapi-example-key-123456');
+ h.p.setBtcLimit(1);h.p.toggle(true);
+ assert.equal((await h.p.onProtected(protectedEntry())).status,'SENT');
+ const next=protectedEntry();next.entry.orderId='45678902';
+ const over=await h.p.onProtected(next);
+ assert.equal(over.status,'LIMIT_REACHED');
+ assert.equal(h.p.status().btcDailyRemaining,0);
+ assert.equal(h.calls.filter(x=>String(x.url).endsWith('/content/add')).length,1);
 });
