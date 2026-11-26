@@ -38,7 +38,7 @@ const square=new SquarePublisher({dataDir:dir,fetchKlines:async({symbol='BTCUSDT
 browserFutures.setSquarePublisher(square);
 const watchlistScanner=new OccSquareScanner({dataDir:dir,publisher:square,scope:'WATCHLIST'});
 const allScanner=new OccSquareScanner({dataDir:dir,publisher:square,scope:'ALL',
- excludeSymbols:()=>new Set(watchlistScanner.config.symbols)});
+ excludeSymbols:()=>new Set(watchlistScanner.config.enabled?watchlistScanner.config.symbols:[])});
 let closing=false,status={state:'starting',message:'Synchronizing Binance Futures'};
 function statusEvent(s){
  status=s;if(closing)return;
