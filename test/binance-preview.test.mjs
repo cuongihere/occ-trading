@@ -256,7 +256,8 @@ test('API, real Binance quote and minimized Auto config share a row without losi
  assert.match(config,/id="autoConfigSnapshot"/);
  assert.match(config,/class="configPrimary"/);
  assert.match(config,/class="configTargets"/);
- assert.equal((config.match(/<label/g)||[]).length,17);
+ const tradeConfig=config.slice(0,config.indexOf('<div class="squareSettings"'));
+ assert.equal((tradeConfig.match(/<label/g)||[]).length,16,'Trading controls remain unchanged; Square modes have separate labels');
  assert.match(config,/id="squareEnabled"/);
  assert.match(config,/id="squareSaveKey"/);
  for(const id of ['entryMode','limitBasis','limitOffsetPct','limitWaitSeconds','cancelLimit','limitInfo'])
