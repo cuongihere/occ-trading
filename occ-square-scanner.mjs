@@ -131,7 +131,7 @@ export class OccSquareScanner{
   const volumes=new Map(tickers.map(x=>[x.symbol,Number(x.quoteVolume)||0]));
   const wanted=new Set(this.config.symbols),excluded=this.excludeSymbols();
   const symbols=info.symbols.filter(s=>s.status==='TRADING'&&s.contractType==='PERPETUAL'&&
-   s.quoteAsset==='USDT'&&s.marginAsset!=='USDC'&&validSymbol(s.symbol)&&s.symbol!=='BTCUSDT'&&
+   s.quoteAsset==='USDT'&&s.marginAsset==='USDT'&&validSymbol(s.symbol)&&s.symbol!=='BTCUSDT'&&
    !excluded.has(s.symbol)&&(this.scope==='ALL'||wanted.has(s.symbol)))
    .map(s=>({symbol:s.symbol,volume:volumes.get(s.symbol)||0}))
    .sort((a,b)=>b.volume-a.volume);
