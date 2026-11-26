@@ -706,6 +706,17 @@ body:has(#credentialEditor[open])::before{content:'';position:fixed;inset:0;z-in
 .squareKeyControls button{min-height:30px;padding:4px 8px}
 .squareKeyControls a{border:1px solid #395b78;padding:7px 9px;border-radius:6px;text-decoration:none;font-size:11px}
 .squareSettings>.small{line-height:1.5}
+.squareModes{display:grid;gap:8px;margin-top:10px}
+.squareMode{background:#0e2538;border:1px solid #385874;border-radius:8px;padding:9px}
+.squareModeHeading{display:flex;align-items:center;gap:8px;justify-content:space-between;flex-wrap:wrap}
+.squareModeHeading strong{font-size:12px}
+.squareModeFields{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;align-items:end;margin-top:6px}
+.squareModeFields .symbolInput{grid-column:span 2}
+.squareModeFields label{font-size:10px}
+.squareModeFields button{min-height:35px;white-space:nowrap}
+.squareModeStatus{margin-top:6px;font-size:10px;line-height:1.45;color:#aec6db}
+@media(max-width:680px){.squareModeFields{grid-template-columns:repeat(2,minmax(0,1fr))}.squareModeFields .symbolInput{grid-column:span 2}}
+
 
 /* Unified one-screen workbench */
 .symbolStrip{display:flex;align-items:center;gap:5px;padding:5px 8px;margin:5px 0;border:1px solid #294a65;border-radius:7px;background:#0d2033;flex-wrap:wrap}
@@ -820,10 +831,16 @@ body:not(.coinAlt) #altPositionSection{display:none!important}
 <button id="applyLeverage" class="minor" disabled>Áp dụng đòn bẩy lên Binance</button><button id="cancelLimit" class="minor" hidden>Hủy LIMIT</button></div>
 <span id="settingStatus" class="small">Tự lưu · Auto OFF khi sửa</span><span id="limitInfo" class="small" aria-live="polite"></span></div>
 <div class="squareSettings" aria-label="Binance Square tự động đăng bài sau khi Entry Futures khớp">
- <div class="squareTitle">BINANCE SQUARE · BÀI LỆNH THẬT</div>
- 
- <label class="squareToggle" style="flex-direction:row"><input type="checkbox" id="squareEnabled" disabled>
-  <span>Đăng ảnh chart sau khi Entry khớp và SL/TP xác nhận</span></label>
+ <div class="squareTitle">BINANCE SQUARE · 3 NHÓM ĐĂNG BÀI RIÊNG BIỆT</div>
+ <div class="squareMode">
+  <div class="squareModeHeading"><strong>BTC · GIAO DỊCH THẬT</strong>
+   <label class="squareToggle" style="flex-direction:row;margin:0"><input type="checkbox" id="squareEnabled" disabled><span>ON/OFF BTC</span></label></div>
+  <div class="squareModeFields">
+   <label>Giới hạn BTC / ngày<input id="squareBtcDaily" type="number" min="1" max="20" step="1" value="15"></label>
+   <button id="squareBtcSave" type="button" class="minor">Lưu giới hạn BTC</button>
+  </div>
+  <div class="squareModeStatus">Chỉ đăng khi Entry BTCUSDT thật khớp và SL/TP Binance đã xác minh.</div>
+ </div>
  <div class="squareKeyControls">
   <input id="squareKey" type="password" autocomplete="new-password" spellcheck="false"
    placeholder="Square OpenAPI key (khác API Futures)">
@@ -831,8 +848,34 @@ body:not(.coinAlt) #altPositionSection{display:none!important}
   <button type="button" class="minor" id="squareForgetKey">Xóa khóa</button>
   <a id="squareLastImage" target="_blank" rel="noopener noreferrer" href="/api/square/latest-chart.png">Xem ảnh chart</a>
  </div>
- <div class="small" id="squareStatus" role="status">Square đang OFF · chỉ đăng Entry đã khớp thật.</div>
- <div class="small">Ảnh và nội dung: BTCUSDT LONG/SHORT, Entry, SL, TP1–TP3. Không lộ loại tín hiệu hay dữ liệu tài khoản.</div>
+ <div class="small" id="squareStatus" role="status">BTC Square đang OFF · chỉ đăng Entry đã khớp thật.</div>
+ <div class="squareModes">
+  <div class="squareMode">
+   <div class="squareModeHeading"><strong>LIST 1 · QUÉT CÁC COIN ĐƯỢC CHỌN VÀ ĐĂNG</strong>
+    <label class="squareToggle" style="flex-direction:row;margin:0"><input id="squareListEnabled" type="checkbox" disabled><span>ON/OFF List 1</span></label></div>
+   <div class="squareModeFields">
+    <label class="symbolInput">Danh sách mã (phân cách bằng dấu phẩy)
+     <input id="squareListSymbols" type="text" placeholder="ETH, SOL, BNB" autocomplete="off"></label>
+    <label>Bài / lần quét<input id="squareListPerCycle" type="number" min="1" max="3" step="1" value="2"></label>
+    <label>Bài / ngày<input id="squareListDaily" type="number" min="1" max="20" step="1" value="10"></label>
+    <label>Thanh khoản 24h tối thiểu (USDT)<input id="squareListMinVolume" type="number" min="0" step="1000000" value="10000000"></label>
+    <button id="squareListSave" type="button" class="minor">Lưu List 1</button>
+   </div>
+   <div id="squareListStatus" class="squareModeStatus" role="status">List 1 đang OFF.</div>
+  </div>
+  <div class="squareMode">
+   <div class="squareModeHeading"><strong>LIST 2 · QUÉT TOÀN BỘ FUTURES USDT VÀ ĐĂNG</strong>
+    <label class="squareToggle" style="flex-direction:row;margin:0"><input id="squareAllEnabled" type="checkbox" disabled><span>ON/OFF ALL</span></label></div>
+   <div class="squareModeFields">
+    <label>Bài / lần quét<input id="squareAllPerCycle" type="number" min="1" max="3" step="1" value="3"></label>
+    <label>Bài / ngày<input id="squareAllDaily" type="number" min="1" max="20" step="1" value="15"></label>
+    <label>Thanh khoản 24h tối thiểu (USDT)<input id="squareAllMinVolume" type="number" min="0" step="1000000" value="10000000"></label>
+    <button id="squareAllSave" type="button" class="minor">Lưu ALL</button>
+   </div>
+   <div id="squareAllStatus" class="squareModeStatus" role="status">List 2 đang OFF.</div>
+  </div>
+ </div>
+ <div class="small">List 1 / ALL: chỉ đăng tín hiệu OCC M15 từ nến Binance công khai; <strong>chưa phải giao dịch đã khớp</strong>. BTC có nhóm riêng; coin trong List 1 được loại khỏi ALL để tránh trùng bài. Tự đăng dùng Square OpenAPI key riêng, không dùng API Futures.</div>
 </div>
    </div>
   </details>
